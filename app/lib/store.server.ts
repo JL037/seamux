@@ -9,6 +9,8 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
+// Two levels up is the repo root both from app/lib/ and from the bundled
+// build/server/index.js. Keep it that way if either moves.
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "../..");
 export const DB_PATH = process.env.SEEMUX_DB ?? join(REPO, "data/seemux.db");
 

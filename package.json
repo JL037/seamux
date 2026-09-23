@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "setup": "npm install && npm run hooks:install && npm run skills:install",
+    "board": "npm run build && HOST=127.0.0.1 PORT=4173 NODE_NO_WARNINGS=1 react-router-serve ./build/server/index.js",
     "dev": "react-router dev",
     "build": "react-router build",
     "start": "HOST=127.0.0.1 react-router-serve ./build/server/index.js",
