@@ -1,6 +1,6 @@
 # seemux
 
-A board over every Claude Code session on this Mac, and the tools to drive and dispatch them. `README.md` is the brief and is generated: edit `~/brain/notes/reference/2026-09-23-dispatcher-build-brief.md` and run `python3 ops/scripts/sync-seemux-brief.py` from `~/brain`, never `README.md` itself.
+A board over every Claude Code session on this Mac, and the tools to drive and dispatch them. `README.md` is the brief and the source of truth for the design; keep it current when behaviour changes. Prose is checked with Taskless.
 
 ## Rules
 
@@ -15,6 +15,10 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 - `app/lib/board.server.ts`: derives the board. `drive.server.ts`: every write verb, through cmux. `protocol.server.ts`: fan-out manifests and markers.
 - `hooks/subagent-event.ts` and `scripts/seemux.ts` run under plain Node with type stripping, and so does everything they import: relative imports with `.ts` extensions, `import type`, no enums.
 - `skills/seemux-dispatch/SKILL.md` is a template; `npm run skills:install` renders it into `~/.claude/skills`.
+
+## Landing changes
+
+The board runs `npm run dev` from the main checkout, on `main`, under launchd (`npm run service:install`). Work happens in worktrees under `worktrees/<name>` on their own branch. `npm run land -- <branch>`, run from the main checkout, rebases the branch onto main, typechecks it, fast-forwards main, and restarts the board only if dependencies changed; otherwise hot reload picks the change up. It never deletes the branch or worktree.
 
 ## Checking changes
 
