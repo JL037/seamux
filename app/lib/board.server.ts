@@ -4,19 +4,23 @@
 // tools, the tools win.
 
 import { execFile } from "node:child_process";
-import { open, readdir, stat } from "node:fs/promises";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import {
   DONE_VISIBLE_MS,
+  SUBAGENT_STALE_MS,
+  SUBAGENT_VISIBLE_MS,
   type BackgroundSession,
   type Board,
   type Card,
   type ChatMessage,
   type Column,
+  type Subagent,
 } from "./board";
+import { subagentsFor, type SubagentRow } from "./store.server";
 
 const run = promisify(execFile);
 const CLAUDE_DIR = join(homedir(), ".claude");
@@ -46,6 +50,8 @@ interface TranscriptSummary {
   branch: string | null;
   lastPrompt: string | null;
   lastReply: string | null;
+  // From the last message: is a turn in progress? null when unknown.
+  turnActive: boolean | null;
 }
 
 async function readJson<T>(cmd: string, args: string[]): Promise<T> {
@@ -161,7 +167,23 @@ function excerpt(text: string): string {
 // Harness-generated user turns (slash commands, caveats, reminders,
 // compaction summaries).
 const SYNTHETIC_PROMPT =
-  /^(<(local-command|command-|system-reminder)|This session is being continued from a previous conversation)/;
+  /^(<(local-command|command-|system-reminder|bash-|task-notification)|This session is being continued from a previous conversation)/;
+
+// Messages are written once complete, so the last one says whether the model
+// still owes a response. This is the check on `status: busy`, which Claude
+// Code also sets while internal helper agents run between turns.
+function turnActive(o: any): boolean {
+  if (o.type === "assistant") return o.message?.stop_reason === "tool_use";
+  if (o.isMeta || o.isCompactSummary) return false;
+  const content = o.message?.content;
+  if (Array.isArray(content) && content.some((c) => c?.type === "tool_result"))
+    return true;
+  const text = (textOf(content) ?? "").trimStart();
+  if (text.startsWith("[Request interrupted")) return false;
+  // A task notification wakes the model; other harness turns do not.
+  if (text.startsWith("<task-notification")) return true;
+  return !SYNTHETIC_PROMPT.test(text);
+}
 
 async function summarize(path: string): Promise<TranscriptSummary> {
   const summary: TranscriptSummary = {
@@ -170,6 +192,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     branch: null,
     lastPrompt: null,
     lastReply: null,
+    turnActive: null,
   };
   const lines = await readTail(path);
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -180,10 +203,18 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     } catch {
       continue;
     }
-    if (o.type === "custom-title" && !summary.name) summary.name = o.customTitle;
+    if (o.type === "custom-title" && !summary.name)
+      summary.name = o.customTitle;
     if (o.type === "agent-name" && !summary.name) summary.name = o.agentName;
     if (o.cwd && !summary.cwd) summary.cwd = o.cwd;
     if (o.gitBranch && !summary.branch) summary.branch = o.gitBranch;
+    if (
+      summary.turnActive == null &&
+      (o.type === "user" || o.type === "assistant") &&
+      !o.isSidechain
+    ) {
+      summary.turnActive = turnActive(o);
+    }
     if (o.isSidechain || o.isMeta || o.isCompactSummary) continue;
 
     const text = textOf(o.message?.content);
@@ -198,7 +229,13 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     ) {
       summary.lastPrompt = excerpt(text);
     }
-    if (summary.lastPrompt && summary.lastReply && summary.cwd && summary.branch)
+    if (
+      summary.lastPrompt &&
+      summary.lastReply &&
+      summary.turnActive != null &&
+      summary.cwd &&
+      summary.branch
+    )
       break;
   }
   return summary;
@@ -239,6 +276,44 @@ export async function loadMessages(
   return messages.slice(-limit);
 }
 
+// Claude Code keeps each subagent's transcript and metadata next to the
+// parent's: <parent>/<session-id>/subagents/agent-<id>.{jsonl,meta.json}.
+async function toSubagent(
+  row: SubagentRow,
+  parentTranscript: string | undefined,
+  now: number,
+): Promise<Subagent> {
+  let description: string | null = null;
+  let quietSince: number | null = null;
+  if (parentTranscript) {
+    const base = join(
+      dirname(parentTranscript),
+      row.session_id,
+      "subagents",
+      `agent-${row.agent_id}`,
+    );
+    try {
+      const meta = JSON.parse(await readFile(`${base}.meta.json`, "utf8"));
+      description = meta.description ?? null;
+    } catch {}
+    try {
+      quietSince = (await stat(`${base}.jsonl`)).mtimeMs;
+    } catch {}
+  }
+  const running = row.stopped_at == null;
+  const lastWrite = quietSince ?? row.started_at ?? 0;
+  return {
+    agentId: row.agent_id,
+    type: row.agent_type,
+    description,
+    running,
+    stale: running && now - lastWrite > SUBAGENT_STALE_MS,
+    startedAt: row.started_at,
+    stoppedAt: row.stopped_at,
+    lastMessage: row.last_message ? excerpt(row.last_message) : null,
+  };
+}
+
 async function toBackground(row: AgentRow): Promise<BackgroundSession> {
   const shortId = row.id ?? row.sessionId.slice(0, 8);
   const { needs } = await backgroundDetail(shortId);
@@ -247,15 +322,20 @@ async function toBackground(row: AgentRow): Promise<BackgroundSession> {
 
 function liveColumn(
   row: AgentRow,
+  turnActive: boolean | null,
   needsInput: boolean,
   background: BackgroundSession[],
+  subagents: Subagent[],
 ): Column {
   // A failed or blocked child needs Jakob just as much as a blocked parent.
   const childNeedsHuman = background.some(
     (b) => b.state === "blocked" || b.state === "failed",
   );
   if (needsInput || childNeedsHuman) return "waiting";
-  if (row.status === "busy") return "working";
+  // A parent at rest while its subagents run is still working.
+  // Busy only counts when the transcript agrees a turn is running.
+  const busy = row.status === "busy" && turnActive !== false;
+  if (busy || subagents.some((s) => s.running && !s.stale)) return "working";
   return "idle";
 }
 
@@ -265,7 +345,9 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const [agents, workspaces, transcripts] = await Promise.all([
     listAgents(),
     cmuxWorkspaces().catch((err) => {
-      warnings.push(`cmux unavailable, WAITING may be incomplete: ${err.message}`);
+      warnings.push(
+        `cmux unavailable, WAITING may be incomplete: ${err.message}`,
+      );
       return new Map<string, { ref: string; needsInput: boolean }>();
     }),
     indexTranscripts(),
@@ -293,23 +375,45 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     }
   });
 
+  let subagentRows: SubagentRow[] = [];
+  try {
+    subagentRows = subagentsFor(
+      interactive.map((a) => a.sessionId),
+      now - SUBAGENT_VISIBLE_MS,
+    );
+  } catch (err) {
+    warnings.push(`Subagent store unavailable: ${(err as Error).message}`);
+  }
+
   const liveCards = await Promise.all(
     interactive.map(async (row): Promise<Card> => {
       const transcript = transcripts.get(row.sessionId);
       const summary = transcript ? await summarize(transcript.path) : null;
       const ws = workspaces.get(row.cwd);
       const children = childrenByCwd.get(row.cwd) ?? [];
+      const subagents = await Promise.all(
+        subagentRows
+          .filter((s) => s.session_id === row.sessionId)
+          .map((s) => toSubagent(s, transcript?.path, now)),
+      );
       return {
         sessionId: row.sessionId,
         name: row.name,
         cwd: row.cwd,
-        column: liveColumn(row, ws?.needsInput ?? false, children),
+        column: liveColumn(
+          row,
+          summary?.turnActive ?? null,
+          ws?.needsInput ?? false,
+          children,
+          subagents,
+        ),
         branch: summary?.branch ?? null,
         lastActivityAt: transcript?.mtimeMs ?? null,
         lastPrompt: summary?.lastPrompt ?? null,
         lastReply: summary?.lastReply ?? null,
         workspaceRef: ws?.ref ?? null,
         background: children,
+        subagents,
       };
     }),
   );
@@ -334,6 +438,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastReply: s.lastReply,
         workspaceRef: null,
         background: [],
+        subagents: [],
       };
     }),
   );

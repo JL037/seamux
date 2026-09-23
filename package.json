@@ -3,10 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "react-router build",
+    "setup": "npm install && npm run hooks:install",
     "dev": "react-router dev",
+    "build": "react-router build",
     "start": "HOST=127.0.0.1 react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc"
+    "typecheck": "react-router typegen && tsc",
+    "hooks:install": "node --no-warnings scripts/install-hooks.ts",
+    "hooks:uninstall": "node --no-warnings scripts/install-hooks.ts --uninstall"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

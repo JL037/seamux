@@ -19,6 +19,21 @@ export interface BackgroundSession {
   needs: string | null;
 }
 
+// A subagent, from the SubagentStart / SubagentStop hooks, described from
+// its own transcript metadata.
+export interface Subagent {
+  agentId: string;
+  type: string | null;
+  description: string | null;
+  running: boolean;
+  // Running with no Stop, but its transcript has gone quiet. Usually a
+  // session that was killed before the hook could fire.
+  stale: boolean;
+  startedAt: number | null;
+  stoppedAt: number | null;
+  lastMessage: string | null;
+}
+
 export interface Card {
   sessionId: string;
   name: string;
@@ -30,6 +45,7 @@ export interface Card {
   lastReply: string | null;
   workspaceRef: string | null;
   background: BackgroundSession[];
+  subagents: Subagent[];
 }
 
 export interface Board {
@@ -45,6 +61,11 @@ export interface ChatMessage {
   text: string;
   at: string | null;
 }
+
+// Finished subagents stay on their card for this long.
+export const SUBAGENT_VISIBLE_MS = 30 * 60 * 1000;
+// A running subagent whose transcript is quiet this long is marked stale.
+export const SUBAGENT_STALE_MS = 15 * 60 * 1000;
 
 // DONE cards stay visible for this long after the chat closes.
 export const DONE_VISIBLE_MS = 30 * 60 * 1000;

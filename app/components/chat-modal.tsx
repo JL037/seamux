@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
 import type { Card, ChatMessage } from "~/lib/board";
 import { cn } from "~/lib/utils";
@@ -63,29 +64,39 @@ export function ChatModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="-mx-4 min-h-0 flex-1 overflow-y-auto border-y px-4 py-3">
-          {!messages && fetcher.state !== "idle" && (
-            <p className="text-muted-foreground">Loading conversation…</p>
-          )}
-          {messages?.length === 0 && (
-            <p className="text-muted-foreground">No messages yet.</p>
-          )}
-          <div className="flex flex-col gap-3">
-            {messages?.map((m, i) => (
-              <div
-                key={`${m.at}-${i}`}
-                className={cn(
-                  "max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-sm",
-                  m.role === "user"
-                    ? "self-end bg-primary text-primary-foreground"
-                    : "self-start bg-muted",
-                )}
-              >
-                {m.text}
-              </div>
-            ))}
+        <div className="-mx-4 flex min-h-0 flex-1 border-y">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            {!messages && fetcher.state !== "idle" && (
+              <p className="text-muted-foreground">Loading conversation…</p>
+            )}
+            {messages?.length === 0 && (
+              <p className="text-muted-foreground">No messages yet.</p>
+            )}
+            <div className="flex flex-col gap-3">
+              {messages?.map((m, i) => (
+                <div
+                  key={`${m.at}-${i}`}
+                  className={cn(
+                    "max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-sm",
+                    m.role === "user"
+                      ? "self-end bg-primary text-primary-foreground"
+                      : "self-start bg-muted",
+                  )}
+                >
+                  {m.text}
+                </div>
+              ))}
+            </div>
+            <div ref={endRef} />
           </div>
-          <div ref={endRef} />
+          {card.subagents.length > 0 && (
+            <aside className="hidden w-72 shrink-0 overflow-y-auto border-l px-4 py-3 md:block">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Subagents
+              </h3>
+              <SubagentDetail subagents={card.subagents} now={Date.now()} />
+            </aside>
+          )}
         </div>
 
         <div className="flex items-end gap-2">

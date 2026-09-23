@@ -11,6 +11,7 @@ import {
 
 import type { Route } from "./+types/home";
 import { ChatModal } from "~/components/chat-modal";
+import { SubagentSummary } from "~/components/subagent-list";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -169,6 +170,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           </p>
         )}
         {card.lastReply && <p className="line-clamp-4">{card.lastReply}</p>}
+        <SubagentSummary subagents={card.subagents} now={now} />
         {card.background.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {card.background.map((b) => (
