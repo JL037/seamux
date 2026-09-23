@@ -36,8 +36,7 @@ Four hard constraints, each of which exists for a reason stated below:
 
 ```bash
 npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
-npm run board    # build and serve the board on http://127.0.0.1:4173
-npm run dev      # or: the dev server on http://127.0.0.1:5173, reloading on edit
+npm run serve    # run the board on http://127.0.0.1:5173 and keep it running
 ```
 
 `setup` writes to two places outside the repo, both idempotent and both reversible:
@@ -45,7 +44,9 @@ npm run dev      # or: the dev server on http://127.0.0.1:5173, reloading on edi
 - **`~/.claude/settings.json`** gains `SubagentStart` and `SubagentStop` hooks that run `hooks/subagent-event.ts`. It backs the file up first. `npm run hooks:uninstall` removes exactly its own entries.
 - **`~/.claude/skills/seemux-dispatch/`** holds the protocol skill, rendered with this checkout's `bin/seemux` path. `npm run skills:uninstall` removes it, and never removes a skill it did not write.
 
-Keep the board running in its own cmux workspace. It needs no restart when sessions come and go, since every poll re-derives the board from the tools.
+Run `npm run serve` in its own cmux workspace. It serves the dev server from this checkout, so a change landed on `main` goes live by hot reload. It restarts the server if it exits, if it stops answering, or when `npm run land` asks after reinstalling dependencies. It also stops a server orphaned by an earlier supervisor that was killed, and refuses to run twice. The supervisor is plain Node with no macOS dependency, so it runs under Linux and WSL too, polling for file changes on WSL's `/mnt/` drives.
+
+To change seemux, work in a worktree on your own branch, commit, and run `npm run land` there. `CLAUDE.md` has the details, for people and agents alike.
 
 The store is SQLite at `data/seemux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents and fan-out records, never a session.
 

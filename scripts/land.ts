@@ -26,7 +26,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { restart } from "./service.ts";
+import { requestRestart } from "./supervise.ts";
 
 const BOARD = "http://127.0.0.1:5173/";
 const LOCK_WAIT_MS = 20 * 60 * 1000;
@@ -184,6 +184,8 @@ async function main() {
     return;
   }
 
+  // The lockfile changes whenever dependencies do; package.json alone
+  // also changes for scripts, which need no reinstall.
   const depsChanged =
     git(
       REPO,
@@ -192,19 +194,13 @@ async function main() {
       before,
       after,
       "--",
-      "package.json",
       "package-lock.json",
     ) !== "";
   if (depsChanged) {
     step("Dependencies changed: reinstalling and restarting the board");
     run(REPO, "npm", "ci", "--no-audit", "--no-fund");
-    try {
-      restart();
-    } catch {
-      console.log(
-        "  The board service is not installed; restart the board yourself.",
-      );
-    }
+    // `npm run serve` picks this up within a second.
+    requestRestart();
   }
 
   step("Checking the board");
