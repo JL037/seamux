@@ -21,7 +21,12 @@ import {
   type Subagent,
 } from "./board";
 import { listSurfaces, type Surface } from "./drive.server";
-import { subagentsFor, type SubagentRow } from "./store.server";
+import {
+  dispatchesFor,
+  recentDispatchCwds,
+  subagentsFor,
+  type SubagentRow,
+} from "./store.server";
 
 const run = promisify(execFile);
 const CLAUDE_DIR = join(homedir(), ".claude");
@@ -67,11 +72,17 @@ async function listAgents(): Promise<AgentRow[]> {
   return readJson<AgentRow[]>("claude", ["agents", "--json", "--all"]);
 }
 
-// cwd -> { ref, needsInput } for every cmux workspace. cmux only sees sessions
-// in surfaces it hosts, so this can add WAITING but never owns the columns.
-async function cmuxWorkspaces(): Promise<
-  Map<string, { ref: string; needsInput: boolean }>
-> {
+interface Workspace {
+  id: string;
+  ref: string;
+  cwd: string;
+  needsInput: boolean;
+}
+
+// Every cmux workspace and whether an agent in it needs input. cmux only sees
+// sessions in surfaces it hosts, so this can add WAITING but never owns the
+// columns.
+async function cmuxWorkspaces(): Promise<Workspace[]> {
   const { workspaces } = await readJson<{
     workspaces: { id: string; ref: string; current_directory: string }[];
   }>("cmux", ["rpc", "workspace.list", "{}"]);
@@ -85,13 +96,15 @@ async function cmuxWorkspaces(): Promise<
         "workspace.status.get",
         JSON.stringify({ workspace_id: w.id }),
       ]);
-      return [
-        w.current_directory,
-        { ref: w.ref, needsInput: status.signals.any_agent_needs_input },
-      ] as const;
+      return {
+        id: w.id,
+        ref: w.ref,
+        cwd: w.current_directory,
+        needsInput: status.signals.any_agent_needs_input,
+      };
     }),
   );
-  return new Map(entries);
+  return entries;
 }
 
 async function backgroundDetail(
@@ -257,7 +270,17 @@ export async function closedSession(
     indexTranscripts(),
   ]);
   if (agents.some((a) => a.sessionId === sessionId)) return null;
-  const transcript = transcripts.get(sessionId);
+  return infoFrom(sessionId, transcripts.get(sessionId));
+}
+
+// A session's directory and name, live or not, from its transcript.
+export async function sessionInfo(
+  sessionId: string,
+): Promise<{ cwd: string; name: string } | null> {
+  return infoFrom(sessionId, (await indexTranscripts()).get(sessionId));
+}
+
+async function infoFrom(sessionId: string, transcript: Transcript | undefined) {
   if (!transcript) return null;
   const s = await summarize(transcript.path);
   return s.cwd ? { cwd: s.cwd, name: s.name ?? sessionId.slice(0, 8) } : null;
@@ -366,7 +389,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       warnings.push(
         `cmux unavailable, WAITING may be incomplete: ${err.message}`,
       );
-      return new Map<string, { ref: string; needsInput: boolean }>();
+      return [] as Workspace[];
     }),
     indexTranscripts(),
   ]);
@@ -413,7 +436,12 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     interactive.map(async (row): Promise<Card> => {
       const transcript = transcripts.get(row.sessionId);
       const summary = transcript ? await summarize(transcript.path) : null;
-      const ws = workspaces.get(row.cwd);
+      // The session's own workspace when cmux hosts it; otherwise the one
+      // open in the same directory.
+      const surface = surfaces.get(row.sessionId);
+      const ws = surface
+        ? workspaces.find((w) => w.id === surface.workspaceId)
+        : workspaces.find((w) => w.cwd === row.cwd);
       const children = childrenByCwd.get(row.cwd) ?? [];
       const subagents = await Promise.all(
         subagentRows
@@ -436,6 +464,8 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: summary?.lastPrompt ?? null,
         lastReply: summary?.lastReply ?? null,
         workspaceRef: ws?.ref ?? null,
+        intent: null,
+        forkedFrom: null,
         drivable: surfaces.has(row.sessionId),
         background: children,
         subagents,
@@ -462,6 +492,8 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: s.lastPrompt,
         lastReply: s.lastReply,
         workspaceRef: null,
+        intent: null,
+        forkedFrom: null,
         drivable: false,
         background: [],
         subagents: [],
@@ -469,8 +501,75 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     }),
   );
 
-  const cards = [...liveCards, ...doneCards].sort(
-    (a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0),
-  );
+  const cards = [...liveCards, ...doneCards];
+  try {
+    const intents = new Map(
+      dispatchesFor(cards.map((c) => c.sessionId)).map((d) => [
+        d.session_id,
+        d,
+      ]),
+    );
+    for (const card of cards) {
+      const d = intents.get(card.sessionId);
+      if (d) {
+        card.intent = excerpt(d.prompt);
+        card.forkedFrom = d.forked_from;
+      }
+    }
+  } catch (err) {
+    warnings.push(`Dispatch store unavailable: ${(err as Error).message}`);
+  }
+  cards.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
   return { generatedAt: now, cards, orphans, warnings };
+}
+
+const REPO_ROOTS = [join(homedir(), "code")];
+
+// Git repos up to two levels under each root, e.g. ~/code/seemux and
+// ~/code/taskless/cli.
+async function gitRepos(): Promise<string[]> {
+  const found: string[] = [];
+  async function scan(dir: string, depth: number) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    if (entries.some((e) => e.name === ".git")) found.push(dir);
+    if (depth === 0) return;
+    await Promise.all(
+      entries
+        .filter(
+          (e) =>
+            e.isDirectory() &&
+            !e.name.startsWith(".") &&
+            e.name !== "node_modules",
+        )
+        .map((e) => scan(join(dir, e.name), depth - 1)),
+    );
+  }
+  await Promise.all(REPO_ROOTS.map((r) => scan(r, 2)));
+  return found;
+}
+
+// Where new work is likely to go: directories in use right now first, then
+// past dispatches, then every repo on disk.
+export async function knownDirectories(): Promise<string[]> {
+  const [agents, workspaces, repos] = await Promise.all([
+    listAgents().catch(() => [] as AgentRow[]),
+    cmuxWorkspaces().catch(() => [] as Workspace[]),
+    gitRepos(),
+  ]);
+  let dispatched: string[] = [];
+  try {
+    dispatched = recentDispatchCwds();
+  } catch {}
+  const all = [
+    ...agents.map((a) => a.cwd),
+    ...workspaces.map((w) => w.cwd),
+    ...dispatched,
+    ...repos.sort(),
+  ];
+  return [...new Set(all)].filter((d) => d.startsWith(`${homedir()}/`));
 }

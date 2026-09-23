@@ -4,4 +4,6 @@ export default [
   index("routes/home.tsx"),
   route("sessions/:sessionId/messages", "routes/session-messages.ts"),
   route("sessions/:sessionId/action", "routes/session-action.ts"),
+  route("dispatch", "routes/dispatch.ts"),
+  route("directories", "routes/directories.ts"),
 ] satisfies RouteConfig;

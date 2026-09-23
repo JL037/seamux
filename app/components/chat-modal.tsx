@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
-import { SendHorizontal } from "lucide-react";
+import { GitFork, SendHorizontal } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -29,6 +29,8 @@ export function ChatModal({
   canSend,
   pending,
   error,
+  onFork,
+  forking,
 }: {
   card: Card;
   open: boolean;
@@ -39,6 +41,8 @@ export function ChatModal({
   canSend: boolean;
   pending: boolean;
   error: string | null;
+  onFork: () => void;
+  forking: boolean;
 }) {
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
   const url = `/sessions/${card.sessionId}/messages`;
@@ -120,16 +124,27 @@ export function ChatModal({
             }}
             placeholder={
               card.drivable
-                ? "Next message (⌘↵ to send)"
-                : "This session is not in a cmux surface"
+                ? "Next message (⌘↵ to send), or a tangent to fork"
+                : "Not running: write a tangent to fork from this chat"
             }
-            disabled={!card.drivable}
+
             className="min-h-32 flex-1 resize-y"
           />
-          <Button disabled={!canSend} onClick={onSend} title="Send (⌘↵)">
-            <SendHorizontal />
-            {pending ? "Sending…" : "Send"}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              disabled={forking || !draft.trim()}
+              onClick={onFork}
+              title="Start a new session with this chat's context and this message"
+            >
+              <GitFork />
+              {forking ? "Forking…" : "Fork"}
+            </Button>
+            <Button disabled={!canSend} onClick={onSend} title="Send (⌘↵)">
+              <SendHorizontal />
+              {pending ? "Sending…" : "Send"}
+            </Button>
+          </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </DialogContent>

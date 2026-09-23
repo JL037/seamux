@@ -1,30 +1,16 @@
 import { data } from "react-router";
 
 import type { Route } from "./+types/session-action";
-import { closedSession } from "~/lib/board.server";
-import { interrupt, resume, sendMessage } from "~/lib/drive.server";
+import { closedSession, sessionInfo } from "~/lib/board.server";
+import { fork, interrupt, resume, sendMessage } from "~/lib/drive.server";
+import { assertFromBoard, SESSION_ID } from "~/lib/guard.server";
 
-const SESSION_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
-const INTENTS = new Set(["send", "interrupt", "resume"]);
+const INTENTS = new Set(["send", "interrupt", "resume", "fork"]);
 const MAX_MESSAGE = 100_000;
 
 export interface ActionResult {
   ok: boolean;
   error: string | null;
-}
-
-// These endpoints type into live sessions. A browser lets any website POST
-// a form to 127.0.0.1, so only accept requests the board itself made:
-// the Host must be local (no DNS rebinding) and the Origin must match it.
-function assertFromBoard(request: Request) {
-  const host = request.headers.get("host") ?? "";
-  const origin = request.headers.get("origin");
-  const hostname = host.replace(/:\d+$/, "");
-  if (!LOCAL_HOSTS.has(hostname) || origin !== `http://${host}`) {
-    throw data("Forbidden", { status: 403 });
-  }
 }
 
 async function perform(sessionId: string, intent: string, form: FormData) {
@@ -40,6 +26,10 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     if (!closed)
       throw new Error("This chat is still live, or has no transcript");
     await resume(sessionId, closed.cwd, closed.name);
+  } else if (intent === "fork") {
+    const info = await sessionInfo(sessionId);
+    if (!info) throw new Error("No transcript to fork from");
+    await fork(sessionId, info.cwd, String(form.get("text") ?? ""));
   }
 }
 

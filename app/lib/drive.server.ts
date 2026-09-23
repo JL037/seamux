@@ -1,11 +1,15 @@
-// The board's write verbs: send a message, interrupt a turn, resume a closed
-// chat. All of them go through cmux, into the surface that hosts the
-// session. None of them destroys anything.
+// The board's write verbs: send a message, interrupt a turn, resume a
+// closed chat, and start new sessions (dispatch and fork). All of them go
+// through cmux. None of them destroys anything.
 
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+
+import { recordDispatch } from "./store.server";
 
 const run = promisify(execFile);
 
@@ -80,7 +84,7 @@ export async function interrupt(sessionId: string) {
   await rpc("surface.send_key", { ...target(surface), key: "escape" });
 }
 
-// Reopen a closed chat in a new cmux workspace in its own directory.
+// Every session seemux starts runs in its own cmux workspace.
 //
 // cmux runs the command in a login shell that does not read ~/.zshrc, so
 // `claude` is not on its PATH. Launch through cmux's own wrapper, which
@@ -91,6 +95,24 @@ const CMUX_CLAUDE_WRAPPER =
 const CLAUDE_BIN_DIR = join(homedir(), ".local/bin");
 
 const shq = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+
+async function launch(
+  cwd: string,
+  title: string,
+  args: string[],
+  focus: boolean,
+) {
+  await rpc("workspace.create", {
+    cwd,
+    title,
+    initial_command: [
+      `PATH=${shq(CLAUDE_BIN_DIR)}:"$PATH"`,
+      shq(CMUX_CLAUDE_WRAPPER),
+      ...args.map(shq),
+    ].join(" "),
+    focus,
+  });
+}
 
 // A new workspace starts Claude a few seconds after it is created, and
 // until then nothing reports the session as live. Remember in-flight
@@ -111,14 +133,123 @@ export async function resume(sessionId: string, cwd: string, title: string) {
     if ((await listSurfaces()).has(sessionId)) {
       throw new Error("This chat is already open in cmux");
     }
-    await rpc("workspace.create", {
-      cwd,
-      title,
-      initial_command: `PATH=${shq(CLAUDE_BIN_DIR)}:"$PATH" ${shq(CMUX_CLAUDE_WRAPPER)} --resume ${shq(sessionId)}`,
-      focus: true,
-    });
+    await launch(cwd, title, ["--resume", sessionId], true);
   } catch (err) {
     resuming.delete(sessionId);
     throw err;
   }
+}
+
+// Only real directories inside the home folder can be dispatched into.
+export async function checkDirectory(path: string): Promise<string> {
+  if (!path.startsWith("/")) throw new Error("Pick an absolute directory");
+  let real: string;
+  try {
+    real = await realpath(path);
+  } catch {
+    throw new Error(`No such directory: ${path}`);
+  }
+  if (!(await stat(real)).isDirectory())
+    throw new Error(`Not a directory: ${path}`);
+  if (!real.startsWith(`${homedir()}/`)) {
+    throw new Error("Directory must be inside your home folder");
+  }
+  return real;
+}
+
+// A short, readable name from the first words of a prompt.
+export function nameFrom(prompt: string): string {
+  return (
+    prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 4)
+      .join("-")
+      .slice(0, 40) || "work"
+  );
+}
+
+const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
+
+// A leading dash would be read as a flag.
+const asPrompt = (p: string) => (p.startsWith("-") ? `Task: ${p}` : p);
+
+export interface DispatchInput {
+  cwd: string;
+  prompt: string;
+  name?: string;
+  worktree?: string | null;
+  dispatchId?: string | null;
+  worker?: string | null;
+}
+
+// Start new work as its own top-level session, and record why.
+export async function dispatch(input: DispatchInput): Promise<string> {
+  const cwd = await checkDirectory(input.cwd);
+  const prompt = input.prompt.trim();
+  if (!prompt) throw new Error("Say what the new session should do");
+  const name = input.name?.trim() || nameFrom(prompt);
+  const worktree = input.worktree?.trim() || null;
+  if (worktree && !WORKTREE_NAME.test(worktree)) {
+    throw new Error("Worktree names are lowercase letters, digits, - . _ /");
+  }
+
+  const sessionId = randomUUID();
+  const args = ["--session-id", sessionId, "--name", name];
+  if (worktree) args.push("--worktree", worktree);
+  args.push(asPrompt(prompt));
+
+  recordDispatch({
+    session_id: sessionId,
+    cwd,
+    prompt,
+    name,
+    worktree,
+    forked_from: null,
+    dispatch_id: input.dispatchId ?? null,
+    worker: input.worker ?? null,
+  });
+  await launch(cwd, name, args, false);
+  return sessionId;
+}
+
+// Split a tangent out of a chat: a new session that starts with the
+// parent's full context, leaving the parent untouched.
+export async function fork(
+  parentId: string,
+  cwd: string,
+  prompt: string,
+): Promise<string> {
+  const text = prompt.trim();
+  if (!text) throw new Error("Say what the tangent is");
+  const sessionId = randomUUID();
+  const name = nameFrom(text);
+  recordDispatch({
+    session_id: sessionId,
+    cwd,
+    prompt: text,
+    name,
+    worktree: null,
+    forked_from: parentId,
+    dispatch_id: null,
+    worker: null,
+  });
+  await launch(
+    cwd,
+    name,
+    [
+      "--resume",
+      parentId,
+      "--fork-session",
+      "--session-id",
+      sessionId,
+      "--name",
+      name,
+      asPrompt(text),
+    ],
+    false,
+  );
+  return sessionId;
 }

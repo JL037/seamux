@@ -17,6 +17,7 @@ import {
 
 import type { Route } from "./+types/home";
 import { ChatModal } from "~/components/chat-modal";
+import { DispatchBar } from "~/components/dispatch-bar";
 import { SubagentSummary } from "~/components/subagent-list";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -103,6 +104,7 @@ function ChatInput({ card }: { card: BoardCard }) {
     [card.sessionId, setDraft],
   );
   const { submit, pending, error } = useSessionAction(card.sessionId, clear);
+  const forker = useSessionAction(card.sessionId, clear);
   const canSend = card.drivable && !pending && draft.trim().length > 0;
   const send = () => canSend && submit("send", { text: draft });
 
@@ -146,7 +148,9 @@ function ChatInput({ card }: { card: BoardCard }) {
         onSend={send}
         canSend={canSend}
         pending={pending}
-        error={error}
+        error={error ?? forker.error}
+        onFork={() => draft.trim() && forker.submit("fork", { text: draft })}
+        forking={forker.pending}
       />
     </div>
   );
@@ -208,7 +212,15 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-xs">
-        {card.lastPrompt && (
+        {card.intent && (
+          <p className="line-clamp-2 rounded-md bg-muted px-2 py-1">
+            <span className="font-medium">
+              {card.forkedFrom ? "Tangent: " : "Goal: "}
+            </span>
+            {card.intent}
+          </p>
+        )}
+        {card.lastPrompt && card.lastPrompt !== card.intent && (
           <p className="line-clamp-2 text-muted-foreground">
             <span className="font-medium text-foreground">You: </span>
             {card.lastPrompt}
@@ -239,9 +251,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             {card.workspaceRef}
           </span>
         )}
-        {(card.column === "idle" || card.column === "waiting") && (
-          <ChatInput card={card} />
-        )}
+        <ChatInput card={card} />
       </CardContent>
     </Card>
   );
@@ -272,25 +282,6 @@ function BoardColumn({
         <SessionCard key={card.sessionId} card={card} now={now} />
       ))}
     </section>
-  );
-}
-
-function DispatchBar() {
-  return (
-    <div className="flex items-center gap-2 rounded-xl border bg-card p-2">
-      <input
-        disabled
-        placeholder="Dispatch new work (phase 4)"
-        className="min-w-0 flex-1 bg-transparent px-2 text-base outline-none placeholder:text-muted-foreground"
-      />
-      <Button variant="outline" disabled>
-        /dir pick
-      </Button>
-      <Button disabled>
-        <SendHorizontal />
-        Dispatch
-      </Button>
-    </div>
   );
 }
 

@@ -24,6 +24,19 @@ const SCHEMA = `
     last_message    TEXT     -- from SubagentStop
   );
   CREATE INDEX IF NOT EXISTS subagents_session ON subagents (session_id);
+
+  -- Sessions seemux started, and why. Nothing else records a session's goal.
+  CREATE TABLE IF NOT EXISTS dispatches (
+    session_id     TEXT PRIMARY KEY,
+    cwd            TEXT NOT NULL,
+    prompt         TEXT NOT NULL,
+    name           TEXT,
+    worktree       TEXT,    -- worktree name, when started in a new one
+    forked_from    TEXT,    -- parent session id, for a forked tangent
+    dispatch_id    TEXT,    -- fan-out set this worker belongs to, if any
+    worker         TEXT,    -- the worker's key within that set
+    created_at     INTEGER NOT NULL
+  );
 `;
 
 let db: DatabaseSync | null = null;
@@ -121,4 +134,57 @@ export function subagentsFor(
        ORDER BY started_at`,
     )
     .all(...sessionIds, since) as unknown as SubagentRow[];
+}
+
+export interface DispatchRow {
+  session_id: string;
+  cwd: string;
+  prompt: string;
+  name: string | null;
+  worktree: string | null;
+  forked_from: string | null;
+  dispatch_id: string | null;
+  worker: string | null;
+  created_at: number;
+}
+
+export function recordDispatch(
+  row: Omit<DispatchRow, "created_at">,
+  now = Date.now(),
+): void {
+  openStore()
+    .prepare(
+      `INSERT INTO dispatches
+         (session_id, cwd, prompt, name, worktree, forked_from, dispatch_id, worker, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      row.session_id,
+      row.cwd,
+      row.prompt,
+      row.name,
+      row.worktree,
+      row.forked_from,
+      row.dispatch_id,
+      row.worker,
+      now,
+    );
+}
+
+export function dispatchesFor(sessionIds: string[]): DispatchRow[] {
+  if (sessionIds.length === 0) return [];
+  const marks = sessionIds.map(() => "?").join(", ");
+  return openStore()
+    .prepare(`SELECT * FROM dispatches WHERE session_id IN (${marks})`)
+    .all(...sessionIds) as unknown as DispatchRow[];
+}
+
+export function recentDispatchCwds(limit = 50): string[] {
+  return (
+    openStore()
+      .prepare(
+        `SELECT cwd FROM dispatches GROUP BY cwd ORDER BY MAX(created_at) DESC LIMIT ?`,
+      )
+      .all(limit) as unknown as { cwd: string }[]
+  ).map((r) => r.cwd);
 }

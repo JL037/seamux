@@ -1,0 +1,119 @@
+import { useEffect, useRef, useState } from "react";
+import { useFetcher } from "react-router";
+import { FolderOpen, SendHorizontal } from "lucide-react";
+
+import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
+import type { DispatchResult } from "~/routes/dispatch";
+
+const LAST_DIR_KEY = "seemux:last-dir";
+
+function readLastDir(): string {
+  try {
+    return localStorage.getItem(LAST_DIR_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLastDir(dir: string) {
+  try {
+    localStorage.setItem(LAST_DIR_KEY, dir);
+  } catch {}
+}
+
+// The primary action: start new work as its own session, in a chosen
+// directory, instead of cramming another goal into an existing chat.
+export function DispatchBar() {
+  const dispatcher = useFetcher<DispatchResult>();
+  const dirs = useFetcher<{ directories: string[] }>();
+  const [prompt, setPrompt] = useState("");
+  const [cwd, setCwd] = useState("");
+  const [worktree, setWorktree] = useState(false);
+  const [started, setStarted] = useState<string | null>(null);
+  const handled = useRef<DispatchResult | undefined>(undefined);
+
+  useEffect(() => setCwd(readLastDir()), []);
+
+  const pending = dispatcher.state !== "idle";
+  const result = dispatcher.data;
+  useEffect(() => {
+    if (pending || !result || handled.current === result) return;
+    handled.current = result;
+    if (result.ok) {
+      setStarted(prompt.trim().split("\n")[0].slice(0, 80));
+      setPrompt("");
+      writeLastDir(cwd);
+    }
+  }, [pending, result, prompt, cwd]);
+
+  const loadDirs = () => {
+    if (dirs.state === "idle" && !dirs.data) dirs.load("/directories");
+  };
+
+  const canDispatch = !pending && prompt.trim() !== "" && cwd.trim() !== "";
+  const submit = () => {
+    if (!canDispatch) return;
+    setStarted(null);
+    dispatcher.submit(
+      { prompt, cwd: cwd.trim(), ...(worktree ? { worktree: "on" } : {}) },
+      { method: "post", action: "/dispatch" },
+    );
+  };
+
+  return (
+    <section className="flex flex-col gap-2 rounded-xl border bg-card p-2">
+      <Textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="Dispatch new work: what should a new session do? (⌘↵)"
+        rows={2}
+        className="min-h-0 resize-y border-0 bg-transparent text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex min-w-0 flex-1 basis-64 items-center gap-2 rounded-lg border bg-background px-2">
+          <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
+          <input
+            list="seemux-directories"
+            value={cwd}
+            onChange={(e) => setCwd(e.target.value)}
+            onFocus={loadDirs}
+            placeholder="/dir pick"
+            className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-sm outline-none placeholder:text-muted-foreground"
+          />
+          <datalist id="seemux-directories">
+            {dirs.data?.directories.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
+        </label>
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={worktree}
+            onChange={(e) => setWorktree(e.target.checked)}
+          />
+          new worktree
+        </label>
+        <Button disabled={!canDispatch} onClick={submit}>
+          <SendHorizontal />
+          {pending ? "Starting…" : "Dispatch"}
+        </Button>
+      </div>
+      {result && !pending && !result.ok && (
+        <p className="px-1 text-sm text-destructive">{result.error}</p>
+      )}
+      {started && (
+        <p className="px-1 text-sm text-muted-foreground">
+          Started “{started}”. It will appear on the board in a few seconds.
+        </p>
+      )}
+    </section>
+  );
+}

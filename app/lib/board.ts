@@ -44,6 +44,9 @@ export interface Card {
   lastPrompt: string | null;
   lastReply: string | null;
   workspaceRef: string | null;
+  // What the session was dispatched or forked to do, if seemux started it.
+  intent: string | null;
+  forkedFrom: string | null;
   // Running in a cmux surface, so the board can send into it.
   drivable: boolean;
   background: BackgroundSession[];
