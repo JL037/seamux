@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
@@ -544,7 +545,30 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         reported.get(`${card.worker.dispatchId}/${card.worker.key}`) ?? null;
     }
   }
-  return { generatedAt: now, cards, dispatches, orphans, warnings };
+  return {
+    generatedAt: now,
+    version: await servedVersion(),
+    cards,
+    dispatches,
+    orphans,
+    warnings,
+  };
+}
+
+// Two levels up is the repo root from app/lib/ and from build/server/.
+const SEEMUX_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
+
+async function servedVersion(): Promise<string | null> {
+  try {
+    const { stdout } = await run(
+      "git",
+      ["-C", SEEMUX_ROOT, "log", "-1", "--format=%h %s"],
+      { timeout: 5_000 },
+    );
+    return stdout.trim();
+  } catch {
+    return null;
+  }
 }
 
 const REPO_ROOTS = [join(homedir(), "code")];

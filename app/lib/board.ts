@@ -73,6 +73,8 @@ export interface DispatchSet {
 
 export interface Board {
   generatedAt: number;
+  // The commit the board is serving, so a landed change is visible.
+  version: string | null;
   cards: Card[];
   dispatches: DispatchSet[];
   // Background sessions whose parent chat is no longer live.

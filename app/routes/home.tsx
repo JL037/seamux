@@ -305,7 +305,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
         <header className="flex items-center justify-between text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">seemux</span>
-          <span>updated {new Date(now).toLocaleTimeString()}</span>
+          <span className="flex min-w-0 gap-3">
+            {board.version && (
+              <span className="truncate font-mono" title="Commit being served">
+                {board.version}
+              </span>
+            )}
+            <span className="shrink-0">
+              updated {new Date(now).toLocaleTimeString()}
+            </span>
+          </span>
         </header>
 
         <DispatchBar />
