@@ -20,6 +20,7 @@ import {
   type Column,
   type Subagent,
 } from "./board";
+import { listSurfaces, type Surface } from "./drive.server";
 import { subagentsFor, type SubagentRow } from "./store.server";
 
 const run = promisify(execFile);
@@ -167,7 +168,7 @@ function excerpt(text: string): string {
 // Harness-generated user turns (slash commands, caveats, reminders,
 // compaction summaries).
 const SYNTHETIC_PROMPT =
-  /^(<(local-command|command-|system-reminder|bash-|task-notification)|This session is being continued from a previous conversation)/;
+  /^(<(local-command|command-|system-reminder|bash-|task-notification)|This session is being continued from a previous conversation|\[Request interrupted)/;
 
 // Messages are written once complete, so the last one says whether the model
 // still owes a response. This is the check on `status: busy`, which Claude
@@ -245,6 +246,23 @@ const MESSAGE_CHARS = 20_000;
 
 // The visible conversation, oldest first: what Jakob and the agent said to
 // each other, without tool traffic, sidechains, or harness turns.
+// What resuming a closed chat needs, read server-side from its transcript.
+// null when the session is still live, since resuming would run a second
+// process on the same conversation.
+export async function closedSession(
+  sessionId: string,
+): Promise<{ cwd: string; name: string } | null> {
+  const [agents, transcripts] = await Promise.all([
+    listAgents(),
+    indexTranscripts(),
+  ]);
+  if (agents.some((a) => a.sessionId === sessionId)) return null;
+  const transcript = transcripts.get(sessionId);
+  if (!transcript) return null;
+  const s = await summarize(transcript.path);
+  return s.cwd ? { cwd: s.cwd, name: s.name ?? sessionId.slice(0, 8) } : null;
+}
+
 export async function loadMessages(
   sessionId: string,
   limit = 60,
@@ -352,6 +370,12 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     }),
     indexTranscripts(),
   ]);
+  const surfaces = await listSurfaces().catch((err) => {
+    warnings.push(
+      `cmux sessions unavailable, replies disabled: ${err.message}`,
+    );
+    return new Map<string, Surface>();
+  });
 
   // A background session attached to a terminal has a live `status`; it is a
   // chat Jakob is in, so it gets a card like any interactive session.
@@ -412,6 +436,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: summary?.lastPrompt ?? null,
         lastReply: summary?.lastReply ?? null,
         workspaceRef: ws?.ref ?? null,
+        drivable: surfaces.has(row.sessionId),
         background: children,
         subagents,
       };
@@ -437,6 +462,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: s.lastPrompt,
         lastReply: s.lastReply,
         workspaceRef: null,
+        drivable: false,
         background: [],
         subagents: [],
       };

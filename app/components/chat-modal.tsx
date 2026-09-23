@@ -25,12 +25,20 @@ export function ChatModal({
   onOpenChange,
   draft,
   onDraftChange,
+  onSend,
+  canSend,
+  pending,
+  error,
 }: {
   card: Card;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
+  onSend: () => void;
+  canSend: boolean;
+  pending: boolean;
+  error: string | null;
 }) {
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
   const url = `/sessions/${card.sessionId}/messages`;
@@ -104,14 +112,26 @@ export function ChatModal({
             autoFocus
             value={draft}
             onChange={(e) => onDraftChange(e.target.value)}
-            placeholder="Next message (sending lands in phase 3)"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                onSend();
+              }
+            }}
+            placeholder={
+              card.drivable
+                ? "Next message (⌘↵ to send)"
+                : "This session is not in a cmux surface"
+            }
+            disabled={!card.drivable}
             className="min-h-32 flex-1 resize-y"
           />
-          <Button disabled title="Send (phase 3)">
+          <Button disabled={!canSend} onClick={onSend} title="Send (⌘↵)">
             <SendHorizontal />
-            Send
+            {pending ? "Sending…" : "Send"}
           </Button>
         </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </DialogContent>
     </Dialog>
   );

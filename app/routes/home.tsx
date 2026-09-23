@@ -1,12 +1,18 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { useRevalidator } from "react-router";
 import {
   GitBranch,
   Layers,
   Maximize2,
-  Pause,
   Play,
   SendHorizontal,
+  Square,
 } from "lucide-react";
 
 import type { Route } from "./+types/home";
@@ -29,6 +35,7 @@ import {
   type Column,
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
+import { useSessionAction } from "~/lib/use-session-action";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -85,43 +92,100 @@ const DraftsContext = createContext<{
 }>({ drafts: {}, setDraft: () => {} });
 
 // The card's next chat line, with a popout into the full-size modal for
-// longer messages. Sending lands in phase 3.
+// longer messages. Both send through cmux into the session's surface.
 function ChatInput({ card }: { card: BoardCard }) {
   const { drafts, setDraft } = useContext(DraftsContext);
   const [open, setOpen] = useState(false);
   const draft = drafts[card.sessionId] ?? "";
   const onDraftChange = (d: string) => setDraft(card.sessionId, d);
+  const clear = useCallback(
+    () => setDraft(card.sessionId, ""),
+    [card.sessionId, setDraft],
+  );
+  const { submit, pending, error } = useSessionAction(card.sessionId, clear);
+  const canSend = card.drivable && !pending && draft.trim().length > 0;
+  const send = () => canSend && submit("send", { text: draft });
 
   return (
-    <div className="flex items-center gap-1">
-      <div className="flex min-w-0 flex-1 items-center gap-1 rounded-lg border bg-background p-1">
-        <input
-          value={draft}
-          onChange={(e) => onDraftChange(e.target.value)}
-          placeholder="Reply"
-          className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
-        />
-        <Button size="icon-xs" disabled title="Send (phase 3)">
-          <SendHorizontal />
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1">
+        <form
+          className="flex min-w-0 flex-1 items-center gap-1 rounded-lg border bg-background p-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+        >
+          <input
+            value={draft}
+            onChange={(e) => onDraftChange(e.target.value)}
+            placeholder={card.drivable ? "Reply" : "Not in a cmux surface"}
+            disabled={!card.drivable}
+            className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
+          />
+          <Button type="submit" size="icon-xs" disabled={!canSend} title="Send">
+            <SendHorizontal />
+          </Button>
+        </form>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          title="Open full view"
+          onClick={() => setOpen(true)}
+        >
+          <Maximize2 />
         </Button>
       </div>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        title="Open full view"
-        onClick={() => setOpen(true)}
-      >
-        <Maximize2 />
-      </Button>
+      {error && <ActionError error={error} />}
       <ChatModal
         card={card}
         open={open}
         onOpenChange={setOpen}
         draft={draft}
         onDraftChange={onDraftChange}
+        onSend={send}
+        canSend={canSend}
+        pending={pending}
+        error={error}
       />
     </div>
   );
+}
+
+function ActionError({ error }: { error: string }) {
+  return <p className="text-destructive">{error}</p>;
+}
+
+// Stop on a WORKING card (Esc into the session), resume on a DONE one.
+function CardControl({ card }: { card: BoardCard }) {
+  const { submit, pending, error } = useSessionAction(card.sessionId);
+  if (card.column === "working") {
+    return (
+      <Button
+        size="icon-xs"
+        variant="outline"
+        disabled={!card.drivable || pending}
+        title={error ?? "Stop this turn (Esc)"}
+        onClick={() => submit("interrupt")}
+      >
+        <Square />
+      </Button>
+    );
+  }
+  if (card.column === "done") {
+    return (
+      <Button
+        size="icon-xs"
+        variant="outline"
+        disabled={pending}
+        title={error ?? "Resume in a new cmux workspace"}
+        onClick={() => submit("resume")}
+      >
+        <Play />
+      </Button>
+    );
+  }
+  return null;
 }
 
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
@@ -130,26 +194,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <span className="truncate">{card.name}</span>
-          {card.column === "working" && (
-            <Button
-              size="icon-xs"
-              variant="outline"
-              disabled
-              title="Stop (phase 3)"
-            >
-              <Pause />
-            </Button>
-          )}
-          {card.column === "done" && (
-            <Button
-              size="icon-xs"
-              variant="outline"
-              disabled
-              title="Resume (phase 3)"
-            >
-              <Play />
-            </Button>
-          )}
+          <CardControl card={card} />
         </CardTitle>
         <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span className="truncate font-mono">{shortPath(card.cwd)}</span>
@@ -262,7 +307,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
         <header className="flex items-center justify-between text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">seemux</span>
-          <span>read-only · updated {new Date(now).toLocaleTimeString()}</span>
+          <span>updated {new Date(now).toLocaleTimeString()}</span>
         </header>
 
         <DispatchBar />

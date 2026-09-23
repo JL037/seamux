@@ -44,6 +44,8 @@ export interface Card {
   lastPrompt: string | null;
   lastReply: string | null;
   workspaceRef: string | null;
+  // Running in a cmux surface, so the board can send into it.
+  drivable: boolean;
   background: BackgroundSession[];
   subagents: Subagent[];
 }
