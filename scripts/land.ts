@@ -1,6 +1,11 @@
-// Lands a branch on main in this checkout, which the running board serves.
+// Lands a branch on main in the main checkout, which the running board
+// serves. Run it from a worktree to land that worktree's branch:
 //
-//   npm run land -- <branch>
+//   npm run land              (from a worktree: lands its current branch)
+//   npm run land -- <branch>  (from anywhere in the repo)
+//
+// Landings are serialised by a lock, so many agents can land at once: each
+// waits its turn, then rebases onto main as it is at that moment.
 //
 // 1. Rebases the branch onto main in its own worktree, so main only ever
 //    fast-forwards. A conflict stops here, with main untouched.
@@ -12,14 +17,19 @@
 // It never deletes the branch or its worktree.
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
 
 import { restart } from "./service.ts";
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BOARD = "http://127.0.0.1:5173/";
+const LOCK_WAIT_MS = 20 * 60 * 1000;
 
 function run(cwd: string, cmd: string, ...args: string[]): string {
   return execFileSync(cmd, args, { cwd, encoding: "utf8" }).trim();
@@ -36,6 +46,57 @@ function step(message: string) {
 function fail(message: string): never {
   console.error(`\n✗ ${message}\nmain is unchanged.`);
   process.exit(1);
+}
+
+// The main checkout is the first entry git lists, from any worktree.
+const REPO = git(process.cwd(), "worktree", "list", "--porcelain")
+  .split("\n")[0]
+  .replace(/^worktree /, "");
+const LOCK = join(REPO, "data/land.lock");
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// mkdir is atomic, so only one lander gets the directory. A lock whose
+// owner has died is cleared.
+async function acquireLock(branch: string) {
+  mkdirSync(join(REPO, "data"), { recursive: true });
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  let announced = false;
+  for (;;) {
+    try {
+      mkdirSync(LOCK);
+      writeFileSync(
+        join(LOCK, "owner.json"),
+        JSON.stringify({ pid: process.pid, branch, at: Date.now() }),
+      );
+      process.on("exit", () => rmSync(LOCK, { recursive: true, force: true }));
+      for (const sig of ["SIGINT", "SIGTERM"] as const) {
+        process.on(sig, () => process.exit(130));
+      }
+      return;
+    } catch {}
+    let owner: { pid: number; branch: string } | null = null;
+    try {
+      owner = JSON.parse(readFileSync(join(LOCK, "owner.json"), "utf8"));
+    } catch {}
+    if (owner && !alive(owner.pid)) {
+      rmSync(LOCK, { recursive: true, force: true });
+      continue;
+    }
+    if (Date.now() > deadline) fail("Timed out waiting for another landing.");
+    if (!announced && owner) {
+      step(`Waiting for ${owner.branch} to finish landing`);
+      announced = true;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
 }
 
 function worktreeFor(branch: string): string | null {
@@ -65,8 +126,18 @@ async function boardAnswers(): Promise<boolean> {
 }
 
 async function main() {
-  const branch = process.argv[2];
-  if (!branch) fail("usage: npm run land -- <branch>");
+  const branch =
+    process.argv[2] ??
+    (process.cwd().startsWith(`${REPO}/`) || process.cwd() === REPO
+      ? git(process.cwd(), "branch", "--show-current")
+      : "");
+  if (!branch || branch === "main") {
+    fail(
+      "Run this from a worktree, or name the branch: npm run land -- <branch>",
+    );
+  }
+
+  await acquireLock(branch);
 
   if (git(REPO, "branch", "--show-current") !== "main") {
     fail(`${REPO} must be on main: it is what the board serves.`);

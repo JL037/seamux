@@ -151,3 +151,6 @@ vite.config.ts.timestamp-*
 
 # Local worktrees
 /worktrees/
+
+# Claude Code worktrees (claude -w)
+/.claude/worktrees/
