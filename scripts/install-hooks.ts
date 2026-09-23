@@ -5,6 +5,7 @@
 //   npm run hooks:install
 //   npm run hooks:uninstall
 
+import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -15,7 +16,14 @@ const HOOK = join(
   dirname(fileURLToPath(import.meta.url)),
   "../hooks/subagent-event.ts",
 );
-const COMMAND = `node --no-warnings ${HOOK}`;
+// Node by full path: sessions started from a login shell that does not read
+// ~/.zshrc may not have it on PATH, and the hook would fail silently.
+const NODE =
+  execFileSync("/bin/sh", ["-lc", "command -v node"], {
+    encoding: "utf8",
+    env: process.env,
+  }).trim() || process.execPath;
+const COMMAND = `${NODE} --no-warnings ${HOOK}`;
 const EVENTS = ["SubagentStart", "SubagentStop"];
 
 interface HookGroup {

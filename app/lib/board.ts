@@ -47,15 +47,34 @@ export interface Card {
   // What the session was dispatched or forked to do, if seemux started it.
   intent: string | null;
   forkedFrom: string | null;
+  // Set when the session is a worker in a fan-out.
+  worker: {
+    dispatchId: string;
+    key: string;
+    reported: "ok" | "failed" | null;
+  } | null;
   // Running in a cmux surface, so the board can send into it.
   drivable: boolean;
   background: BackgroundSession[];
   subagents: Subagent[];
 }
 
+// A fan-out set from the protocol, and which workers have reported.
+export interface DispatchSet {
+  id: string;
+  title: string;
+  createdAt: number;
+  workers: {
+    key: string;
+    sessionId: string | null;
+    status: "ok" | "failed" | null;
+  }[];
+}
+
 export interface Board {
   generatedAt: number;
   cards: Card[];
+  dispatches: DispatchSet[];
   // Background sessions whose parent chat is no longer live.
   orphans: (BackgroundSession & { cwd: string })[];
   warnings: string[];
@@ -71,6 +90,9 @@ export interface ChatMessage {
 export const SUBAGENT_VISIBLE_MS = 30 * 60 * 1000;
 // A running subagent whose transcript is quiet this long is marked stale.
 export const SUBAGENT_STALE_MS = 15 * 60 * 1000;
+
+// Complete fan-outs stay on the board for this long.
+export const DISPATCH_VISIBLE_MS = 24 * 60 * 60 * 1000;
 
 // DONE cards stay visible for this long after the chat closes.
 export const DONE_VISIBLE_MS = 30 * 60 * 1000;

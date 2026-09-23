@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { GitFork, SendHorizontal } from "lucide-react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -89,13 +91,17 @@ export function ChatModal({
                 <div
                   key={`${m.at}-${i}`}
                   className={cn(
-                    "max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-sm",
+                    "max-w-[85%] rounded-lg px-3 py-2 text-sm",
                     m.role === "user"
-                      ? "self-end bg-primary text-primary-foreground"
-                      : "self-start bg-muted",
+                      ? "self-end whitespace-pre-wrap break-words bg-primary text-primary-foreground"
+                      : "prose prose-sm self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
                   )}
                 >
-                  {m.text}
+                  {m.role === "user" ? (
+                    m.text
+                  ) : (
+                    <Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown>
+                  )}
                 </div>
               ))}
             </div>

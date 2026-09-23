@@ -1,0 +1,3 @@
+#!/bin/sh
+# seemux protocol CLI. See scripts/seemux.ts.
+exec node --no-warnings "$(cd "$(dirname "$0")/.." && pwd)/scripts/seemux.ts" "$@"

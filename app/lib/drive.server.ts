@@ -6,10 +6,10 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
-import { recordDispatch } from "./store.server";
+import { recordDispatch } from "./store.server.ts";
 
 const run = promisify(execFile);
 
@@ -93,6 +93,9 @@ export async function interrupt(sessionId: string) {
 const CMUX_CLAUDE_WRAPPER =
   "/Applications/cmux.app/Contents/Resources/bin/cmux-claude-wrapper";
 const CLAUDE_BIN_DIR = join(homedir(), ".local/bin");
+// Node, for bin/seemux and the subagent hook inside the new session: the
+// same one this server runs on.
+const NODE_BIN_DIR = dirname(process.execPath);
 
 const shq = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
@@ -106,7 +109,7 @@ async function launch(
     cwd,
     title,
     initial_command: [
-      `PATH=${shq(CLAUDE_BIN_DIR)}:"$PATH"`,
+      `PATH=${shq(CLAUDE_BIN_DIR)}:${shq(NODE_BIN_DIR)}:"$PATH"`,
       shq(CMUX_CLAUDE_WRAPPER),
       ...args.map(shq),
     ].join(" "),

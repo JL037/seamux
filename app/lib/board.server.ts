@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import {
+  DISPATCH_VISIBLE_MS,
   DONE_VISIBLE_MS,
   SUBAGENT_STALE_MS,
   SUBAGENT_VISIBLE_MS,
@@ -18,9 +19,11 @@ import {
   type Card,
   type ChatMessage,
   type Column,
+  type DispatchSet,
   type Subagent,
 } from "./board";
 import { listSurfaces, type Surface } from "./drive.server";
+import { dispatchStatus, listDispatches } from "./protocol.server";
 import {
   dispatchesFor,
   recentDispatchCwds,
@@ -466,6 +469,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         workspaceRef: ws?.ref ?? null,
         intent: null,
         forkedFrom: null,
+        worker: null,
         drivable: surfaces.has(row.sessionId),
         background: children,
         subagents,
@@ -494,6 +498,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         workspaceRef: null,
         intent: null,
         forkedFrom: null,
+        worker: null,
         drivable: false,
         background: [],
         subagents: [],
@@ -514,13 +519,32 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       if (d) {
         card.intent = excerpt(d.prompt);
         card.forkedFrom = d.forked_from;
+        if (d.dispatch_id && d.worker) {
+          card.worker = {
+            dispatchId: d.dispatch_id,
+            key: d.worker,
+            reported: null,
+          };
+        }
       }
     }
   } catch (err) {
     warnings.push(`Dispatch store unavailable: ${(err as Error).message}`);
   }
   cards.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
-  return { generatedAt: now, cards, orphans, warnings };
+  const dispatches = loadDispatchSets(now, warnings);
+  const reported = new Map(
+    dispatches.flatMap((d) =>
+      d.workers.map((w) => [`${d.id}/${w.key}`, w.status]),
+    ),
+  );
+  for (const card of cards) {
+    if (card.worker) {
+      card.worker.reported =
+        reported.get(`${card.worker.dispatchId}/${card.worker.key}`) ?? null;
+    }
+  }
+  return { generatedAt: now, cards, dispatches, orphans, warnings };
 }
 
 const REPO_ROOTS = [join(homedir(), "code")];
@@ -572,4 +596,29 @@ export async function knownDirectories(): Promise<string[]> {
     ...repos.sort(),
   ];
   return [...new Set(all)].filter((d) => d.startsWith(`${homedir()}/`));
+}
+
+// Fan-outs still waiting on workers, and complete ones from the last day.
+function loadDispatchSets(now: number, warnings: string[]): DispatchSet[] {
+  const sets: DispatchSet[] = [];
+  for (const id of listDispatches()) {
+    try {
+      const s = dispatchStatus(id);
+      if (s.complete && now - s.manifest.createdAt > DISPATCH_VISIBLE_MS)
+        continue;
+      sets.push({
+        id,
+        title: s.manifest.title,
+        createdAt: s.manifest.createdAt,
+        workers: s.manifest.workers.map((w) => ({
+          key: w.key,
+          sessionId: w.sessionId,
+          status: s.markers[w.key]?.status ?? null,
+        })),
+      });
+    } catch (err) {
+      warnings.push(`Dispatch ${id} unreadable: ${(err as Error).message}`);
+    }
+  }
+  return sets.sort((a, b) => b.createdAt - a.createdAt);
 }

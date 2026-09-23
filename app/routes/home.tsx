@@ -18,6 +18,7 @@ import {
 import type { Route } from "./+types/home";
 import { ChatModal } from "~/components/chat-modal";
 import { DispatchBar } from "~/components/dispatch-bar";
+import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { SubagentSummary } from "~/components/subagent-list";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -212,6 +213,12 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-xs">
+        {card.worker && (
+          <p className="flex items-center gap-1.5 font-mono text-muted-foreground">
+            <WorkerStatus status={card.worker.reported} />
+            worker {card.worker.key} · {card.worker.dispatchId}
+          </p>
+        )}
         {card.intent && (
           <p className="line-clamp-2 rounded-md bg-muted px-2 py-1">
             <span className="font-medium">
@@ -302,6 +309,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </header>
 
         <DispatchBar />
+        <DispatchStrip sets={board.dispatches} />
 
         {board.warnings.map((w) => (
           <p key={w} className="text-sm text-amber-600 dark:text-amber-400">
