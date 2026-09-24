@@ -140,6 +140,8 @@ Four columns: **IDLE**, **WAITING**, **WORKING**, **DONE**. Simpler than the uni
 | WORKING | Running | `status: busy` when the transcript agrees a turn is in progress, or any of its subagents still running |
 | DONE | Closed by Jakob | `claude stop`, or the chat closing |
 
+DONE is hidden by default; a **Show done** toggle in the header, remembered per browser, brings it back.
+
 **PINNED sits left of the four**, for sessions that are meant to run for a long time by design. It appears only while something is pinned. A pin is Jakob's call, since nothing about a session says it is long-running, so it is one of the few things the store records. A pinned card stays in PINNED whatever its state, shown as a coloured dot beside its name, with the same controls it would have in its state's column. Closing a pinned chat keeps it in PINNED with its resume button for as long as its transcript exists, rather than letting it age off after 30 minutes. Unpinning puts it back in its state's column. Jakob, 2026-09-23: *"some sessions are meant to be long running by design."*
 
 **A failed session needs Jakob**, so it lands in WAITING rather than DONE. Jakob, 2026-09-23: *"A failed session is probably blocked/waiting."*
@@ -208,7 +210,7 @@ Controls differ by column, and the sketch is specific:
 
 - **WORKING** cards carry a **stop** button. It is disabled, with the reason on hover, when only the card's subagents are running (the chat's own turn has ended, so Esc has no turn to stop) or when the session is not in a cmux surface.
 - **DONE** cards carry a **play / resume** button.
-- Every card carries a **pin** button, which moves it into PINNED or back out.
+- Every card but a DONE one carries a **pin** button, which moves it into PINNED or back out. A closed chat can't be pinned; one pinned before it closed keeps its unpin button.
 - An expanded card shows the transcript with an **input** field beneath it.
 - Every card's path carries a **coloured square** for its project, so cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` belongs to its repo. The colour is one of 24, hashed from the project's path until one is picked by clicking the square. Picks are kept in the browser's localStorage for now, until seemux has a config of its own.
 

@@ -11,6 +11,8 @@ import {
   GitBranch,
   Layers,
   Maximize2,
+  Eye,
+  EyeOff,
   Pin,
   PinOff,
   Play,
@@ -318,9 +320,12 @@ function CardControl({ card }: { card: BoardCard }) {
   return null;
 }
 
-// Pins a long-running chat into its own column, or takes it back out.
+// Pins a long-running chat into its own column, or takes it back out. A
+// closed chat can't be pinned; one pinned before it closed can still be
+// unpinned.
 function PinToggle({ card }: { card: BoardCard }) {
   const { submit, pending, error } = useSessionAction(card.sessionId);
+  if (card.column === "done" && !card.pinned) return null;
   return (
     <Button
       size="icon-xs"
@@ -434,6 +439,13 @@ type BoardColumnKey = Column | "pinned";
 
 const PINNED_ACCENT = "bg-violet-500";
 
+// Spelled out so Tailwind sees each class.
+const XL_GRID_COLS: Record<number, string> = {
+  3: "xl:grid-cols-3",
+  4: "xl:grid-cols-4",
+  5: "xl:grid-cols-5",
+};
+
 function BoardColumn({
   column,
   cards,
@@ -474,6 +486,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const now = board.generatedAt;
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
+  // Done is hidden until asked for, and the choice outlives the tab.
+  const [showDone, setShowDone] = useLocalStorage("seemux:show-done", false);
+  const doneCount = board.cards.filter(
+    (c) => !c.pinned && c.column === "done",
+  ).length;
+  const columns = COLUMNS.filter((c) => showDone || c !== "done");
+  const columnCount = columns.length + (pinned.length > 0 ? 1 : 0);
   const [drafts, setDrafts] = useSessionStorage<Record<string, string>>(
     "seemux:drafts",
     {},
@@ -499,7 +518,20 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
           <header className="flex items-center justify-between text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">seemux</span>
-            <span className="flex min-w-0 gap-3">
+            <span className="flex min-w-0 items-center gap-3">
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => setShowDone(!showDone)}
+                title={
+                  showDone
+                    ? "Hide chats closed in the last 30m"
+                    : "Show chats closed in the last 30m"
+                }
+              >
+                {showDone ? <EyeOff /> : <Eye />}
+                {showDone ? "Hide done" : `Show done (${doneCount})`}
+              </Button>
               {board.version && (
                 <span className="truncate font-mono" title="Commit being served">
                   {board.version}
@@ -523,13 +555,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <div
             className={cn(
               "grid grid-cols-1 gap-4 sm:grid-cols-2",
-              pinned.length > 0 ? "xl:grid-cols-5" : "xl:grid-cols-4",
+              XL_GRID_COLS[columnCount],
             )}
           >
             {pinned.length > 0 && (
               <BoardColumn column="pinned" cards={pinned} now={now} />
             )}
-            {COLUMNS.map((column) => (
+            {columns.map((column) => (
               <BoardColumn
                 key={column}
                 column={column}
