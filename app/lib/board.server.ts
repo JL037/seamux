@@ -365,9 +365,13 @@ async function toBackground(row: AgentRow): Promise<BackgroundSession> {
   return { id: shortId, name: row.name, state: row.state ?? "unknown", needs };
 }
 
+// Busy only counts when the transcript agrees a turn is running.
+function turnRunning(row: AgentRow, turnActive: boolean | null): boolean {
+  return row.status === "busy" && turnActive !== false;
+}
+
 function liveColumn(
-  row: AgentRow,
-  turnActive: boolean | null,
+  busy: boolean,
   needsInput: boolean,
   background: BackgroundSession[],
   subagents: Subagent[],
@@ -378,8 +382,6 @@ function liveColumn(
   );
   if (needsInput || childNeedsHuman) return "waiting";
   // A parent at rest while its subagents run is still working.
-  // Busy only counts when the transcript agrees a turn is running.
-  const busy = row.status === "busy" && turnActive !== false;
   if (busy || subagents.some((s) => s.running && !s.stale)) return "working";
   return "idle";
 }
@@ -452,13 +454,13 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
           .filter((s) => s.session_id === row.sessionId)
           .map((s) => toSubagent(s, transcript?.path, now)),
       );
+      const busy = turnRunning(row, summary?.turnActive ?? null);
       return {
         sessionId: row.sessionId,
         name: row.name,
         cwd: row.cwd,
         column: liveColumn(
-          row,
-          summary?.turnActive ?? null,
+          busy,
           ws?.needsInput ?? false,
           children,
           subagents,
@@ -472,6 +474,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         forkedFrom: null,
         worker: null,
         drivable: surfaces.has(row.sessionId),
+        turnRunning: busy,
         background: children,
         subagents,
       };
@@ -501,6 +504,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         forkedFrom: null,
         worker: null,
         drivable: false,
+        turnRunning: false,
         background: [],
         subagents: [],
       };

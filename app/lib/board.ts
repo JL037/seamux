@@ -55,6 +55,9 @@ export interface Card {
   } | null;
   // Running in a cmux surface, so the board can send into it.
   drivable: boolean;
+  // The chat's own turn is running, so Esc has something to stop. A card can
+  // be WORKING without one, while only its subagents run.
+  turnRunning: boolean;
   background: BackgroundSession[];
   subagents: Subagent[];
 }

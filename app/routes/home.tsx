@@ -190,20 +190,35 @@ function ActionError({ error }: { error: string }) {
   return <p className="text-destructive">{error}</p>;
 }
 
+// Why a WORKING card's stop is disabled, or null when it can be pressed.
+function stopBlocked(card: BoardCard): string | null {
+  if (!card.turnRunning) {
+    return "Only its subagents are running; the chat's own turn has ended, so there is no turn to stop";
+  }
+  if (!card.drivable) {
+    return "Not in a cmux surface, so the board can't press Esc in it";
+  }
+  return null;
+}
+
 // Stop on a WORKING card (Esc into the session), resume on a DONE one.
 function CardControl({ card }: { card: BoardCard }) {
   const { submit, pending, error } = useSessionAction(card.sessionId);
   if (card.column === "working") {
+    const blocked = stopBlocked(card);
+    // A disabled button takes no pointer events, so the span carries the
+    // reason for hover.
     return (
-      <Button
-        size="icon-xs"
-        variant="outline"
-        disabled={!card.drivable || pending}
-        title={error ?? "Stop this turn (Esc)"}
-        onClick={() => submit("interrupt")}
-      >
-        <Square />
-      </Button>
+      <span title={error ?? blocked ?? "Stop this turn (Esc)"}>
+        <Button
+          size="icon-xs"
+          variant="outline"
+          disabled={blocked != null || pending}
+          onClick={() => submit("interrupt")}
+        >
+          <Square />
+        </Button>
+      </span>
     );
   }
   if (card.column === "idle") {

@@ -203,7 +203,7 @@ Closing a chat maps to `claude stop <id>`, whose own help says "its conversation
 
 Controls differ by column, and the sketch is specific:
 
-- **WORKING** cards carry a **stop** button.
+- **WORKING** cards carry a **stop** button. It is disabled, with the reason on hover, when only the card's subagents are running (the chat's own turn has ended, so Esc has no turn to stop) or when the session is not in a cmux surface.
 - **DONE** cards carry a **play / resume** button.
 - An expanded card shows the transcript with an **input** field beneath it.
 - Every card's path carries a **coloured square**, hashed from the project's path, so it is the same on every poll and reload and cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` takes its repo's colour.
