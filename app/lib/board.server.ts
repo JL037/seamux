@@ -77,6 +77,8 @@ interface TranscriptSummary {
   question: string | null;
   // How full the context window is, from the last response's usage.
   context: ContextUsage | null;
+  // Prompts Jakob typed while a turn ran, not yet taken up by the chat.
+  queued: number;
 }
 
 async function readJson<T>(cmd: string, args: string[]): Promise<T> {
@@ -203,6 +205,38 @@ function replyExcerpt(text: string): string {
 const SYNTHETIC_PROMPT =
   /^(<(local-command|command-|system-reminder|bash-|task-notification)|This session is being continued from a previous conversation|\[Request interrupted)/;
 
+// What the harness queues for the chat on its own: background task and
+// subagent hand-backs. The rest of the queue is prompts Jakob typed.
+const HARNESS_QUEUED = /^<(task-notification|agent-message)[\s>]/;
+
+// Claude Code logs its input queue as it changes. Replaying the log gives
+// what is still queued. A dequeue takes a typed prompt ahead of harness
+// items, and a remove names the item it drops.
+function queuedPrompts(lines: string[]): number {
+  let queue: string[] = [];
+  for (const line of lines) {
+    if (!line.includes('"queue-operation"')) continue;
+    let o: any;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (o.type !== "queue-operation") continue;
+    const content = typeof o.content === "string" ? o.content : "";
+    if (o.operation === "enqueue") queue.push(content);
+    else if (o.operation === "popAll") queue = [];
+    else if (o.operation === "dequeue") {
+      const typed = queue.findIndex((c) => !HARNESS_QUEUED.test(c));
+      queue.splice(typed >= 0 ? typed : 0, 1);
+    } else if (o.operation === "remove") {
+      const at = queue.indexOf(content);
+      if (at >= 0) queue.splice(at, 1);
+    }
+  }
+  return queue.filter((c) => !HARNESS_QUEUED.test(c)).length;
+}
+
 // Messages are written once complete, so the last one says whether the model
 // still owes a response. This is the check on `status: busy`, which Claude
 // Code also sets while internal helper agents run between turns.
@@ -276,11 +310,13 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     pendingTool: null,
     question: null,
     context: null,
+    queued: 0,
   };
   // Settled by the last response, or by a compaction after it, which leaves
   // the window's size unknown until the next response.
   let contextKnown = false;
   const lines = await readTail(path);
+  summary.queued = queuedPrompts(lines);
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i]) continue;
     let o: any;
@@ -601,6 +637,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: summary?.lastPrompt ?? null,
         lastReply: summary?.lastReply ?? null,
         context: summary?.context ?? null,
+        queued: summary?.queued ?? 0,
         workspaceRef: ws?.ref ?? null,
         intent: null,
         forkedFrom: null,
@@ -644,6 +681,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: s.lastPrompt,
         lastReply: s.lastReply,
         context: s.context,
+        queued: 0,
         workspaceRef: null,
         intent: null,
         forkedFrom: null,

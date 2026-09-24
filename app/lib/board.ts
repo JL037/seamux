@@ -79,6 +79,8 @@ export interface Card {
   lastReply: string | null;
   // null until the chat's first response, and again just after a compaction.
   context: ContextUsage | null;
+  // Prompts typed into the chat that wait for its current turn to end.
+  queued: number;
   workspaceRef: string | null;
   // What the session was dispatched or forked to do, if seamux started it.
   intent: string | null;

@@ -605,7 +605,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             ))}
           </div>
         )}
-        <CardState column={card.column} />
+        <CardState column={card.column} queued={card.queued} />
         <ChatInput card={card} />
       </CardContent>
     </Card>
@@ -614,7 +614,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
 
 // Waiting shows nothing here: the card already carries the prompt or tool
 // that is waiting, and done cards are over.
-function CardState({ column }: { column: Column }) {
+function CardState({ column, queued }: { column: Column; queued: number }) {
   if (column === "idle") {
     return (
       <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -628,6 +628,11 @@ function CardState({ column }: { column: Column }) {
       <span className="flex items-center gap-1.5 text-brand-cyan">
         <LoaderCircle className="size-3.5 animate-spin" />
         working
+        {queued > 0 && (
+          <span title={`${queued} queued for when this turn ends`}>
+            +{queued}
+          </span>
+        )}
       </span>
     );
   }
