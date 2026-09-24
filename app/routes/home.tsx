@@ -26,6 +26,7 @@ import { ChatModal } from "~/components/chat-modal";
 import { DispatchBar } from "~/components/dispatch-bar";
 import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { SubagentSummary } from "~/components/subagent-list";
+import { WaitingPanel } from "~/components/waiting-panel";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -404,6 +405,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           </p>
         )}
         {card.lastReply && <p className="line-clamp-4">{card.lastReply}</p>}
+        <WaitingPanel card={card} />
         <SubagentSummary subagents={card.subagents} now={now} />
         {card.background.length > 0 && (
           <div className="flex flex-wrap gap-1">

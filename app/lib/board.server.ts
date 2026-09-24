@@ -1,7 +1,7 @@
 // Derives the board from the running tools. Nothing here writes anywhere:
-// session state comes from `claude agents --json`, waiting signals from cmux,
-// card content from the transcripts on disk. If this ever disagrees with the
-// tools, the tools win.
+// session state comes from `claude agents --json`, backed by cmux's waiting
+// signal, and card content from the transcripts on disk. If this ever
+// disagrees with the tools, the tools win.
 
 import { execFile } from "node:child_process";
 import { open, readdir, readFile, stat } from "node:fs/promises";
@@ -21,7 +21,9 @@ import {
   type ChatMessage,
   type Column,
   type DispatchSet,
+  type Question,
   type Subagent,
+  type Waiting,
 } from "./board";
 import { listSurfaces, type Surface } from "./drive.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
@@ -46,7 +48,9 @@ interface AgentRow {
   startedAt: number;
   id?: string;
   pid?: number;
-  status?: "busy" | "idle";
+  // "waiting" when a dialog is open, with `waitingFor` saying which kind.
+  status?: "busy" | "idle" | "waiting";
+  waitingFor?: string;
   state?: "working" | "blocked" | "done" | "failed";
 }
 
@@ -63,6 +67,8 @@ interface TranscriptSummary {
   lastReply: string | null;
   // From the last message: is a turn in progress? null when unknown.
   turnActive: boolean | null;
+  // The tool call the last message is waiting on, if any.
+  pendingTool: { id: string; name: string; input: any } | null;
 }
 
 async function readJson<T>(cmd: string, args: string[]): Promise<T> {
@@ -204,6 +210,19 @@ function turnActive(o: any): boolean {
   return !SYNTHETIC_PROMPT.test(text);
 }
 
+// The last tool call in an assistant message that stopped to run tools. When
+// the session is waiting, its dialog belongs to this call.
+function pendingTool(o: any): TranscriptSummary["pendingTool"] {
+  if (o.type !== "assistant" || o.message?.stop_reason !== "tool_use")
+    return null;
+  const content = o.message?.content;
+  if (!Array.isArray(content)) return null;
+  const call = content.filter((c: any) => c?.type === "tool_use").at(-1);
+  return call
+    ? { id: call.id, name: call.name, input: call.input ?? {} }
+    : null;
+}
+
 async function summarize(path: string): Promise<TranscriptSummary> {
   const summary: TranscriptSummary = {
     name: null,
@@ -212,6 +231,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     lastPrompt: null,
     lastReply: null,
     turnActive: null,
+    pendingTool: null,
   };
   const lines = await readTail(path);
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -233,6 +253,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       !o.isSidechain
     ) {
       summary.turnActive = turnActive(o);
+      summary.pendingTool = pendingTool(o);
     }
     if (o.isSidechain || o.isMeta || o.isCompactSummary) continue;
 
@@ -366,6 +387,54 @@ async function toBackground(row: AgentRow): Promise<BackgroundSession> {
   return { id: shortId, name: row.name, state: row.state ?? "unknown", needs };
 }
 
+// The questions of an open AskUserQuestion call, or null when the input is
+// not the shape the board knows how to answer.
+function questionsOf(input: any): Question[] | null {
+  if (!Array.isArray(input?.questions) || input.questions.length === 0)
+    return null;
+  const questions: Question[] = [];
+  for (const q of input.questions) {
+    if (typeof q?.question !== "string" || !Array.isArray(q.options))
+      return null;
+    // Options are picked by digit, so at most nine, less "Type something".
+    if (q.options.length === 0 || q.options.length > 8) return null;
+    questions.push({
+      question: q.question,
+      header: typeof q.header === "string" ? q.header : null,
+      multiSelect: q.multiSelect === true,
+      options: q.options.map((o: any) => ({
+        label: String(o?.label ?? ""),
+        description: typeof o?.description === "string" ? o.description : null,
+      })),
+    });
+  }
+  return questions;
+}
+
+// What a waiting tool call is about, in one line.
+function toolDetail(input: any): string | null {
+  const v =
+    input?.command ?? input?.file_path ?? input?.url ?? input?.description;
+  if (typeof v === "string") return excerpt(v);
+  const json = JSON.stringify(input ?? {});
+  return json === "{}" ? null : excerpt(json);
+}
+
+function waitingOn(
+  row: AgentRow,
+  tool: TranscriptSummary["pendingTool"],
+): Waiting | null {
+  if (row.status !== "waiting") return null;
+  const questions =
+    tool?.name === "AskUserQuestion" ? questionsOf(tool.input) : null;
+  return {
+    reason: row.waitingFor ?? null,
+    tool: tool?.name ?? null,
+    detail: tool && !questions ? toolDetail(tool.input) : null,
+    ask: tool && questions ? { toolUseId: tool.id, questions } : null,
+  };
+}
+
 // Busy only counts when the transcript agrees a turn is running.
 function turnRunning(row: AgentRow, turnActive: boolean | null): boolean {
   return row.status === "busy" && turnActive !== false;
@@ -456,13 +525,15 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
           .map((s) => toSubagent(s, transcript?.path, now)),
       );
       const busy = turnRunning(row, summary?.turnActive ?? null);
+      const waiting = waitingOn(row, summary?.pendingTool ?? null);
       return {
         sessionId: row.sessionId,
         name: row.name,
         cwd: row.cwd,
         column: liveColumn(
           busy,
-          ws?.needsInput ?? false,
+          // cmux as a backup, for a dialog Claude Code does not report.
+          waiting != null || (ws?.needsInput ?? false),
           children,
           subagents,
         ),
@@ -477,6 +548,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         drivable: surfaces.has(row.sessionId),
         turnRunning: busy,
         pinned: false,
+        waiting,
         background: children,
         subagents,
       };
@@ -517,6 +589,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         drivable: false,
         turnRunning: false,
         pinned: false,
+        waiting: null,
         background: [],
         subagents: [],
       };

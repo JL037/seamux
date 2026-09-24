@@ -34,6 +34,30 @@ export interface Subagent {
   lastMessage: string | null;
 }
 
+// One question from an open AskUserQuestion call, as the model asked it.
+export interface Question {
+  question: string;
+  header: string | null;
+  multiSelect: boolean;
+  options: { label: string; description: string | null }[];
+}
+
+// How Jakob answers one question: option indices, or his own text. Own text
+// is only offered on single-select questions.
+export type Answer = { picks: number[] } | { text: string };
+
+// What a WAITING card is blocked on.
+export interface Waiting {
+  // Claude Code's own words, from `claude agents`: "input needed" for a
+  // question, "permission prompt" for an approval.
+  reason: string | null;
+  // The tool call the dialog belongs to, from the transcript.
+  tool: string | null;
+  detail: string | null;
+  // An open AskUserQuestion, which the board can answer.
+  ask: { toolUseId: string; questions: Question[] } | null;
+}
+
 export interface Card {
   sessionId: string;
   name: string;
@@ -61,6 +85,8 @@ export interface Card {
   // Pinned from the board: shown in its own column whatever its state, and
   // kept on the board after it closes, however long ago.
   pinned: boolean;
+  // Set when the chat itself is blocked on a dialog.
+  waiting: Waiting | null;
   background: BackgroundSession[];
   subagents: Subagent[];
 }

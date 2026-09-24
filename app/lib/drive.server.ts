@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
+import type { Answer, Question } from "./board.ts";
 import { recordDispatch } from "./store.server.ts";
 
 const run = promisify(execFile);
@@ -85,6 +86,48 @@ export async function interrupt(sessionId: string) {
   await rpc("surface.send_key", { ...target(surface), key: "escape" });
 }
 
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Long enough for the question dialog to redraw between keys.
+const KEY_GAP_MS = 400;
+
+// Answer an open AskUserQuestion by driving its dialog, so the model gets a
+// real answer rather than an interrupted turn. Measured against Claude Code
+// 2.1.281:
+// - a digit picks an option on a single-select question and moves on,
+//   submitting outright when there is only one question;
+// - on a multi-select question digits toggle, and Tab moves on;
+// - the digit after the last option is "Type something", and pasted text
+//   there is submitted as the answer;
+// - with several questions, or any multi-select one, a review screen comes
+//   last, and 1 submits it.
+export async function answerQuestion(
+  sessionId: string,
+  questions: Question[],
+  answers: Answer[],
+) {
+  const surface = await surfaceFor(sessionId);
+  const digit = async (n: number) => {
+    await rpc("surface.send_text", { ...target(surface), text: String(n) });
+    await pause(KEY_GAP_MS);
+  };
+  for (const [i, q] of questions.entries()) {
+    const a = answers[i];
+    if ("text" in a) {
+      await digit(q.options.length + 1);
+      await rpc("terminal.paste", { ...target(surface), text: a.text });
+      await pause(KEY_GAP_MS);
+    } else if (q.multiSelect) {
+      for (const pick of a.picks) await digit(pick + 1);
+      await rpc("surface.send_key", { ...target(surface), key: "tab" });
+      await pause(KEY_GAP_MS);
+    } else {
+      await digit(a.picks[0] + 1);
+    }
+  }
+  if (questions.length > 1 || questions.some((q) => q.multiSelect))
+    await digit(1);
+}
+
 // Close a chat the way Jakob would: /exit. The conversation is kept, and
 // the card moves to DONE, where it can be resumed.
 export async function closeChat(sessionId: string) {
@@ -112,16 +155,51 @@ async function launch(
   args: string[],
   focus: boolean,
 ) {
-  await rpc("workspace.create", {
-    cwd,
-    title,
-    initial_command: [
-      `PATH=${shq(CLAUDE_BIN_DIR)}:${shq(NODE_BIN_DIR)}:"$PATH"`,
-      shq(CMUX_CLAUDE_WRAPPER),
-      ...args.map(shq),
-    ].join(" "),
-    focus,
-  });
+  const created = await rpc<{ surface_id: string; workspace_id: string }>(
+    "workspace.create",
+    {
+      cwd,
+      title,
+      initial_command: [
+        `PATH=${shq(CLAUDE_BIN_DIR)}:${shq(NODE_BIN_DIR)}:"$PATH"`,
+        shq(CMUX_CLAUDE_WRAPPER),
+        ...args.map(shq),
+      ].join(" "),
+      focus,
+    },
+  );
+  // Not awaited: the dialog, if any, shows up seconds after the launch.
+  void acceptTrust({
+    surfaceId: created.surface_id,
+    workspaceId: created.workspace_id,
+  }).catch(() => {});
+}
+
+const TRUST_PROMPT = "Yes, I trust this folder";
+const TRUST_WAIT_MS = 30_000;
+
+// Claude Code stops on a new folder to ask whether Jakob trusts it, before
+// the session exists anywhere the board could see it. Choosing the folder
+// to dispatch into is that decision, so seemux answers yes. Enter alone
+// would pick the default, "No, exit".
+async function acceptTrust(surface: Surface) {
+  const deadline = Date.now() + TRUST_WAIT_MS;
+  while (Date.now() < deadline) {
+    await pause(1000);
+    const { stdout: screen } = await run(
+      "cmux",
+      ["read-screen", "--surface", surface.surfaceId],
+      { timeout: 10_000 },
+    );
+    if (screen.includes(TRUST_PROMPT)) {
+      await rpc("surface.send_key", { ...target(surface), key: "down" });
+      await pause(KEY_GAP_MS);
+      await rpc("surface.send_key", { ...target(surface), key: "enter" });
+      return;
+    }
+    // Claude Code is up, past any dialog.
+    if (screen.includes("Claude Code v")) return;
+  }
 }
 
 // A new workspace starts Claude a few seconds after it is created, and

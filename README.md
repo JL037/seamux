@@ -68,7 +68,7 @@ This README is the brief and its own source of truth: edit it here. Prose in thi
 
 | Need | Already provided by | Verified |
 | --- | --- | --- |
-| Session state and columns | `claude agents --json --all` gives `blocked` / `working` / `done` / `failed` plus `idle` / `busy`, across every project | yes |
+| Session state and columns | `claude agents --json --all` gives `blocked` / `working` / `done` / `failed` plus `idle` / `busy` / `waiting`, across every project. A `waiting` row says why in `waitingFor` | yes |
 | Spawn | `claude --bg`, prints a short id | yes |
 | Read without entering | `claude logs <id>` | yes |
 | Enter | `claude attach <id>` | yes |
@@ -136,7 +136,7 @@ Four columns: **IDLE**, **WAITING**, **WORKING**, **DONE**. Simpler than the uni
 | Column | Means | Derived from |
 | --- | --- | --- |
 | IDLE | Alive, holding its worktree, nothing to do | `claude agents` `status: idle` with no block |
-| WAITING | Blocked on a human | `claude agents` `state: blocked` or `state: failed`, cmux `any_agent_needs_input`, `agent.approval.requested` / `agent.question.requested` |
+| WAITING | Blocked on a human | `claude agents` `status: waiting` or a child's `state: blocked` / `state: failed`, with cmux `any_agent_needs_input` as a backup |
 | WORKING | Running | `status: busy` when the transcript agrees a turn is in progress, or any of its subagents still running |
 | DONE | Closed by Jakob | `claude stop`, or the chat closing |
 
@@ -169,6 +169,8 @@ That gives the system a property worth stating outright: **the dispatcher reads,
 Both halves are available today.
 
 **Reading a conversation:** transcripts are JSONL at `~/.claude/projects/<project-slug>/<session-id>.jsonl`, one file per session. That is the card's content. `claude logs <id>` gives recent terminal output for a cheaper preview.
+
+**What a waiting card is waiting on:** `claude agents` gives the kind, `waitingFor: "input needed"` for a question and `"permission prompt"` for an approval, and the transcript's last message is the tool call the dialog belongs to. An approval shows its command or path on the card, to approve in the terminal. An AskUserQuestion is answered on the card: the board drives the dialog with the same keys Jakob would press, so the model gets real answers, not an interrupted turn. Jakob, 2026-09-23: *"I don't want to reimplement the tools, but reimplementing things like AskUserQuestions might actually save us some headache."*
 
 **Writing into a conversation:** a paste into the session's cmux surface, then Enter. `claude -p --resume <session-id>` looked like the path, but on a live session it starts a second process on the same conversation, so seemux never uses it on anything live. A closed chat is resumed in a new cmux workspace instead, so that it becomes live and drivable again.
 
@@ -289,6 +291,9 @@ Each of these corrected something the research had marked verified or documented
 - **That login shell does not read `~/.zshrc`**, so neither `claude` nor `node` is on its `PATH`. seemux launches through cmux's own `cmux-claude-wrapper`, which also registers the session with cmux, with `~/.local/bin` and the server's Node directory prepended. Launching `claude` directly starts a session cmux never learns about, which the board then cannot drive.
 - **cmux RPCs default to the caller's own surface.** A call without a `surface_id` acts on whatever terminal seemux itself runs in. seemux always resolves the surface server-side and passes it explicitly.
 - **A resumed chat is invisible for a few seconds.** Until the new workspace starts Claude, nothing reports the session as live, so a second resume in that window started a second process on the same conversation. The server now claims a session before its first check and holds the claim for 60 seconds.
+- **Idle and waiting are separate `status` values.** `claude agents` reports `status: waiting` while a dialog is open, with `waitingFor` set to `input needed` for AskUserQuestion or `permission prompt` for an approval. The research listed only `idle` and `busy`, so the board used to depend on cmux for WAITING and missed sessions outside it.
+- **AskUserQuestion answers by digit.** On a single-select question a digit picks and moves on, and it submits outright when it is the only question. On a multi-select question, digits toggle and Tab moves on. The digit after the last option is "Type something", and a paste there submits the text. With several questions, or any multi-select one, a review screen comes last and `1` submits it. Measured against Claude Code 2.1.281.
+- **A new folder stops on a trust dialog that nothing reports.** Before Claude Code starts, it asks whether the folder is trusted: no `claude agents` row, no transcript, cmux sees no input needed. Its default is "No, exit". Choosing a folder to dispatch into is that decision, so every launch watches the new surface for the dialog and answers yes.
 - **The global hook is required.** A hook fires in the session that starts the subagent, so a hook in seemux's own project settings would only ever see seemux's own subagents.
 
 ## What is left open

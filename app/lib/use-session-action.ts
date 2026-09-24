@@ -10,7 +10,8 @@ type Intent =
   | "fork"
   | "close"
   | "pin"
-  | "unpin";
+  | "unpin"
+  | "answer";
 
 // Posts one of the board's write verbs for a session. `onSuccess` runs once
 // per successful submission, `onFailure` once per failed one, e.g. to put
