@@ -383,18 +383,20 @@ const MESSAGE_CHARS = 20_000;
 
 // The visible conversation, oldest first: what Jakob and the agent said to
 // each other, without tool traffic, sidechains, or harness turns.
-// What resuming a closed chat needs, read server-side from its transcript.
-// null when the session is still live, since resuming would run a second
-// process on the same conversation.
+// What resuming or renaming a closed chat needs, read server-side from its
+// transcript. null when the session is still live, since resuming would run
+// a second process on the same conversation.
 export async function closedSession(
   sessionId: string,
-): Promise<{ cwd: string; name: string } | null> {
+): Promise<{ cwd: string; name: string; transcript: string } | null> {
   const [agents, transcripts] = await Promise.all([
     listAgents(),
     indexTranscripts(),
   ]);
   if (agents.some((a) => a.sessionId === sessionId)) return null;
-  return infoFrom(sessionId, transcripts.get(sessionId));
+  const transcript = transcripts.get(sessionId);
+  const info = await infoFrom(sessionId, transcript);
+  return info && transcript ? { ...info, transcript: transcript.path } : null;
 }
 
 // A session's directory and name, live or not, from its transcript.

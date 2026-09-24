@@ -14,6 +14,7 @@ type Intent =
   | "pin"
   | "unpin"
   | "pin-move"
+  | "rename"
   | "answer"
   | "approve"
   | "deny"

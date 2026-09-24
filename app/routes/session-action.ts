@@ -13,6 +13,7 @@ import {
   closeSession,
   fork,
   interrupt,
+  renameClosed,
   resume,
   sendMessage,
 } from "~/lib/drive.server";
@@ -38,6 +39,7 @@ const INTENTS = new Set([
   "pin",
   "unpin",
   "pin-move",
+  "rename",
   "answer",
   "approve",
   "deny",
@@ -90,6 +92,17 @@ function messageText(form: FormData): string {
   if (!text) throw new Error("Nothing to send");
   if (text.length > MAX_MESSAGE) throw new Error("Message too long");
   return text;
+}
+
+const MAX_NAME = 100;
+
+// One line: it is typed after `/rename`, and a newline would submit early.
+function sessionName(form: FormData): string {
+  const name = String(form.get("name") ?? "").trim();
+  if (!name) throw new Error("A name can't be empty");
+  if (name.length > MAX_NAME) throw new Error("Name too long");
+  if (/[\u0000-\u001f\u007f]/.test(name)) throw new Error("One line only");
+  return name;
 }
 
 function queuedId(form: FormData): number {
@@ -191,6 +204,21 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     await fork(sessionId, info.cwd, String(form.get("text") ?? ""));
   } else if (intent === "pin" || intent === "unpin") {
     setPinned(sessionId, intent === "pin");
+  } else if (intent === "rename") {
+    const name = sessionName(form);
+    const closed = await closedSession(sessionId);
+    if (closed) {
+      await renameClosed(sessionId, closed.transcript, name);
+    } else {
+      // A live chat renames itself, which takes effect even mid-turn. Not
+      // while a dialog is open: the keys would land in it.
+      const card = (await loadBoard()).cards.find(
+        (c) => c.sessionId === sessionId,
+      );
+      if (!card) throw new Error("No longer on the board");
+      if (card.waiting) throw new Error("Answer what it is waiting on first");
+      await sendMessage(sessionId, `/rename ${name}`);
+    }
   } else if (intent === "pin-move") {
     const before = String(form.get("before") ?? "");
     if (before && !SESSION_ID.test(before)) throw new Error("Bad session id");

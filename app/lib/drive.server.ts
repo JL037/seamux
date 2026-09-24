@@ -5,7 +5,7 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { realpath, stat } from "node:fs/promises";
+import { appendFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -549,6 +549,31 @@ export async function resume(sessionId: string, cwd: string, title: string) {
     resuming.delete(sessionId);
     throw err;
   }
+}
+
+// A closed chat's name lives in its transcript, as the lines `/rename`
+// writes; Claude Code reads the last of them when the chat is resumed.
+// Appending adds to the transcript and changes nothing already in it. Not
+// while a resume is starting, since the new process would write its old
+// name back.
+export async function renameClosed(
+  sessionId: string,
+  transcript: string,
+  name: string,
+) {
+  const started = resuming.get(sessionId);
+  if (started && Date.now() - started < RESUME_GUARD_MS) {
+    throw new Error("This chat is resuming; rename it once it is open");
+  }
+  await appendFile(
+    transcript,
+    [
+      { type: "custom-title", customTitle: name, sessionId },
+      { type: "agent-name", agentName: name, sessionId },
+    ]
+      .map((line) => JSON.stringify(line) + "\n")
+      .join(""),
+  );
 }
 
 // Brings a stopped background session back in a new cmux workspace, with

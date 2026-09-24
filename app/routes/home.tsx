@@ -433,6 +433,88 @@ function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
   );
 }
 
+// The card's name, renamed in place by double-clicking it. A pinned card's
+// name is also its drag handle. The new name shows at once, and stays until
+// the board reports it or the rename fails.
+function SessionName({ card }: { card: BoardCard }) {
+  const [editing, setEditing] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  const forget = useCallback(() => setSent(null), []);
+  const { submit, pending, error } = useSessionAction(
+    card.sessionId,
+    undefined,
+    forget,
+  );
+  useEffect(() => {
+    if (sent === null) return;
+    if (card.name === sent) return setSent(null);
+    // Claude Code has had long enough to report it; show what it says.
+    const timer = setTimeout(forget, 10_000);
+    return () => clearTimeout(timer);
+  }, [card.name, sent, forget]);
+
+  // Enter ends the edit, and the input's blur as it goes must not end it
+  // again.
+  const finished = useRef(false);
+  const name = sent ?? card.name;
+  if (editing) {
+    const finish = (value: string | null) => {
+      if (finished.current) return;
+      finished.current = true;
+      setEditing(false);
+      const next = value?.trim();
+      if (!next || next === name) return;
+      setSent(next);
+      submit("rename", { name: next });
+    };
+    return (
+      <input
+        autoFocus
+        defaultValue={name}
+        maxLength={100}
+        aria-label="Session name"
+        className="min-w-0 flex-1 rounded-sm bg-muted px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={(e) => finish(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") finish(e.currentTarget.value);
+          else if (e.key === "Escape") {
+            // Esc here cancels the edit, not whatever dialog holds the card.
+            e.stopPropagation();
+            finish(null);
+          }
+        }}
+      />
+    );
+  }
+  const title =
+    error ??
+    (card.pinned
+      ? "Drag to reorder Pinned, double-click to rename"
+      : "Double-click to rename");
+  return (
+    <span
+      draggable={card.pinned}
+      onDragStart={
+        card.pinned ? (e) => startPinDrag(e, card.sessionId) : undefined
+      }
+      onDoubleClick={() => {
+        finished.current = false;
+        setEditing(true);
+      }}
+      className={cn(
+        "truncate",
+        card.pinned && "cursor-grab active:cursor-grabbing",
+        pending && "opacity-60",
+        error && "text-destructive",
+      )}
+      title={title}
+    >
+      {name}
+    </span>
+  );
+}
+
 // Pins a long-running chat into its own column, or takes it back out. A
 // closed chat can't be pinned; one pinned before it closed can still be
 // unpinned.
@@ -553,18 +635,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
                 title={COLUMN_LABELS[card.column]}
               />
             )}
-            {card.pinned ? (
-              <span
-                draggable
-                onDragStart={(e) => startPinDrag(e, card.sessionId)}
-                className="cursor-grab truncate active:cursor-grabbing"
-                title="Drag to reorder Pinned"
-              >
-                {card.name}
-              </span>
-            ) : (
-              <span className="truncate">{card.name}</span>
-            )}
+            <SessionName card={card} />
           </span>
           <span className="flex shrink-0 items-center gap-1">
             <PinToggle card={card} />
