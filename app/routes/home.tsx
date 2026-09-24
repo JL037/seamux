@@ -237,6 +237,24 @@ function ChatInput({
   const send = () =>
     canSend && submit(queueing ? "queue" : "send", { text: takeDraft() });
 
+  // A single-line input would flatten a multiline draft, and editing it there
+  // would drop the line breaks for good. So a multiline draft is shown, read
+  // only, across the card's full width, and opens the full view instead of
+  // sending: a long message waiting to go is visible at a glance.
+  const lines = draft.split("\n").length;
+  const multiline = lines > 1;
+  const expand = (
+    <Button
+      type="button"
+      size={multiline ? "icon-xs" : "icon-sm"}
+      variant={multiline ? "default" : "ghost"}
+      title="Open full view"
+      onClick={() => setOpen(true)}
+    >
+      <Maximize2 />
+    </Button>
+  );
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
@@ -245,13 +263,16 @@ function ChatInput({
             className="flex items-center gap-1 rounded-t-lg border bg-background p-1"
             onSubmit={(e) => {
               e.preventDefault();
-              send();
+              if (multiline) setOpen(true);
+              else send();
             }}
           >
             <input
               data-focus-key={`reply:${card.sessionId}`}
-              value={draft}
+              value={multiline ? draft.split("\n")[0] : draft}
               onChange={(e) => onDraftChange(e.target.value)}
+              onClick={multiline ? () => setOpen(true) : undefined}
+              readOnly={multiline}
               placeholder={
                 !card.drivable
                   ? "Not in a cmux surface"
@@ -260,27 +281,32 @@ function ChatInput({
                     : "Reply"
               }
               disabled={!card.drivable}
-              className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
+              className={cn(
+                "min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground",
+                multiline && "cursor-pointer",
+              )}
             />
-            <Button
-              type="submit"
-              size="icon-xs"
-              disabled={!canSend}
-              title={queueing ? "Queue, to send once this turn ends" : "Send"}
-            >
-              <SendHorizontal />
-            </Button>
+            {multiline ? (
+              <>
+                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                  {lines} lines
+                </span>
+                {expand}
+              </>
+            ) : (
+              <Button
+                type="submit"
+                size="icon-xs"
+                disabled={!canSend}
+                title={queueing ? "Queue, to send once this turn ends" : "Send"}
+              >
+                <SendHorizontal />
+              </Button>
+            )}
           </form>
           <ContextBar context={card.context} />
         </div>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          title="Open full view"
-          onClick={() => setOpen(true)}
-        >
-          <Maximize2 />
-        </Button>
+        {!multiline && expand}
       </div>
       {error && <ActionError error={error} />}
       <ChatModal
