@@ -18,6 +18,12 @@ import type { Card, ChatMessage } from "~/lib/board";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
+// Within this many pixels of the end counts as reading the latest message.
+const AT_END_PX = 40;
+
+function scrollKey(sessionId: string) {
+  return `seemux:chat-scroll:${sessionId}`;
+}
 
 // Full-screen view of one card: the conversation, and room to write the
 // next message. The draft is shared with the card's inline input.
@@ -49,6 +55,28 @@ export function ChatModal({
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
   const url = `/sessions/${card.sessionId}/messages`;
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const restored = useRef(false);
+
+  // Remember where the conversation was scrolled to, so a reload lands back
+  // there rather than at the end. Reading the end is remembered as such, so
+  // messages that arrive meanwhile still show.
+  useEffect(() => {
+    if (!open) return;
+    const key = scrollKey(card.sessionId);
+    const save = () => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      const atEnd =
+        el.scrollHeight - el.scrollTop - el.clientHeight < AT_END_PX;
+      try {
+        if (atEnd) sessionStorage.removeItem(key);
+        else sessionStorage.setItem(key, String(el.scrollTop));
+      } catch {}
+    };
+    window.addEventListener("pagehide", save);
+    return () => window.removeEventListener("pagehide", save);
+  }, [open, card.sessionId]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +92,22 @@ export function ChatModal({
   const messages = fetcher.data?.messages;
   const count = messages?.length ?? 0;
   useEffect(() => {
+    if (messages && !restored.current) {
+      restored.current = true;
+      const key = scrollKey(card.sessionId);
+      let top: string | null = null;
+      try {
+        top = sessionStorage.getItem(key);
+        sessionStorage.removeItem(key);
+      } catch {}
+      if (top !== null && scrollerRef.current) {
+        scrollerRef.current.scrollTop = Number(top);
+        return;
+      }
+    }
     endRef.current?.scrollIntoView({ block: "end" });
+    // Only a change in how many messages there are should move the view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count]);
 
   return (
@@ -79,7 +122,10 @@ export function ChatModal({
         </DialogHeader>
 
         <div className="-mx-4 flex min-h-0 flex-1 border-y">
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div
+            ref={scrollerRef}
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+          >
             {!messages && fetcher.state !== "idle" && (
               <p className="text-muted-foreground">Loading conversation…</p>
             )}
@@ -120,9 +166,7 @@ export function ChatModal({
         <div className="flex items-end gap-2">
           <Textarea
             autoFocus
-            // Shares the inline input's key: after a reload the modal is
-            // closed, so the card's input takes the focus instead.
-            data-focus-key={`reply:${card.sessionId}`}
+            data-focus-key={`chat:${card.sessionId}`}
             value={draft}
             onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={(e) => {

@@ -166,7 +166,11 @@ const DraftsContext = createContext<{
 // longer messages. Both send through cmux into the session's surface.
 function ChatInput({ card }: { card: BoardCard }) {
   const { drafts, setDraft } = useContext(DraftsContext);
-  const [open, setOpen] = useState(false);
+  // Kept across a reload, like the draft, so an open chat stays open.
+  const [open, setOpen] = useSessionStorage(
+    `seemux:chat-open:${card.sessionId}`,
+    false,
+  );
   const draft = drafts[card.sessionId] ?? "";
   const onDraftChange = (d: string) => setDraft(card.sessionId, d);
   // A draft is cleared, from state and storage, as it is sent, so a reload
@@ -177,10 +181,10 @@ function ChatInput({ card }: { card: BoardCard }) {
     setDraft(card.sessionId, "");
     return draft;
   };
-  const released = useCallback(
-    () => releaseFocus(`reply:${card.sessionId}`),
-    [card.sessionId],
-  );
+  const released = useCallback(() => {
+    releaseFocus(`reply:${card.sessionId}`);
+    releaseFocus(`chat:${card.sessionId}`);
+  }, [card.sessionId]);
   const current = useRef(draft);
   current.current = draft;
   const restore = useCallback(
