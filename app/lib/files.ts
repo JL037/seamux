@@ -2,6 +2,8 @@
 // `./app/root.tsx` or `/Users/…/README.md`; the board would resolve that
 // against its own URL, so it becomes a link to the /file viewer instead.
 
+import type { Link, Nodes, PhrasingContent, Root, Text } from "mdast";
+
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 // `style.css:12` has the shape of a scheme, but is a path and a line.
 const LINE_SUFFIX = /^[^:/]+:\d+(:\d+)?$/;
@@ -66,4 +68,61 @@ export function fileViewerUrl(path: string, view?: FileView): string {
 // sandbox base for a rendered HTML page, whose requests arrive cross-site.
 export function fileRawUrl(path: string, base = "/file/raw"): string {
   return `${base}${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+// A path written without a link around it, in prose or as inline code:
+// `./content/post.md`, `~/notes.txt`, `/Users/me/a/b`, or `app/root.tsx:12`.
+// A bare relative path needs an extension, so `and/or` stays prose, and an
+// absolute one needs two segments, so `/file` does too.
+const SEGMENT = String.raw`[\w@%+=~.,-]+`;
+const LINE = String.raw`(?::\d+(?::\d+)?)?`;
+const BARE_PATH = new RegExp(
+  String.raw`^(?:(?:\.{1,2}|~)(?:/${SEGMENT})+/?|(?:/${SEGMENT}){2,}/?|${SEGMENT}(?:/${SEGMENT})*/${SEGMENT}\.[A-Za-z]\w*)${LINE}$`,
+);
+const TOKEN = /(^|[\s(\[{"'])([^\s()[\]{}<>"'`]+)/g;
+const TRAILING = /[.,;:!?]+$/;
+
+// The path a token is, less the punctuation of a path that ends a sentence.
+function barePath(token: string): string | null {
+  const path = token.replace(TRAILING, "");
+  return BARE_PATH.test(path) ? path : null;
+}
+
+function linkText(text: Text): PhrasingContent[] | null {
+  const out: PhrasingContent[] = [];
+  let last = 0;
+  for (const m of text.value.matchAll(TOKEN)) {
+    const path = barePath(m[2]);
+    if (!path) continue;
+    const start = m.index + m[1].length;
+    if (start > last) out.push({ type: "text", value: text.value.slice(last, start) });
+    out.push({ type: "link", url: path, children: [{ type: "text", value: path }] });
+    last = start + path.length;
+  }
+  if (last === 0) return null;
+  if (last < text.value.length) out.push({ type: "text", value: text.value.slice(last) });
+  return out;
+}
+
+// Links every bare path in a reply, which the renderer then points at the
+// /file viewer like any other link to a file.
+export function remarkFilePaths() {
+  const walk = (node: Nodes) => {
+    if (!("children" in node)) return;
+    if (node.type === "link" || node.type === "linkReference") return;
+    const children: Nodes[] = [];
+    for (const child of node.children) {
+      if (child.type === "text") {
+        children.push(...(linkText(child) ?? [child]));
+      } else if (child.type === "inlineCode" && barePath(child.value) === child.value) {
+        const link: Link = { type: "link", url: child.value, children: [child] };
+        children.push(link);
+      } else {
+        walk(child);
+        children.push(child);
+      }
+    }
+    (node as { children: Nodes[] }).children = children;
+  };
+  return (tree: Root) => walk(tree);
 }

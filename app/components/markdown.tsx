@@ -3,12 +3,18 @@ import rehypeHighlight from "rehype-highlight";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 
-import { fileRawUrl, fileViewerUrl, linkedPath } from "~/lib/files";
+import {
+  fileRawUrl,
+  fileViewerUrl,
+  linkedPath,
+  remarkFilePaths,
+} from "~/lib/files";
 import { remarkFrontmatterAsCode } from "~/lib/highlight";
 
 // Claude's replies, as the markdown they're written in. Links open in a new
 // tab, so following one never navigates the board away. A link to a file on
-// disk, relative to `base` or absolute, opens it in the /file viewer.
+// disk, relative to `base` or absolute, opens it in the /file viewer, and so
+// does a path written bare.
 export function Markdown({
   children,
   base,
@@ -18,7 +24,12 @@ export function Markdown({
 }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkFrontmatter, remarkFrontmatterAsCode]}
+      remarkPlugins={[
+        remarkGfm,
+        remarkFrontmatter,
+        remarkFrontmatterAsCode,
+        remarkFilePaths,
+      ]}
       // Only fenced blocks that name their language: guessing is slow, and
       // often wrong on short snippets.
       rehypePlugins={[[rehypeHighlight, { detect: false }]]}
