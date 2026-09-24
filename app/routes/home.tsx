@@ -38,6 +38,7 @@ import {
   type Column,
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
+import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useSessionAction } from "~/lib/use-session-action";
 import { useSessionStorage } from "~/lib/use-session-storage";
 import { cn } from "~/lib/utils";
@@ -127,10 +128,10 @@ function ChatInput({ card }: { card: BoardCard }) {
   const [open, setOpen] = useState(false);
   const draft = drafts[card.sessionId] ?? "";
   const onDraftChange = (d: string) => setDraft(card.sessionId, d);
-  const clear = useCallback(
-    () => setDraft(card.sessionId, ""),
-    [card.sessionId, setDraft],
-  );
+  const clear = useCallback(() => {
+    setDraft(card.sessionId, "");
+    releaseFocus(`reply:${card.sessionId}`);
+  }, [card.sessionId, setDraft]);
   const { submit, pending, error } = useSessionAction(card.sessionId, clear);
   const forker = useSessionAction(card.sessionId, clear);
   const canSend = card.drivable && !pending && draft.trim().length > 0;
@@ -147,6 +148,7 @@ function ChatInput({ card }: { card: BoardCard }) {
           }}
         >
           <input
+            data-focus-key={`reply:${card.sessionId}`}
             value={draft}
             onChange={(e) => onDraftChange(e.target.value)}
             placeholder={card.drivable ? "Reply" : "Not in a cmux surface"}
@@ -343,6 +345,7 @@ function BoardColumn({
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   usePoll(POLL_MS);
+  useFocusRestore();
   const board: Board = loaderData;
   const now = board.generatedAt;
   const [drafts, setDrafts] = useSessionStorage<Record<string, string>>(

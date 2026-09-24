@@ -4,6 +4,7 @@ import { FolderOpen, SendHorizontal } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
+import { releaseFocus } from "~/lib/use-focus-restore";
 import { useSessionStorage } from "~/lib/use-session-storage";
 import type { DispatchResult } from "~/routes/dispatch";
 
@@ -53,6 +54,7 @@ export function DispatchBar() {
     if (result.ok) {
       setStarted(prompt.trim().split("\n")[0].slice(0, 80));
       setPrompt("");
+      releaseFocus("dispatch:prompt");
       writeLastDir(cwd);
     }
   }, [pending, result, prompt, cwd, setPrompt]);
@@ -74,6 +76,7 @@ export function DispatchBar() {
   return (
     <section className="flex flex-col gap-2 rounded-xl border bg-card p-2">
       <Textarea
+        data-focus-key="dispatch:prompt"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => {
@@ -90,6 +93,7 @@ export function DispatchBar() {
         <label className="flex min-w-0 flex-1 basis-64 items-center gap-2 rounded-lg border bg-background px-2">
           <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
           <input
+            data-focus-key="dispatch:cwd"
             list="seemux-directories"
             value={cwd}
             onChange={(e) => setCwd(e.target.value)}

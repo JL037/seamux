@@ -120,6 +120,9 @@ export function ChatModal({
         <div className="flex items-end gap-2">
           <Textarea
             autoFocus
+            // Shares the inline input's key: after a reload the modal is
+            // closed, so the card's input takes the focus instead.
+            data-focus-key={`reply:${card.sessionId}`}
             value={draft}
             onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={(e) => {
@@ -133,7 +136,6 @@ export function ChatModal({
                 ? "Next message (⌘↵ to send), or a tangent to fork"
                 : "Not running: write a tangent to fork from this chat"
             }
-
             className="min-h-32 flex-1 resize-y"
           />
           <div className="flex flex-col gap-2">
