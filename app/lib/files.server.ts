@@ -71,17 +71,36 @@ async function statOrNull(path: string) {
 
 // Replies cite code as `app/root.tsx:12` or `:12:4`. When that isn't a
 // file, the path without the line is.
-export async function resolveFile(
-  raw: string,
+async function resolveLine(
+  path: string,
 ): Promise<{ path: string; stats: Stats } | null> {
-  const path = expandHome(raw);
-  if (!path.startsWith("/")) return null;
   const stats = await statOrNull(path);
   if (stats) return { path, stats };
   const bare = path.replace(/:\d+(:\d+)?$/, "");
   if (bare === path) return null;
   const bareStats = await statOrNull(bare);
   return bareStats ? { path: bare, stats: bareStats } : null;
+}
+
+const WORKTREE = /^(.*?)\/(?:\.claude\/)?worktrees\/[^/]+(\/.*)$/;
+
+// A reply resolves its paths against the session's directory, and a
+// session in a worktree removes that worktree once its work has landed. A
+// path into a worktree that is gone is read from the checkout it was made
+// from, where the work now lives.
+export async function resolveFile(
+  raw: string,
+): Promise<{ path: string; stats: Stats } | null> {
+  const path = expandHome(raw);
+  if (!path.startsWith("/")) return null;
+  const found = await resolveLine(path);
+  if (found) return found;
+  const inWorktree = WORKTREE.exec(path);
+  if (!inWorktree) return null;
+  const [, checkout, rest] = inWorktree;
+  const worktree = path.slice(0, path.length - rest.length);
+  if (await statOrNull(worktree)) return null;
+  return resolveLine(checkout + rest);
 }
 
 export function contentType(path: string, sample: Buffer): string {
