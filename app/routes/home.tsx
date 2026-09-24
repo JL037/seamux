@@ -39,6 +39,7 @@ import {
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
 import { useSessionAction } from "~/lib/use-session-action";
+import { useSessionStorage } from "~/lib/use-session-storage";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -316,9 +317,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   usePoll(POLL_MS);
   const board: Board = loaderData;
   const now = board.generatedAt;
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useSessionStorage<Record<string, string>>(
+    "seemux:drafts",
+    {},
+  );
   const setDraft = (sessionId: string, draft: string) =>
-    setDrafts((d) => ({ ...d, [sessionId]: draft }));
+    setDrafts((d) => {
+      const { [sessionId]: _, ...rest } = d;
+      return draft ? { ...rest, [sessionId]: draft } : rest;
+    });
 
   return (
     <DraftsContext.Provider value={{ drafts, setDraft }}>

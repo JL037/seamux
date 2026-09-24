@@ -4,9 +4,13 @@ import { FolderOpen, SendHorizontal } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
+import { useSessionStorage } from "~/lib/use-session-storage";
 import type { DispatchResult } from "~/routes/dispatch";
 
 const LAST_DIR_KEY = "seemux:last-dir";
+const PROMPT_KEY = "seemux:dispatch:prompt";
+const CWD_KEY = "seemux:dispatch:cwd";
+const WORKTREE_KEY = "seemux:dispatch:worktree";
 
 function readLastDir(): string {
   try {
@@ -27,13 +31,19 @@ function writeLastDir(dir: string) {
 export function DispatchBar() {
   const dispatcher = useFetcher<DispatchResult>();
   const dirs = useFetcher<{ directories: string[] }>();
-  const [prompt, setPrompt] = useState("");
-  const [cwd, setCwd] = useState("");
-  const [worktree, setWorktree] = useState(false);
+  const [prompt, setPrompt] = useSessionStorage(PROMPT_KEY, "");
+  const [cwd, setCwd] = useSessionStorage(CWD_KEY, "");
+  const [worktree, setWorktree] = useSessionStorage(WORKTREE_KEY, false);
   const [started, setStarted] = useState<string | null>(null);
   const handled = useRef<DispatchResult | undefined>(undefined);
 
-  useEffect(() => setCwd(readLastDir()), []);
+  // An unsent directory from before a reload wins over the last one used.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(CWD_KEY) !== null) return;
+    } catch {}
+    setCwd(readLastDir());
+  }, [setCwd]);
 
   const pending = dispatcher.state !== "idle";
   const result = dispatcher.data;
@@ -45,7 +55,7 @@ export function DispatchBar() {
       setPrompt("");
       writeLastDir(cwd);
     }
-  }, [pending, result, prompt, cwd]);
+  }, [pending, result, prompt, cwd, setPrompt]);
 
   const loadDirs = () => {
     if (dirs.state === "idle" && !dirs.data) dirs.load("/directories");
