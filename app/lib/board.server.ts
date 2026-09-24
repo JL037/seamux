@@ -40,6 +40,8 @@ const run = promisify(execFile);
 const CLAUDE_DIR = join(homedir(), ".claude");
 const TAIL_BYTES = 2 * 1024 * 1024;
 const EXCERPT_CHARS = 280;
+// A card renders its last reply as markdown, clipped to a few lines.
+const REPLY_EXCERPT_CHARS = 800;
 
 interface AgentRow {
   sessionId: string;
@@ -177,6 +179,17 @@ function excerpt(text: string): string {
     : flat;
 }
 
+// Like excerpt, but keeps the line breaks the reply's markdown is built on.
+function replyExcerpt(text: string): string {
+  const kept = text
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return kept.length > REPLY_EXCERPT_CHARS
+    ? `${kept.slice(0, REPLY_EXCERPT_CHARS - 1)}…`
+    : kept;
+}
+
 // Harness-generated user turns (slash commands, caveats, reminders,
 // compaction summaries).
 const SYNTHETIC_PROMPT =
@@ -262,7 +275,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     const text = textOf(o.message?.content);
     if (!text) continue;
     if (o.type === "assistant" && !summary.lastReply) {
-      summary.lastReply = excerpt(text);
+      summary.lastReply = replyExcerpt(text);
     }
     if (
       o.type === "user" &&

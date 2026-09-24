@@ -218,6 +218,7 @@ Controls differ by column, and the sketch is specific:
 - **DONE** cards carry a **play / resume** button.
 - Every card but a DONE one carries a **pin** button, which moves it into PINNED or back out. A closed chat can't be pinned; one pinned before it closed keeps its unpin button.
 - An expanded card shows the transcript with an **input** field beneath it.
+- A card shows the start of its last reply **as markdown**, clipped to a few lines and faded when there is more, so the shape of the reply reads at a glance. The expanded chat renders every reply the same way. Links in either open in a new tab, so following one never navigates the board away.
 - Every card's path carries a **coloured square** for its project, so cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` belongs to its repo. The colour is one of 24, hashed from the project's path until one is picked by clicking the square. Picks are kept in the browser's localStorage for now, until seemux has a config of its own.
 
 **DISPATCH NEW WORK is the primary action**, a full-width bar above the columns with a **directory picker** beside it. Putting it there fixes the cost asymmetry, since the most prominent control on the screen starts a new session in a chosen directory, and spawning one becomes visibly cheaper than cramming another goal into an existing session.

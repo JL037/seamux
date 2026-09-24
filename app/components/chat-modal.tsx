@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { GitFork, SendHorizontal } from "lucide-react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -12,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { Markdown } from "~/components/markdown";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
 import type { Card, ChatMessage } from "~/lib/board";
@@ -146,7 +145,7 @@ export function ChatModal({
                   {m.role === "user" ? (
                     m.text
                   ) : (
-                    <Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown>
+                    <Markdown>{m.text}</Markdown>
                   )}
                 </div>
               ))}

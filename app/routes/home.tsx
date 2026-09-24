@@ -25,6 +25,7 @@ import type { Route } from "./+types/home";
 import { ChatModal } from "~/components/chat-modal";
 import { DispatchBar } from "~/components/dispatch-bar";
 import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
+import { Markdown } from "~/components/markdown";
 import { SubagentSummary } from "~/components/subagent-list";
 import { WaitingPanel } from "~/components/waiting-panel";
 import { Badge } from "~/components/ui/badge";
@@ -346,6 +347,37 @@ function PinToggle({ card }: { card: BoardCard }) {
   );
 }
 
+// The card's last reply, as markdown, clipped to a few lines; faded at the
+// bottom when there's more, which the chat shows in full.
+function ReplyExcerpt({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [clipped, setClipped] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text]);
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "prose prose-sm max-h-40 max-w-none overflow-hidden break-words text-xs dark:prose-invert",
+        "prose-headings:my-1 prose-headings:text-xs prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-2",
+        "prose-pre:my-1 prose-pre:bg-muted prose-pre:p-2 prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
+        "prose-table:my-1 [&>:first-child]:mt-0",
+        clipped &&
+          "[mask-image:linear-gradient(to_bottom,black_70%,transparent)]",
+      )}
+    >
+      <Markdown>{text}</Markdown>
+    </div>
+  );
+}
+
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   return (
     <Card size="sm" className={cn(card.column === "done" && "opacity-70")}>
@@ -405,7 +437,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             {card.lastPrompt}
           </p>
         )}
-        {card.lastReply && <p className="line-clamp-4">{card.lastReply}</p>}
+        {card.lastReply && <ReplyExcerpt text={card.lastReply} />}
         <WaitingPanel card={card} />
         <SubagentSummary subagents={card.subagents} now={now} />
         {card.background.length > 0 && (
