@@ -9,7 +9,9 @@ import {
 import { useRevalidator } from "react-router";
 import {
   GitBranch,
+  CircleCheck,
   Layers,
+  LoaderCircle,
   Maximize2,
   Eye,
   EyeOff,
@@ -572,15 +574,33 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             ))}
           </div>
         )}
-        {card.workspaceRef && (
-          <span className="font-mono text-muted-foreground">
-            {card.workspaceRef}
-          </span>
-        )}
+        <CardState column={card.column} />
         <ChatInput card={card} />
       </CardContent>
     </Card>
   );
+}
+
+// Waiting shows nothing here: the card already carries the prompt or tool
+// that is waiting, and done cards are over.
+function CardState({ column }: { column: Column }) {
+  if (column === "idle") {
+    return (
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <CircleCheck className="size-3.5" />
+        ready
+      </span>
+    );
+  }
+  if (column === "working") {
+    return (
+      <span className="flex items-center gap-1.5 text-brand-cyan">
+        <LoaderCircle className="size-3.5 animate-spin" />
+        working
+      </span>
+    );
+  }
+  return null;
 }
 
 // Pinned sits left of the state columns; its cards show their state as a dot.
