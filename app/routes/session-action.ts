@@ -10,8 +10,17 @@ import {
   sendMessage,
 } from "~/lib/drive.server";
 import { assertFromBoard, SESSION_ID } from "~/lib/guard.server";
+import { setPinned } from "~/lib/store.server";
 
-const INTENTS = new Set(["send", "interrupt", "resume", "fork", "close"]);
+const INTENTS = new Set([
+  "send",
+  "interrupt",
+  "resume",
+  "fork",
+  "close",
+  "pin",
+  "unpin",
+]);
 const MAX_MESSAGE = 100_000;
 
 export interface ActionResult {
@@ -45,6 +54,8 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     const info = await sessionInfo(sessionId);
     if (!info) throw new Error("No transcript to fork from");
     await fork(sessionId, info.cwd, String(form.get("text") ?? ""));
+  } else if (intent === "pin" || intent === "unpin") {
+    setPinned(sessionId, intent === "pin");
   }
 }
 

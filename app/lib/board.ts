@@ -58,6 +58,9 @@ export interface Card {
   // The chat's own turn is running, so Esc has something to stop. A card can
   // be WORKING without one, while only its subagents run.
   turnRunning: boolean;
+  // Pinned from the board: shown in its own column whatever its state, and
+  // kept on the board after it closes, however long ago.
+  pinned: boolean;
   background: BackgroundSession[];
   subagents: Subagent[];
 }

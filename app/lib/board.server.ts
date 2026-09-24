@@ -27,6 +27,7 @@ import { listSurfaces, type Surface } from "./drive.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
 import {
   dispatchesFor,
+  pinnedSessions,
   recentDispatchCwds,
   subagentsFor,
   type SubagentRow,
@@ -475,17 +476,27 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         worker: null,
         drivable: surfaces.has(row.sessionId),
         turnRunning: busy,
+        pinned: false,
         background: children,
         subagents,
       };
     }),
   );
 
-  // DONE: a chat Jakob closed recently. It is no longer live, is not a
-  // background job, and its transcript was written within the window.
+  let pinned = new Set<string>();
+  try {
+    pinned = new Set(pinnedSessions());
+  } catch (err) {
+    warnings.push(`Pin store unavailable: ${(err as Error).message}`);
+  }
+
+  // DONE: a chat Jakob closed recently, or a pinned one closed at any time.
+  // It is no longer live, is not a background job, and its transcript was
+  // written within the window unless it is pinned.
   const known = new Set(agents.map((a) => a.sessionId));
   const recent = [...transcripts.entries()].filter(
-    ([id, t]) => !known.has(id) && now - t.mtimeMs < DONE_VISIBLE_MS,
+    ([id, t]) =>
+      !known.has(id) && (pinned.has(id) || now - t.mtimeMs < DONE_VISIBLE_MS),
   );
   const doneCards = await Promise.all(
     recent.map(async ([sessionId, t]): Promise<Card> => {
@@ -505,6 +516,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         worker: null,
         drivable: false,
         turnRunning: false,
+        pinned: false,
         background: [],
         subagents: [],
       };
@@ -512,6 +524,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   );
 
   const cards = [...liveCards, ...doneCards];
+  for (const card of cards) card.pinned = pinned.has(card.sessionId);
   try {
     const intents = new Map(
       dispatchesFor(cards.map((c) => c.sessionId)).map((d) => [

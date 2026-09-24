@@ -11,6 +11,8 @@ import {
   GitBranch,
   Layers,
   Maximize2,
+  Pin,
+  PinOff,
   Play,
   SendHorizontal,
   Square,
@@ -316,13 +318,50 @@ function CardControl({ card }: { card: BoardCard }) {
   return null;
 }
 
+// Pins a long-running chat into its own column, or takes it back out.
+function PinToggle({ card }: { card: BoardCard }) {
+  const { submit, pending, error } = useSessionAction(card.sessionId);
+  return (
+    <Button
+      size="icon-xs"
+      variant="ghost"
+      disabled={pending}
+      title={
+        error ??
+        (card.pinned
+          ? "Unpin: back to its column, and off the board 30m after it closes"
+          : "Pin: keep it in Pinned, whatever its state, for as long as it exists")
+      }
+      onClick={() => submit(card.pinned ? "unpin" : "pin")}
+    >
+      {card.pinned ? <PinOff /> : <Pin />}
+    </Button>
+  );
+}
+
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   return (
     <Card size="sm" className={cn(card.column === "done" && "opacity-70")}>
-      <CardHeader>
+      {/* A bounded column, so a long path truncates rather than widening the
+          header and pushing the title's buttons off the card. */}
+      <CardHeader className="grid-cols-[minmax(0,1fr)]">
         <CardTitle className="flex items-center justify-between gap-2">
-          <span className="truncate">{card.name}</span>
-          <CardControl card={card} />
+          <span className="flex min-w-0 items-center gap-2">
+            {card.pinned && (
+              <span
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  COLUMN_ACCENT[card.column],
+                )}
+                title={COLUMN_LABELS[card.column]}
+              />
+            )}
+            <span className="truncate">{card.name}</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1">
+            <PinToggle card={card} />
+            <CardControl card={card} />
+          </span>
         </CardTitle>
         <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -390,20 +429,30 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   );
 }
 
+// Pinned sits left of the state columns; its cards show their state as a dot.
+type BoardColumnKey = Column | "pinned";
+
+const PINNED_ACCENT = "bg-violet-500";
+
 function BoardColumn({
   column,
   cards,
   now,
 }: {
-  column: Column;
+  column: BoardColumnKey;
   cards: BoardCard[];
   now: number;
 }) {
   return (
     <section className="flex min-w-0 flex-col gap-3">
       <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
-        <span className={cn("size-2 rounded-full", COLUMN_ACCENT[column])} />
-        {COLUMN_LABELS[column]}
+        <span
+          className={cn(
+            "size-2 rounded-full",
+            column === "pinned" ? PINNED_ACCENT : COLUMN_ACCENT[column],
+          )}
+        />
+        {column === "pinned" ? "Pinned" : COLUMN_LABELS[column]}
         <span className="text-muted-foreground">{cards.length}</span>
         {column === "done" && (
           <span className="font-normal normal-case text-muted-foreground">
@@ -469,12 +518,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </p>
           ))}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <BoardColumn
+              column="pinned"
+              cards={board.cards.filter((c) => c.pinned)}
+              now={now}
+            />
             {COLUMNS.map((column) => (
               <BoardColumn
                 key={column}
                 column={column}
-                cards={board.cards.filter((c) => c.column === column)}
+                cards={board.cards.filter(
+                  (c) => !c.pinned && c.column === column,
+                )}
                 now={now}
               />
             ))}

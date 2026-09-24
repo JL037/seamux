@@ -50,7 +50,7 @@ A landing can reload the board mid-sentence, so unsent text survives it: the dis
 
 To change seemux, work in a worktree on your own branch, commit, and run `npm run land` there. `CLAUDE.md` has the details, for people and agents alike.
 
-The store is SQLite at `data/seemux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents and fan-out records, never a session.
+The store is SQLite at `data/seemux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents, pins and fan-out records, never a session.
 
 This README is the brief and its own source of truth: edit it here. Prose in this repo is checked with Taskless.
 
@@ -126,6 +126,7 @@ The rule is **never store what can be re-derived.** Two tiers:
 | Stage override | The human's correction when inference is wrong |
 | Work log | The durable cross-session record, which survives a session being disposed |
 | Subagent tree | Only exists in hook events, nowhere else |
+| Pins | Jakob's word that a session is meant to run for a long time. Nothing about the session says so |
 | Dependencies | Which cards gate which |
 
 ### The board, from the sketch
@@ -138,6 +139,8 @@ Four columns: **IDLE**, **WAITING**, **WORKING**, **DONE**. Simpler than the uni
 | WAITING | Blocked on a human | `claude agents` `state: blocked` or `state: failed`, cmux `any_agent_needs_input`, `agent.approval.requested` / `agent.question.requested` |
 | WORKING | Running | `status: busy` when the transcript agrees a turn is in progress, or any of its subagents still running |
 | DONE | Closed by Jakob | `claude stop`, or the chat closing |
+
+**PINNED sits left of the four**, for sessions that are meant to run for a long time by design. A pin is Jakob's call, since nothing about a session says it is long-running, so it is one of the few things the store records. A pinned card stays in PINNED whatever its state, shown as a coloured dot beside its name, with the same controls it would have in its state's column. Closing a pinned chat keeps it in PINNED with its resume button for as long as its transcript exists, rather than letting it age off after 30 minutes. Unpinning puts it back in its state's column. Jakob, 2026-09-23: *"some sessions are meant to be long running by design."*
 
 **A failed session needs Jakob**, so it lands in WAITING rather than DONE. Jakob, 2026-09-23: *"A failed session is probably blocked/waiting."*
 
@@ -205,6 +208,7 @@ Controls differ by column, and the sketch is specific:
 
 - **WORKING** cards carry a **stop** button. It is disabled, with the reason on hover, when only the card's subagents are running (the chat's own turn has ended, so Esc has no turn to stop) or when the session is not in a cmux surface.
 - **DONE** cards carry a **play / resume** button.
+- Every card carries a **pin** button, which moves it into PINNED or back out.
 - An expanded card shows the transcript with an **input** field beneath it.
 - Every card's path carries a **coloured square** for its project, so cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` belongs to its repo. The colour is one of 24, hashed from the project's path until one is picked by clicking the square. Picks are kept in the browser's localStorage for now, until seemux has a config of its own.
 

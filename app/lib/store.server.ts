@@ -39,6 +39,12 @@ const SCHEMA = `
     worker         TEXT,    -- the worker's key within that set
     created_at     INTEGER NOT NULL
   );
+
+  -- Sessions Jakob pinned, because they are meant to run for a long time.
+  CREATE TABLE IF NOT EXISTS pins (
+    session_id TEXT PRIMARY KEY,
+    pinned_at  INTEGER NOT NULL
+  );
 `;
 
 let db: DatabaseSync | null = null;
@@ -189,4 +195,30 @@ export function recentDispatchCwds(limit = 50): string[] {
       )
       .all(limit) as unknown as { cwd: string }[]
   ).map((r) => r.cwd);
+}
+
+export function pinnedSessions(): string[] {
+  return (
+    openStore()
+      .prepare(`SELECT session_id FROM pins ORDER BY pinned_at`)
+      .all() as unknown as { session_id: string }[]
+  ).map((r) => r.session_id);
+}
+
+export function setPinned(
+  sessionId: string,
+  pinned: boolean,
+  now = Date.now(),
+): void {
+  const store = openStore();
+  if (pinned) {
+    store
+      .prepare(
+        `INSERT INTO pins (session_id, pinned_at) VALUES (?, ?)
+         ON CONFLICT (session_id) DO NOTHING`,
+      )
+      .run(sessionId, now);
+  } else {
+    store.prepare(`DELETE FROM pins WHERE session_id = ?`).run(sessionId);
+  }
 }
