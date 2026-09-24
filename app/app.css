@@ -42,6 +42,8 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-brand-cyan: var(--brand-cyan);
+  --color-brand-indigo: var(--brand-indigo);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -51,73 +53,77 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* The palette comes from the seamux mark, which takes cmux's own ramp:
+   cyan to indigo, on a deep navy ground. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --brand-cyan: #5ecdfa;
+  --brand-indigo: #586beb;
+  --background: oklch(0.982 0.005 262);
+  --foreground: oklch(0.2 0.03 262);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0.03 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.2 0.03 262);
+  --primary: oklch(0.56 0.19 272);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.01 262);
+  --secondary-foreground: oklch(0.25 0.03 262);
+  --muted: oklch(0.955 0.01 262);
+  --muted-foreground: oklch(0.5 0.04 262);
+  --accent: oklch(0.95 0.02 262);
+  --accent-foreground: oklch(0.25 0.03 262);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --border: oklch(0.9 0.015 262);
+  --input: oklch(0.9 0.015 262);
+  --ring: oklch(0.62 0.17 272);
+  --chart-1: oklch(0.81 0.12 225);
+  --chart-2: oklch(0.58 0.19 272);
+  --chart-3: oklch(0.7 0.15 245);
+  --chart-4: oklch(0.45 0.12 268);
+  --chart-5: oklch(0.35 0.08 262);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.975 0.008 262);
+  --sidebar-foreground: oklch(0.2 0.03 262);
+  --sidebar-primary: oklch(0.56 0.19 272);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.95 0.02 262);
+  --sidebar-accent-foreground: oklch(0.25 0.03 262);
+  --sidebar-border: oklch(0.9 0.015 262);
+  --sidebar-ring: oklch(0.62 0.17 272);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.175 0.028 262);
+  --foreground: oklch(0.97 0.012 262);
+  --card: oklch(0.215 0.032 262);
+  --card-foreground: oklch(0.97 0.012 262);
+  --popover: oklch(0.235 0.035 262);
+  --popover-foreground: oklch(0.97 0.012 262);
+  --primary: oklch(0.63 0.18 272);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.27 0.035 262);
+  --secondary-foreground: oklch(0.97 0.012 262);
+  --muted: oklch(0.27 0.035 262);
+  --muted-foreground: oklch(0.72 0.05 262);
+  --accent: oklch(0.28 0.04 262);
+  --accent-foreground: oklch(0.97 0.012 262);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: oklch(0.72 0.05 262 / 14%);
+  --input: oklch(0.72 0.05 262 / 20%);
+  --ring: oklch(0.63 0.18 272);
+  --chart-1: oklch(0.81 0.12 225);
+  --chart-2: oklch(0.63 0.18 272);
+  --chart-3: oklch(0.7 0.15 245);
+  --chart-4: oklch(0.5 0.12 268);
+  --chart-5: oklch(0.4 0.08 262);
+  --sidebar: oklch(0.215 0.032 262);
+  --sidebar-foreground: oklch(0.97 0.012 262);
+  --sidebar-primary: oklch(0.63 0.18 272);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.28 0.04 262);
+  --sidebar-accent-foreground: oklch(0.97 0.012 262);
+  --sidebar-border: oklch(0.72 0.05 262 / 14%);
+  --sidebar-ring: oklch(0.63 0.18 272);
 }
 
 @layer base {
@@ -125,9 +131,31 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply min-h-dvh bg-background text-foreground;
+    /* A faint wash of the mark's ramp at the top, like light on water. */
+    background-image:
+      radial-gradient(
+        60rem 24rem at 10% -8rem,
+        color-mix(in oklch, var(--brand-cyan) 9%, transparent),
+        transparent
+      ),
+      radial-gradient(
+        50rem 22rem at 90% -10rem,
+        color-mix(in oklch, var(--brand-indigo) 11%, transparent),
+        transparent
+      );
+    background-repeat: no-repeat;
   }
   html {
     @apply font-sans;
   }
+}
+
+/* The mark's ramp: the primary action, and the edge of a working card. */
+@utility bg-brand-ramp {
+  background-image: linear-gradient(
+    90deg,
+    var(--brand-cyan),
+    var(--brand-indigo)
+  );
 }

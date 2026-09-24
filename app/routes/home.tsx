@@ -27,6 +27,7 @@ import { ConfigDialog } from "~/components/config-dialog";
 import { DispatchBar } from "~/components/dispatch-bar";
 import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { Markdown } from "~/components/markdown";
+import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
 import { WaitingPanel } from "~/components/waiting-panel";
 import { Badge } from "~/components/ui/badge";
@@ -99,7 +100,7 @@ function usePoll(ms: number) {
 const COLUMN_ACCENT: Record<Column, string> = {
   idle: "bg-muted-foreground/40",
   waiting: "bg-amber-500",
-  working: "bg-sky-500",
+  working: "bg-brand-cyan",
   done: "bg-emerald-500/60",
 };
 
@@ -450,9 +451,22 @@ function ReplyExcerpt({ text }: { text: string }) {
   );
 }
 
+// A hairline along a card's top edge for the states that want attention.
+const CARD_EDGE: Partial<Record<Column, string>> = {
+  waiting: "before:bg-amber-500",
+  working: "before:bg-brand-ramp",
+};
+
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   return (
-    <Card size="sm" className={cn(card.column === "done" && "opacity-70")}>
+    <Card
+      size="sm"
+      className={cn(
+        "relative shadow-sm transition-shadow before:absolute before:inset-x-0 before:top-0 before:h-0.5 hover:shadow-md dark:shadow-black/20",
+        CARD_EDGE[card.column],
+        card.column === "done" && "opacity-70",
+      )}
+    >
       {/* A bounded column, so a long path truncates rather than widening the
           header and pushing the title's buttons off the card. */}
       <CardHeader className="grid-cols-[minmax(0,1fr)]">
@@ -576,19 +590,23 @@ function BoardColumn({
   cards: BoardCard[];
   now: number;
 }) {
+  const label = column === "pinned" ? "Pinned" : COLUMN_LABELS[column];
   return (
     <section className="flex min-w-0 flex-col gap-3">
-      <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
+      <h2 className="flex items-center gap-2 border-b pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <span
           className={cn(
             "size-2 rounded-full",
             column === "pinned" ? PINNED_ACCENT : COLUMN_ACCENT[column],
+            column === "working" && cards.length > 0 && "animate-pulse",
           )}
         />
-        {column === "pinned" ? "Pinned" : COLUMN_LABELS[column]}
-        <span className="text-muted-foreground">{cards.length}</span>
+        <span className="text-foreground">{label}</span>
+        <span className="rounded-full bg-muted px-1.5 py-px text-[0.7rem] tabular-nums">
+          {cards.length}
+        </span>
         {column === "done" && (
-          <span className="font-normal normal-case text-muted-foreground">
+          <span className="font-normal normal-case tracking-normal">
             last 30m
           </span>
         )}
@@ -596,6 +614,11 @@ function BoardColumn({
       {cards.map((card) => (
         <SessionCard key={card.sessionId} card={card} now={now} />
       ))}
+      {cards.length === 0 && (
+        <p className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+          Nothing {label.toLowerCase()}
+        </p>
+      )}
     </section>
   );
 }
@@ -638,9 +661,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     <DraftsContext.Provider value={{ drafts, setDraft }}>
       <ProjectColorsContext.Provider value={{ colors, setColor }}>
         <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
-          <header className="flex items-center justify-between text-sm text-muted-foreground">
+          <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="font-semibold text-foreground">seemux</span>
+              <span className="flex items-center gap-2.5">
+                <SeamuxMark size={32} />
+                <span className="text-xl font-bold tracking-tight text-foreground">
+                  seemux
+                </span>
+              </span>
               <ConfigDialog config={config} />
             </span>
             <span className="flex min-w-0 items-center gap-3">
@@ -659,13 +687,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               </Button>
               {board.version && (
                 <span
-                  className="truncate font-mono"
+                  className="truncate font-mono text-xs opacity-70"
                   title="Commit being served"
                 >
                   {board.version}
                 </span>
               )}
-              <span className="shrink-0">
+              <span className="shrink-0 text-xs tabular-nums">
                 updated {new Date(now).toLocaleTimeString()}
               </span>
             </span>

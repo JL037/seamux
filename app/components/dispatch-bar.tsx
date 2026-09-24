@@ -101,7 +101,7 @@ export function DispatchBar({
   };
 
   return (
-    <section className="flex flex-col gap-2 rounded-xl border bg-card p-2">
+    <section className="flex flex-col gap-2 rounded-xl border bg-card p-2 shadow-sm transition-shadow focus-within:border-ring/60 focus-within:ring-3 focus-within:ring-ring/15">
       <Textarea
         data-focus-key="dispatch:prompt"
         value={prompt}
@@ -142,7 +142,11 @@ export function DispatchBar({
           />
           new worktree
         </label>
-        <Button disabled={!canDispatch} onClick={submit}>
+        <Button
+          disabled={!canDispatch}
+          onClick={submit}
+          className="bg-brand-ramp text-white shadow-sm hover:opacity-90"
+        >
           <SendHorizontal />
           {pending ? "Starting…" : "Dispatch"}
         </Button>
