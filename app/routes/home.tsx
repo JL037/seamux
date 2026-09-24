@@ -24,6 +24,11 @@ import { SubagentSummary } from "~/components/subagent-list";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -40,7 +45,11 @@ import {
 import { loadBoard } from "~/lib/board.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useSessionAction } from "~/lib/use-session-action";
-import { useSessionStorage } from "~/lib/use-session-storage";
+import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
+import {
+  useLocalStorage,
+  useSessionStorage,
+} from "~/lib/use-session-storage";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -89,28 +98,59 @@ function shortPath(cwd: string): string {
   return cwd.replace(/^\/Users\/[^/]+/, "~");
 }
 
-// A colour for the project a path belongs to, the same on every poll and
-// every reload, so cards from one repo can be spotted at a glance. A
-// worktree (`.claude/worktrees/<name>` or `worktrees/<name>`) takes its
-// repo's colour. FNV-1a picks the hue; fixed lightness and chroma keep every
-// hue equally legible.
-function pathColor(cwd: string): string {
-  const project = cwd.replace(/\/(?:\.claude\/)?worktrees\/[^/]+(?:\/.*)?$/, "");
-  let h = 0x811c9dc5;
-  for (let i = 0; i < project.length; i++) {
-    h ^= project.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return `oklch(0.7 0.15 ${(h >>> 0) % 360})`;
-}
+// Colours picked for projects, keyed by project path. Kept in this browser
+// for now, until seemux has a config of its own.
+const ProjectColorsContext = createContext<{
+  colors: Record<string, string>;
+  setColor: (project: string, color: string | null) => void;
+}>({ colors: {}, setColor: () => {} });
 
+// The project's colour, and a picker for it on click.
 function PathSwatch({ cwd }: { cwd: string }) {
+  const { colors, setColor } = useContext(ProjectColorsContext);
+  const project = projectOf(cwd);
+  const current = colors[project] ?? hashedColor(project);
+  const [open, setOpen] = useState(false);
+  const pick = (color: string | null) => {
+    setColor(project, color);
+    setOpen(false);
+  };
   return (
-    <span
-      aria-hidden
-      className="size-2.5 shrink-0 rounded-[2px]"
-      style={{ backgroundColor: pathColor(cwd) }}
-    />
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        aria-label={`Colour for ${shortPath(project)}`}
+        title={shortPath(project)}
+        className="size-2.5 shrink-0 cursor-pointer rounded-[2px] outline-offset-2"
+        style={{ backgroundColor: current }}
+      />
+      <PopoverContent align="start" className="w-auto gap-2">
+        <div className="grid grid-cols-6 gap-1.5">
+          {PALETTE.map((color) => (
+            <button
+              type="button"
+              key={color}
+              aria-label={color}
+              onClick={() => pick(color)}
+              className={cn(
+                "size-6 cursor-pointer rounded-sm outline-offset-2",
+                color === current &&
+                  "ring-2 ring-foreground ring-offset-2 ring-offset-popover",
+              )}
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </div>
+        {colors[project] && (
+          <button
+            type="button"
+            onClick={() => pick(null)}
+            className="cursor-pointer text-left text-xs text-muted-foreground hover:text-foreground"
+          >
+            Reset to automatic
+          </button>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -372,62 +412,73 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       const { [sessionId]: _, ...rest } = d;
       return draft ? { ...rest, [sessionId]: draft } : rest;
     });
+  const [colors, setColors] = useLocalStorage<Record<string, string>>(
+    "seemux:project-colors",
+    {},
+  );
+  const setColor = (project: string, color: string | null) =>
+    setColors((c) => {
+      const { [project]: _, ...rest } = c;
+      return color ? { ...rest, [project]: color } : rest;
+    });
 
   return (
     <DraftsContext.Provider value={{ drafts, setDraft }}>
-      <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
-        <header className="flex items-center justify-between text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">seemux</span>
-          <span className="flex min-w-0 gap-3">
-            {board.version && (
-              <span className="truncate font-mono" title="Commit being served">
-                {board.version}
+      <ProjectColorsContext.Provider value={{ colors, setColor }}>
+        <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
+          <header className="flex items-center justify-between text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">seemux</span>
+            <span className="flex min-w-0 gap-3">
+              {board.version && (
+                <span className="truncate font-mono" title="Commit being served">
+                  {board.version}
+                </span>
+              )}
+              <span className="shrink-0">
+                updated {new Date(now).toLocaleTimeString()}
               </span>
-            )}
-            <span className="shrink-0">
-              updated {new Date(now).toLocaleTimeString()}
             </span>
-          </span>
-        </header>
+          </header>
 
-        <DispatchBar />
-        <DispatchStrip sets={board.dispatches} />
+          <DispatchBar />
+          <DispatchStrip sets={board.dispatches} />
 
-        {board.warnings.map((w) => (
-          <p key={w} className="text-sm text-amber-600 dark:text-amber-400">
-            {w}
-          </p>
-        ))}
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {COLUMNS.map((column) => (
-            <BoardColumn
-              key={column}
-              column={column}
-              cards={board.cards.filter((c) => c.column === column)}
-              now={now}
-            />
+          {board.warnings.map((w) => (
+            <p key={w} className="text-sm text-amber-600 dark:text-amber-400">
+              {w}
+            </p>
           ))}
-        </div>
 
-        {board.orphans.length > 0 && (
-          <footer className="flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground">
-            <span>Background sessions with no live parent chat</span>
-            <div className="flex flex-wrap gap-1">
-              {board.orphans.map((b) => (
-                <Badge
-                  key={b.id}
-                  variant="outline"
-                  title={b.needs ?? undefined}
-                >
-                  <PathSwatch cwd={b.cwd} />
-                  {b.name} · {b.state} · {shortPath(b.cwd)}
-                </Badge>
-              ))}
-            </div>
-          </footer>
-        )}
-      </main>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {COLUMNS.map((column) => (
+              <BoardColumn
+                key={column}
+                column={column}
+                cards={board.cards.filter((c) => c.column === column)}
+                now={now}
+              />
+            ))}
+          </div>
+
+          {board.orphans.length > 0 && (
+            <footer className="flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground">
+              <span>Background sessions with no live parent chat</span>
+              <div className="flex flex-wrap gap-1">
+                {board.orphans.map((b) => (
+                  <Badge
+                    key={b.id}
+                    variant="outline"
+                    title={b.needs ?? undefined}
+                  >
+                    <PathSwatch cwd={b.cwd} />
+                    {b.name} · {b.state} · {shortPath(b.cwd)}
+                  </Badge>
+                ))}
+              </div>
+            </footer>
+          )}
+        </main>
+      </ProjectColorsContext.Provider>
     </DraftsContext.Provider>
   );
 }

@@ -206,7 +206,7 @@ Controls differ by column, and the sketch is specific:
 - **WORKING** cards carry a **stop** button. It is disabled, with the reason on hover, when only the card's subagents are running (the chat's own turn has ended, so Esc has no turn to stop) or when the session is not in a cmux surface.
 - **DONE** cards carry a **play / resume** button.
 - An expanded card shows the transcript with an **input** field beneath it.
-- Every card's path carries a **coloured square**, hashed from the project's path, so it is the same on every poll and reload and cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` takes its repo's colour.
+- Every card's path carries a **coloured square** for its project, so cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` belongs to its repo. The colour is one of 24, hashed from the project's path until one is picked by clicking the square. Picks are kept in the browser's localStorage for now, until seemux has a config of its own.
 
 **DISPATCH NEW WORK is the primary action**, a full-width bar above the columns with a **directory picker** beside it. Putting it there fixes the cost asymmetry, since the most prominent control on the screen starts a new session in a chosen directory, and spawning one becomes visibly cheaper than cramming another goal into an existing session.
 
