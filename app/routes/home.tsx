@@ -472,6 +472,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   useFocusRestore();
   const board: Board = loaderData;
   const now = board.generatedAt;
+  // Pinned only takes a column while something is pinned.
+  const pinned = board.cards.filter((c) => c.pinned);
   const [drafts, setDrafts] = useSessionStorage<Record<string, string>>(
     "seemux:drafts",
     {},
@@ -518,12 +520,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </p>
           ))}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <BoardColumn
-              column="pinned"
-              cards={board.cards.filter((c) => c.pinned)}
-              now={now}
-            />
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-4 sm:grid-cols-2",
+              pinned.length > 0 ? "xl:grid-cols-5" : "xl:grid-cols-4",
+            )}
+          >
+            {pinned.length > 0 && (
+              <BoardColumn column="pinned" cards={pinned} now={now} />
+            )}
             {COLUMNS.map((column) => (
               <BoardColumn
                 key={column}
