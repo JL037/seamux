@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { ContextBar } from "~/components/context-bar";
 import { Markdown } from "~/components/markdown";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
@@ -142,11 +143,7 @@ export function ChatModal({
                       : "prose prose-sm self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
                   )}
                 >
-                  {m.role === "user" ? (
-                    m.text
-                  ) : (
-                    <Markdown>{m.text}</Markdown>
-                  )}
+                  {m.role === "user" ? m.text : <Markdown>{m.text}</Markdown>}
                 </div>
               ))}
             </div>
@@ -163,24 +160,27 @@ export function ChatModal({
         </div>
 
         <div className="flex items-end gap-2">
-          <Textarea
-            autoFocus
-            data-focus-key={`chat:${card.sessionId}`}
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                onSend();
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Textarea
+              autoFocus
+              data-focus-key={`chat:${card.sessionId}`}
+              value={draft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  onSend();
+                }
+              }}
+              placeholder={
+                card.drivable
+                  ? "Next message (⌘↵ to send), or a tangent to fork"
+                  : "Not running: write a tangent to fork from this chat"
               }
-            }}
-            placeholder={
-              card.drivable
-                ? "Next message (⌘↵ to send), or a tangent to fork"
-                : "Not running: write a tangent to fork from this chat"
-            }
-            className="min-h-32 flex-1 resize-y"
-          />
+              className="min-h-32 resize-y rounded-b-none"
+            />
+            <ContextBar context={card.context} className="border-input" />
+          </div>
           <div className="flex flex-col gap-2">
             <Button
               variant="outline"

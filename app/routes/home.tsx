@@ -24,6 +24,7 @@ import {
 import type { Route } from "./+types/home";
 import { ChatModal } from "~/components/chat-modal";
 import { ConfigDialog } from "~/components/config-dialog";
+import { ContextBar } from "~/components/context-bar";
 import { DispatchBar } from "~/components/dispatch-bar";
 import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { Markdown } from "~/components/markdown";
@@ -221,25 +222,33 @@ function ChatInput({ card }: { card: BoardCard }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
-        <form
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-lg border bg-background p-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send();
-          }}
-        >
-          <input
-            data-focus-key={`reply:${card.sessionId}`}
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            placeholder={card.drivable ? "Reply" : "Not in a cmux surface"}
-            disabled={!card.drivable}
-            className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
-          />
-          <Button type="submit" size="icon-xs" disabled={!canSend} title="Send">
-            <SendHorizontal />
-          </Button>
-        </form>
+        <div className="min-w-0 flex-1">
+          <form
+            className="flex items-center gap-1 rounded-t-lg border bg-background p-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send();
+            }}
+          >
+            <input
+              data-focus-key={`reply:${card.sessionId}`}
+              value={draft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              placeholder={card.drivable ? "Reply" : "Not in a cmux surface"}
+              disabled={!card.drivable}
+              className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
+            />
+            <Button
+              type="submit"
+              size="icon-xs"
+              disabled={!canSend}
+              title="Send"
+            >
+              <SendHorizontal />
+            </Button>
+          </form>
+          <ContextBar context={card.context} />
+        </div>
         <Button
           size="icon-sm"
           variant="ghost"

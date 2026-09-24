@@ -21,6 +21,7 @@ import {
   type Card,
   type ChatMessage,
   type Column,
+  type ContextUsage,
   type DispatchSet,
   type Question,
   type Subagent,
@@ -74,6 +75,8 @@ interface TranscriptSummary {
   pendingTool: { id: string; name: string; input: any } | null;
   // The question the last message ended the turn on, if it did.
   question: string | null;
+  // How full the context window is, from the last response's usage.
+  context: ContextUsage | null;
 }
 
 async function readJson<T>(cmd: string, args: string[]): Promise<T> {
@@ -236,6 +239,27 @@ function endingQuestion(o: any): string | null {
   return excerpt(last.replace(/\*\*|__|`/g, ""));
 }
 
+// Transcripts record the model but not its window: a 1M session is logged
+// as plain `claude-opus-5`. Opus runs with 1M here; anything else is taken
+// at 200k until a response shows it holding more.
+const WINDOW = 200_000;
+const LARGE_WINDOW = 1_000_000;
+
+// What the next request would send: everything this response read, plus
+// what it wrote.
+function contextUsage(o: any): ContextUsage | null {
+  const m = o.message;
+  const u = m?.usage;
+  if (!u || m.model === "<synthetic>") return null;
+  const used =
+    (u.input_tokens ?? 0) +
+    (u.cache_creation_input_tokens ?? 0) +
+    (u.cache_read_input_tokens ?? 0) +
+    (u.output_tokens ?? 0);
+  const large = /opus/.test(m.model ?? "") || used > WINDOW;
+  return { used, window: large ? LARGE_WINDOW : WINDOW };
+}
+
 async function summarize(path: string): Promise<TranscriptSummary> {
   const summary: TranscriptSummary = {
     name: null,
@@ -246,7 +270,11 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     turnActive: null,
     pendingTool: null,
     question: null,
+    context: null,
   };
+  // Settled by the last response, or by a compaction after it, which leaves
+  // the window's size unknown until the next response.
+  let contextKnown = false;
   const lines = await readTail(path);
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i]) continue;
@@ -270,6 +298,13 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       summary.pendingTool = pendingTool(o);
       summary.question = endingQuestion(o);
     }
+    if (!contextKnown && !o.isSidechain) {
+      if (o.isCompactSummary) contextKnown = true;
+      else if (o.type === "assistant") {
+        summary.context = contextUsage(o);
+        contextKnown = summary.context != null;
+      }
+    }
     if (o.isSidechain || o.isMeta || o.isCompactSummary) continue;
 
     const text = textOf(o.message?.content);
@@ -288,6 +323,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       summary.lastPrompt &&
       summary.lastReply &&
       summary.turnActive != null &&
+      contextKnown &&
       summary.cwd &&
       summary.branch
     )
@@ -559,6 +595,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastActivityAt: transcript?.mtimeMs ?? null,
         lastPrompt: summary?.lastPrompt ?? null,
         lastReply: summary?.lastReply ?? null,
+        context: summary?.context ?? null,
         workspaceRef: ws?.ref ?? null,
         intent: null,
         forkedFrom: null,
@@ -601,6 +638,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastActivityAt: t.mtimeMs,
         lastPrompt: s.lastPrompt,
         lastReply: s.lastReply,
+        context: s.context,
         workspaceRef: null,
         intent: null,
         forkedFrom: null,
