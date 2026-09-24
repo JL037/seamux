@@ -159,3 +159,97 @@
     var(--brand-indigo)
   );
 }
+
+/* Syntax highlighting, from highlight.js's classes: GitHub's palette in
+   light, GitHub Dark's in dark. */
+:root {
+  --hl-keyword: #cf222e;
+  --hl-title: #8250df;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-comment: #6e7781;
+  --hl-name: #116329;
+  --hl-attr: #0550ae;
+  --hl-meta: #953800;
+}
+.dark {
+  --hl-keyword: #ff7b72;
+  --hl-title: #d2a8ff;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-comment: #8b949e;
+  --hl-name: #7ee787;
+  --hl-attr: #79c0ff;
+  --hl-meta: #ffa657;
+}
+.hljs-keyword,
+.hljs-doctag,
+.hljs-template-tag,
+.hljs-type,
+.hljs-variable.language_ {
+  color: var(--hl-keyword);
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: var(--hl-title);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string {
+  color: var(--hl-string);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-built_in,
+.hljs-symbol,
+.hljs-link {
+  color: var(--hl-number);
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-code {
+  color: var(--hl-comment);
+}
+.hljs-comment {
+  font-style: italic;
+}
+.hljs-name,
+.hljs-selector-tag,
+.hljs-section,
+.hljs-bullet {
+  color: var(--hl-name);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-variable,
+.hljs-template-variable {
+  color: var(--hl-attr);
+}
+.hljs-meta,
+.hljs-params {
+  color: var(--hl-meta);
+}
+.hljs-section,
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-addition {
+  color: var(--hl-name);
+}
+.hljs-deletion {
+  color: var(--hl-keyword);
+}
+
+/* A markdown file's frontmatter, set apart from the body it describes. */
+pre:has(> code[data-frontmatter]) {
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

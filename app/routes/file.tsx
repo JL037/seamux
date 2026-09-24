@@ -10,6 +10,7 @@ import {
 import { File, Folder } from "lucide-react";
 
 import type { Route } from "./+types/file";
+import { Code } from "~/components/code";
 import { Markdown } from "~/components/markdown";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
@@ -192,9 +193,11 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
             />
           </div>
         ) : file.text !== null ? (
-          <pre className="p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground">
-            {file.text}
-          </pre>
+          <Code
+            text={file.text}
+            path={file.path}
+            className="p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground"
+          />
         ) : (
           <p className="p-6 text-sm text-muted-foreground">
             A binary file, not shown here.{" "}

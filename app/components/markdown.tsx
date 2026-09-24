@@ -1,7 +1,10 @@
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
+import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 
 import { fileRawUrl, fileViewerUrl, linkedPath } from "~/lib/files";
+import { remarkFrontmatterAsCode } from "~/lib/highlight";
 
 // Claude's replies, as the markdown they're written in. Links open in a new
 // tab, so following one never navigates the board away. A link to a file on
@@ -15,7 +18,10 @@ export function Markdown({
 }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkFrontmatter, remarkFrontmatterAsCode]}
+      // Only fenced blocks that name their language: guessing is slow, and
+      // often wrong on short snippets.
+      rehypePlugins={[[rehypeHighlight, { detect: false }]]}
       // The default drops `style.css:12` as an unknown scheme.
       urlTransform={(url) =>
         linkedPath(url, base) ? url : defaultUrlTransform(url)
