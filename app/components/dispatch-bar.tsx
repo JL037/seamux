@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 import { FolderOpen, SendHorizontal } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { releaseFocus } from "~/lib/use-focus-restore";
 import { useSessionStorage } from "~/lib/use-session-storage";
@@ -134,11 +135,10 @@ export function DispatchBar({
             ))}
           </datalist>
         </label>
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <Switch
             checked={worktree}
-            onChange={(e) => setWorktree(e.target.checked)}
+            onCheckedChange={(on) => setWorktree(on)}
           />
           new worktree
         </label>

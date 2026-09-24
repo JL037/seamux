@@ -33,13 +33,14 @@ Most settings live in the board. Click the cog beside the seamux name.
 **General**
 
 - **Directories**: what the dispatch bar's directory picker offers. When this is empty, the picker lists directories with live sessions, past dispatches, and every git repo up to two levels under `~/code`.
-- **New worktree by default**: whether the dispatch bar's "new worktree" box starts ticked.
+- **New worktree by default**: whether the dispatch bar's "new worktree" switch starts on.
 
 **Macros** are prompts seamux sends into a session for you. `{{name}}` variables are filled in when the prompt is sent.
 
 | Macro | Sent | Variables |
 | --- | --- | --- |
-| New session | Wrapped around the first prompt of every session seamux dispatches. Must contain `{{prompt}}`, and defaults to just that | `prompt`, `cwd` |
+| New session | Wrapped around the first prompt of every session seamux dispatches. Must contain `{{prompt}}`, and defaults to that followed by `{{how_to_worktree}}` | `prompt`, `cwd`, `how_to_worktree` |
+| How to worktree | Filled into the new session's `{{how_to_worktree}}` when the session starts in a new worktree in a repo with no worktree convention; empty otherwise. Defaults to steps that have the session check `worktrees/` is gitignored first, then install dependencies in the worktree. A New session macro without `{{how_to_worktree}}` gets it at the end | `worktree`, `branch`, `repo` |
 | Close session | When you close an idle chat, before it exits. Defaults to a cleanup prompt asking the session to remove its own worktree. Leave it empty to exit straight away | `cwd`, `repo`, `siblings` |
 
 `{{siblings}}` is a sentence naming the other live sessions under the same repo. Without it, a session can't know that another session is using the same repo.
@@ -107,7 +108,7 @@ A card shows the last prompt and the end of the latest reply, with a reply box b
 
 ### Dispatching
 
-The **dispatch bar** at the top starts a new top-level session in a chosen directory, optionally in a new worktree, with your prompt wrapped in the new-session macro. Starting new work in its own session is the point: that's cheaper than piling another goal into a chat that's already running.
+The **dispatch bar** at the top starts a new top-level session in a chosen directory, optionally in a new worktree, with your prompt wrapped in the new-session macro. seamux makes that worktree itself, branched from what the directory has checked out: under `.claude/worktrees/` if the repo has one, otherwise under `worktrees/`. A repo with neither `.claude/worktrees/` nor an ignored `worktrees/` has no worktree convention, so the session also gets the How to worktree macro. Starting new work in its own session is the point: that's cheaper than piling another goal into a chat that's already running.
 
 A session can split a task into several at once with the `seamux-dispatch` skill, which calls `bin/seamux`:
 

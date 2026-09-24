@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 import { FolderOpen, Plus, RotateCcw, Save, Settings, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Switch } from "~/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -203,21 +204,20 @@ function WorktreeSetting({ on }: { on: boolean }) {
   return (
     <section className="flex flex-col gap-2">
       <h3 className="font-medium">Worktrees</h3>
-      <label className="flex items-start gap-2">
-        <input
-          type="checkbox"
+      <label className="flex cursor-pointer items-start gap-2">
+        <Switch
           className="mt-0.5"
           checked={on}
           disabled={action.pending}
-          onChange={(e) =>
-            action.submit("worktree-default", { on: String(e.target.checked) })
+          onCheckedChange={(checked) =>
+            action.submit("worktree-default", { on: String(checked) })
           }
         />
         <span>
           Use worktrees by default
           <span className="block text-muted-foreground">
-            The dispatch bar's "new worktree" box starts ticked, so dispatched
-            work gets its own worktree unless you untick it.
+            The dispatch bar's "new worktree" switch starts on, so dispatched
+            work gets its own worktree unless you turn it off.
           </span>
         </span>
       </label>

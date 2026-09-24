@@ -3,7 +3,11 @@
 
 // System macros: text the dispatcher sends into a session as a user prompt,
 // at a fixed point in its life.
-export const MACRO_NAMES = ["newSession", "closeSession"] as const;
+export const MACRO_NAMES = [
+  "newSession",
+  "howToWorktree",
+  "closeSession",
+] as const;
 export type MacroName = (typeof MACRO_NAMES)[number];
 
 export interface MacroInfo {
@@ -22,8 +26,23 @@ export const MACROS: Record<MacroName, MacroInfo> = {
     variables: [
       { name: "prompt", meaning: "what you typed into the dispatch bar" },
       { name: "cwd", meaning: "the directory the session starts in" },
+      {
+        name: "how_to_worktree",
+        meaning:
+          "the How to worktree macro, when it applies; added at the end if left out",
+      },
     ],
     required: "prompt",
+  },
+  howToWorktree: {
+    label: "How to worktree",
+    when: "Filled into the new session's {{how_to_worktree}} when seamux starts it in a new worktree in a repo with no worktree convention: one that neither has .claude/worktrees nor ignores worktrees/. That worktree goes under worktrees/. Leave it empty to say nothing.",
+    variables: [
+      { name: "worktree", meaning: "the new worktree's directory" },
+      { name: "branch", meaning: "its branch" },
+      { name: "repo", meaning: "the checkout it was branched from" },
+    ],
+    required: null,
   },
   closeSession: {
     label: "Close session",
@@ -41,7 +60,14 @@ export const MACROS: Record<MacroName, MacroInfo> = {
 };
 
 export const DEFAULT_MACROS: Record<MacroName, string> = {
-  newSession: "{{prompt}}",
+  newSession: "{{prompt}}\n\n{{how_to_worktree}}",
+  howToWorktree: `## How to worktree
+
+You are working in a new git worktree, {{worktree}}, on branch {{branch}}, made from {{repo}}. This repo has no worktree convention yet, so its worktrees go under worktrees/ at the root of the repo, which git should ignore.
+
+1. Before anything else, check that the repo ignores worktrees/: \`git check-ignore -q worktrees/\` succeeds when it does. If it doesn't, add \`/worktrees/\` to .gitignore and commit that first, so the change lands with your work.
+2. Install the project's dependencies in this worktree before running any of its scripts. Package managers hoist dependencies inconsistently, so what is installed in {{repo}} may not resolve from here.
+3. Do all your work in this worktree, never in {{repo}}.`,
   closeSession: `Clean up after yourself: if you are working in a worktree, remove it and its branch.
 
 {{siblings}} Do not touch anything outside your own worktree, and do not run a bare \`git worktree prune\` or anything else that operates on the whole repo.
@@ -55,7 +81,7 @@ export interface Config {
   // What the dispatch bar's directory picker offers. Empty means every
   // directory seamux can find.
   directories: string[];
-  // The dispatch bar's "new worktree" box starts ticked.
+  // The dispatch bar's "new worktree" switch starts on.
   worktreeByDefault: boolean;
   macros: Record<MacroName, { text: string; custom: boolean }>;
 }
@@ -63,10 +89,12 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = {
   directories: [],
   worktreeByDefault: false,
-  macros: {
-    newSession: { text: DEFAULT_MACROS.newSession, custom: false },
-    closeSession: { text: DEFAULT_MACROS.closeSession, custom: false },
-  },
+  macros: Object.fromEntries(
+    MACRO_NAMES.map((name) => [
+      name,
+      { text: DEFAULT_MACROS[name], custom: false },
+    ]),
+  ) as Config["macros"],
 };
 
 // Fills `{{name}}` from `vars` in one pass, so a value that itself contains

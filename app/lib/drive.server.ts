@@ -17,7 +17,7 @@ import {
   type Dialog,
   type Question,
 } from "./board.ts";
-import { renderMacro } from "./config.ts";
+import { renderMacro, usesVariable } from "./config.ts";
 import { configOrDefaults } from "./config.server.ts";
 import { projectOf } from "./project-colors.ts";
 import { recordDispatch } from "./store.server.ts";
@@ -690,11 +690,25 @@ export function nameFrom(prompt: string): string {
 
 const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
 
+interface NewWorktree {
+  path: string;
+  branch: string;
+  // The checkout it was branched from.
+  repo: string;
+  // Whether the repo already had somewhere for worktrees. Without one, the
+  // session is told how this one was set up.
+  convention: boolean;
+}
+
 // A new worktree for dispatched work, branched from what the chosen checkout
 // has checked out now. seamux makes it rather than `claude --worktree`, which
 // branches from the remote's default branch (stale when main is unpushed)
 // and stops on exit to ask whether to keep the worktree.
-async function createWorktree(cwd: string, name: string): Promise<string> {
+//
+// It goes where the repo keeps its worktrees: .claude/worktrees if that
+// exists, else worktrees/. A repo with neither that directory nor worktrees/
+// in its ignores has no convention yet, and gets worktrees/.
+async function createWorktree(cwd: string, name: string): Promise<NewWorktree> {
   let root: string;
   try {
     ({ stdout: root } = await run("git", [
@@ -707,20 +721,38 @@ async function createWorktree(cwd: string, name: string): Promise<string> {
     throw new Error("A new worktree needs a git repository");
   }
   root = root.trim();
-  const path = join(root, ".claude/worktrees", name);
+  const claudeHome = existsSync(join(root, ".claude/worktrees"));
+  const path = join(root, claudeHome ? ".claude/worktrees" : "worktrees", name);
+  const convention =
+    claudeHome ||
+    (await run("git", ["-C", root, "check-ignore", "-q", "worktrees/"]).then(
+      () => true,
+      () => false,
+    ));
   if (existsSync(path))
     throw new Error(`A worktree named ${name} already exists`);
-  await run("git", [
-    "-C",
-    root,
-    "worktree",
-    "add",
-    path,
-    "-b",
-    `worktree-${name}`,
-    "HEAD",
-  ]);
-  return path;
+  const branch = `worktree-${name}`;
+  await run("git", ["-C", root, "worktree", "add", path, "-b", branch, "HEAD"]);
+  return { path, branch, repo: root, convention };
+}
+
+// The first prompt of a dispatched session: the new-session macro around
+// what was typed, with How to worktree when a new worktree needs it. A
+// macro customised without {{how_to_worktree}} gets it at the end.
+function firstPrompt(prompt: string, cwd: string, wt: NewWorktree | null) {
+  const { macros } = configOrDefaults();
+  const howTo =
+    wt && !wt.convention
+      ? renderMacro(macros.howToWorktree.text, {
+          worktree: wt.path,
+          branch: wt.branch,
+          repo: wt.repo,
+        }).trim()
+      : "";
+  let text = macros.newSession.text;
+  if (howTo && !usesVariable(text, "how_to_worktree"))
+    text += "\n\n{{how_to_worktree}}";
+  return renderMacro(text, { prompt, cwd, how_to_worktree: howTo }).trim();
 }
 
 // A leading dash would be read as a flag.
@@ -747,13 +779,11 @@ export async function dispatch(input: DispatchInput): Promise<string> {
   }
 
   const sessionId = randomUUID();
-  const where = worktree ? await createWorktree(cwd, worktree) : cwd;
+  const wt = worktree ? await createWorktree(cwd, worktree) : null;
+  const where = wt?.path ?? cwd;
   // The session gets the prompt inside the new-session macro; the card
   // shows what was typed.
-  const first = renderMacro(configOrDefaults().macros.newSession.text, {
-    prompt,
-    cwd: where,
-  });
+  const first = firstPrompt(prompt, where, wt);
   const args = ["--session-id", sessionId, "--name", name, asPrompt(first)];
 
   recordDispatch({
