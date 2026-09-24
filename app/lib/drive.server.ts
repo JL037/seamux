@@ -457,6 +457,30 @@ export async function resume(sessionId: string, cwd: string, title: string) {
   }
 }
 
+// Brings a stopped background session back in a new cmux workspace, with
+// its conversation. `claude attach` restarts it from its job, even when its
+// transcript is gone. The wrapper passes subcommands through without
+// registering a surface, so the board can show it but not type into it.
+export async function attach(
+  sessionId: string,
+  shortId: string,
+  cwd: string,
+  title: string,
+) {
+  const now = Date.now();
+  const started = resuming.get(sessionId);
+  if (started && now - started < RESUME_GUARD_MS) {
+    throw new Error("Already resuming this session");
+  }
+  resuming.set(sessionId, now);
+  try {
+    await launch(cwd, title, ["attach", shortId], true);
+  } catch (err) {
+    resuming.delete(sessionId);
+    throw err;
+  }
+}
+
 // Only real directories inside the home folder can be dispatched into.
 export async function checkDirectory(path: string): Promise<string> {
   if (!path.startsWith("/")) throw new Error("Pick an absolute directory");

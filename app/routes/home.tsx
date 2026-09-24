@@ -32,6 +32,14 @@ import { WaitingPanel } from "~/components/waiting-panel";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -331,6 +339,60 @@ function CardControl({ card }: { card: BoardCard }) {
     );
   }
   return null;
+}
+
+// A background session no open chat owns. Play brings it back with
+// `claude attach`; X explains how to delete it, since seemux never does.
+function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
+  const { submit, pending, error } = useSessionAction(orphan.sessionId);
+  const [removing, setRemoving] = useState(false);
+  return (
+    <Badge
+      variant="outline"
+      className="h-6 pr-0.5"
+      title={orphan.needs ?? undefined}
+    >
+      <PathSwatch cwd={orphan.cwd} />
+      {orphan.name} · {orphan.state} · {shortPath(orphan.cwd)}
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        disabled={pending}
+        title={error ?? "Resume in a new cmux workspace (claude attach)"}
+        onClick={() => submit("attach")}
+      >
+        <Play />
+      </Button>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        title="How to delete this session"
+        onClick={() => setRemoving(true)}
+      >
+        <X />
+      </Button>
+      <Dialog open={removing} onOpenChange={setRemoving}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {orphan.name}</DialogTitle>
+            <DialogDescription>
+              seemux never deletes sessions. To remove this one for good, run
+              this in any Claude Code chat, or without the <code>!</code> in a
+              terminal:
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="rounded-md bg-muted px-3 py-2 font-mono text-sm select-all">
+            ! claude rm {orphan.id}
+          </pre>
+          <p className="text-sm text-muted-foreground">
+            This deletes the session, and its worktree when that is safe. To
+            keep it, resume it with play instead.
+          </p>
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
+    </Badge>
+  );
 }
 
 // Pins a long-running chat into its own column, or takes it back out. A
@@ -644,17 +706,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
           {board.orphans.length > 0 && (
             <footer className="flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground">
-              <span>Background sessions with no live parent chat</span>
+              <span title="`claude agents` names no parent, so a background session belongs to an open chat in its directory that started before it. These match none: their chat has closed, or runs in another directory.">
+                Background sessions not matched to an open chat
+              </span>
               <div className="flex flex-wrap gap-1">
                 {board.orphans.map((b) => (
-                  <Badge
-                    key={b.id}
-                    variant="outline"
-                    title={b.needs ?? undefined}
-                  >
-                    <PathSwatch cwd={b.cwd} />
-                    {b.name} · {b.state} · {shortPath(b.cwd)}
-                  </Badge>
+                  <OrphanBadge key={b.id} orphan={b} />
                 ))}
               </div>
             </footer>

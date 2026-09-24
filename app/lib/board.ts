@@ -116,8 +116,9 @@ export interface Board {
   version: string | null;
   cards: Card[];
   dispatches: DispatchSet[];
-  // Background sessions whose parent chat is no longer live.
-  orphans: (BackgroundSession & { cwd: string })[];
+  // Background sessions not matched to an open chat. Every one `claude
+  // agents` still lists can be brought back with `claude attach`.
+  orphans: (BackgroundSession & { cwd: string; sessionId: string })[];
   warnings: string[];
 }
 

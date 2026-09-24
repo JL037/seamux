@@ -514,7 +514,11 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const orphans: Board["orphans"] = [];
   backgroundRows.forEach((row, i) => {
     if (!interactive.some((p) => parentOf(p, row))) {
-      orphans.push({ ...background[i], cwd: row.cwd });
+      orphans.push({
+        ...background[i],
+        cwd: row.cwd,
+        sessionId: row.sessionId,
+      });
     }
   });
 

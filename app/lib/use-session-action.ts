@@ -7,6 +7,7 @@ type Intent =
   | "send"
   | "interrupt"
   | "resume"
+  | "attach"
   | "fork"
   | "close"
   | "pin"

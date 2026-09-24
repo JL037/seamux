@@ -5,6 +5,7 @@ import { closable, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
   answerQuestion,
+  attach,
   cancelClose,
   closeSession,
   fork,
@@ -19,6 +20,7 @@ const INTENTS = new Set([
   "send",
   "interrupt",
   "resume",
+  "attach",
   "fork",
   "close",
   "pin",
@@ -102,6 +104,14 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     if (!closed)
       throw new Error("This chat is still live, or has no transcript");
     await resume(sessionId, closed.cwd, closed.name);
+  } else if (intent === "attach") {
+    // Only a background session the board lists on its own; one with a
+    // parent chat belongs to that chat.
+    const orphan = (await loadBoard()).orphans.find(
+      (o) => o.sessionId === sessionId,
+    );
+    if (!orphan) throw new Error("No longer a background session on its own");
+    await attach(sessionId, orphan.id, orphan.cwd, orphan.name);
   } else if (intent === "fork") {
     const info = await sessionInfo(sessionId);
     if (!info) throw new Error("No transcript to fork from");
