@@ -293,13 +293,8 @@ function CardControl({ card }: { card: BoardCard }) {
         variant="outline"
         disabled={!card.drivable || pending}
         title={error ?? "Close this chat (it moves to Done and can be resumed)"}
-        onClick={() => {
-          if (
-            window.confirm(`Close “${card.name}”? It can be resumed from Done.`)
-          ) {
-            submit("close");
-          }
-        }}
+        // No confirmation: a closed chat is resumable from Done.
+        onClick={() => submit("close")}
       >
         <X />
       </Button>
