@@ -74,7 +74,7 @@ import { cn } from "~/lib/utils";
 const POLL_MS = 3000;
 
 export function meta({}: Route.MetaArgs) {
-  return [{ title: "seemux" }];
+  return [{ title: "seamux" }];
 }
 
 export async function loader() {
@@ -666,7 +666,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <span className="flex items-center gap-2.5">
                 <SeamuxMark size={32} />
                 <span className="text-xl font-bold tracking-tight text-foreground">
-                  seemux
+                  seamux
                 </span>
               </span>
               <ConfigDialog config={config} />
