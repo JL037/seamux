@@ -40,10 +40,24 @@ const PROBE_TIMEOUT_MS = 5_000;
 const PROBE_FAILURES = 3; // consecutive failures before a restart
 const KILL_AFTER_MS = 5_000;
 
-// Ask a running supervisor to restart the board.
-export function requestRestart() {
-  mkdirSync(DATA, { recursive: true });
-  writeFileSync(RESTART_FILE, `${new Date().toISOString()}\n`);
+// Ask the supervisor serving `repo` to restart the board. `npm run land`
+// runs from a worktree, so it names the main checkout: the worktree's own
+// data/ is not the one the supervisor watches.
+export function requestRestart(repo = REPO) {
+  mkdirSync(join(repo, "data"), { recursive: true });
+  writeFileSync(
+    join(repo, "data", "board.restart"),
+    `${new Date().toISOString()}\n`,
+  );
+}
+
+// The pid of the dev server the supervisor serving `repo` last started.
+export function boardPid(repo = REPO): string | null {
+  try {
+    return readFileSync(join(repo, "data", "board.pid"), "utf8").trim();
+  } catch {
+    return null;
+  }
 }
 
 function log(message: string) {

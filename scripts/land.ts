@@ -26,7 +26,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { requestRestart } from "./supervise.ts";
+import { boardPid, requestRestart } from "./supervise.ts";
 
 const BOARD = "http://127.0.0.1:5173/";
 const LOCK_WAIT_MS = 20 * 60 * 1000;
@@ -115,12 +115,27 @@ function isClean(cwd: string): boolean {
   return git(cwd, "status", "--porcelain", "--untracked-files=no") === "";
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// The supervisor notices a restart request within a second, but until it
+// does the old server still answers. Wait for a new dev server's pid, so
+// the check below is of the new one.
+async function restarted(before: string | null): Promise<void> {
+  for (let i = 0; i < 15; i++) {
+    const pid = boardPid(REPO);
+    if (pid && pid !== before) return;
+    await sleep(1000);
+  }
+}
+
+// A dev server fresh from `npm ci` re-optimizes its dependencies on the
+// first request, which has taken longer than 20 seconds.
 async function boardAnswers(): Promise<boolean> {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 60; i++) {
     try {
       if ((await fetch(BOARD)).ok) return true;
     } catch {}
-    await new Promise((r) => setTimeout(r, 1000));
+    await sleep(1000);
   }
   return false;
 }
@@ -200,7 +215,9 @@ async function main() {
     step("Dependencies changed: reinstalling and restarting the board");
     run(REPO, "npm", "ci", "--no-audit", "--no-fund");
     // `npm run serve` picks this up within a second.
-    requestRestart();
+    const before = boardPid(REPO);
+    requestRestart(REPO);
+    await restarted(before);
   }
 
   step("Checking the board");
@@ -209,7 +226,7 @@ async function main() {
     `\n${ok ? "✓" : "✗"} Landed ${before.slice(0, 7)}..${after.slice(0, 7)} on main.` +
       (ok
         ? ""
-        : ` The board is not answering at ${BOARD}; see data/logs/board.log.`) +
+        : ` The board is not answering at ${BOARD}; see the terminal running \`npm run serve\`.`) +
       `\nTo undo: git revert ${before.slice(0, 7)}..${after.slice(0, 7)}`,
   );
   if (!ok) process.exit(1);
