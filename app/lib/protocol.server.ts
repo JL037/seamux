@@ -9,7 +9,7 @@
 // 4. Handbacks are structured and keyed by worker.
 //
 // Files live in data/dispatches/<dispatch-id>/. Imported by the board and by
-// scripts/seemux.ts, which Node runs directly: relative imports with
+// scripts/seamux.ts, which Node runs directly: relative imports with
 // extensions, no TypeScript-only runtime syntax.
 
 import { randomBytes } from "node:crypto";
@@ -27,8 +27,8 @@ import { fileURLToPath } from "node:url";
 // build/server/index.js. Keep it that way if either moves.
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "../..");
 export const DISPATCH_DIR =
-  process.env.SEEMUX_DISPATCH_DIR ?? join(REPO, "data/dispatches");
-export const SEEMUX_BIN = join(REPO, "bin/seemux");
+  process.env.SEAMUX_DISPATCH_DIR ?? join(REPO, "data/dispatches");
+export const SEAMUX_BIN = join(REPO, "bin/seamux");
 
 export interface WorkerSpec {
   key: string;
@@ -150,11 +150,11 @@ export function workerInstructions(m: Manifest, key: string): string {
   return [
     "",
     "---",
-    `seemux: you are worker \`${key}\` in dispatch \`${m.id}\` ("${m.title}").`,
+    `seamux: you are worker \`${key}\` in dispatch \`${m.id}\` ("${m.title}").`,
     "Other workers are handling the other parts; stay within yours.",
     "When your work is completely finished and every output is written, report back exactly once:",
     "",
-    `  ${SEEMUX_BIN} done ${m.id} ${key} --summary "<what you did and found, one paragraph>" [--result <path to your main output>]`,
+    `  ${SEAMUX_BIN} done ${m.id} ${key} --summary "<what you did and found, one paragraph>" [--result <path to your main output>]`,
     "",
     "If you cannot finish, run the same command with --status failed and explain in --summary.",
     "Do not report before your outputs are fully written: the parent treats the report as the signal that your results are safe to read.",

@@ -30,7 +30,7 @@ export const RESTART_FILE = join(DATA, "board.restart");
 const SUPERVISOR_PID = join(DATA, "serve.pid");
 const CHILD_PID = join(DATA, "board.pid");
 
-const PORT = process.env.SEEMUX_PORT ?? "5173";
+const PORT = process.env.SEAMUX_PORT ?? "5173";
 const URL = `http://127.0.0.1:${PORT}/`;
 const HEALTHY_MS = 60_000; // up this long resets the backoff
 const MAX_BACKOFF_MS = 30_000;
@@ -47,7 +47,7 @@ export function requestRestart() {
 }
 
 function log(message: string) {
-  console.log(`[seemux serve ${new Date().toLocaleTimeString()}] ${message}`);
+  console.log(`[seamux serve ${new Date().toLocaleTimeString()}] ${message}`);
 }
 
 function alive(pid: number): boolean {

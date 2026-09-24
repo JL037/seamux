@@ -1,6 +1,6 @@
-// Installs (or with --uninstall, removes) seemux's skills in
+// Installs (or with --uninstall, removes) seamux's skills in
 // ~/.claude/skills, so sessions in any repo can use the protocol. Each
-// SKILL.md is rendered with this checkout's bin/seemux path. Idempotent.
+// SKILL.md is rendered with this checkout's bin/seamux path. Idempotent.
 //
 //   npm run skills:install
 //   npm run skills:uninstall
@@ -20,9 +20,9 @@ import { fileURLToPath } from "node:url";
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = join(REPO, "skills");
 const TARGET = join(homedir(), ".claude/skills");
-const BIN = join(REPO, "bin/seemux");
+const BIN = join(REPO, "bin/seamux");
 // Marks a skill as ours, so uninstall never removes one it did not write.
-const MARK = "<!-- installed by seemux: npm run skills:install -->";
+const MARK = "<!-- installed by seamux: npm run skills:install -->";
 
 const uninstall = process.argv.includes("--uninstall");
 
@@ -37,11 +37,11 @@ for (const name of readdirSync(SOURCE)) {
     continue;
   }
   if (existsSync(file) && !readFileSync(file, "utf8").includes(MARK)) {
-    console.log(`Skipped ${dest}: a skill seemux did not install is there`);
+    console.log(`Skipped ${dest}: a skill seamux did not install is there`);
     continue;
   }
   const body = readFileSync(join(SOURCE, name, "SKILL.md"), "utf8")
-    .replaceAll("{{SEEMUX_BIN}}", BIN)
+    .replaceAll("{{SEAMUX_BIN}}", BIN)
     .trimEnd();
   mkdirSync(dest, { recursive: true });
   writeFileSync(file, `${body}\n\n${MARK}\n`);

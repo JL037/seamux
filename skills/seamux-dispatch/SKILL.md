@@ -1,13 +1,13 @@
 ---
-name: seemux-dispatch
+name: seamux-dispatch
 description: Split work into independent pieces that each run as their own top-level Claude session, then collect every result at once. Use when a task divides into parts that can proceed in parallel (a sweep over many items, several unrelated fixes, research across separate sources), instead of running them as subagents or worktrees inside this one session. Also use when asked to "dispatch", "fan out", or "split this into sessions".
 ---
 
-# seemux dispatch
+# seamux dispatch
 
-Each piece of work gets its own top-level session, visible and drivable on the seemux board. You declare the whole set first, spawn it, then wait on a barrier that returns every handback at once, keyed by worker. You never react to results one at a time as they arrive.
+Each piece of work gets its own top-level session, visible and drivable on the seamux board. You declare the whole set first, spawn it, then wait on a barrier that returns every handback at once, keyed by worker. You never react to results one at a time as they arrive.
 
-The CLI is `{{SEEMUX_BIN}}`.
+The CLI is `{{SEAMUX_BIN}}`.
 
 ## When to use it
 
@@ -33,7 +33,7 @@ Set `"worktree": true` for a worker that edits a git repo alongside other worker
 ## 2. Spawn it
 
 ```bash
-{{SEEMUX_BIN}} fanout manifest.json
+{{SEAMUX_BIN}} fanout manifest.json
 ```
 
 It writes the manifest before spawning anything, starts each worker as its own session with instructions for reporting back, and prints the dispatch id.
@@ -43,7 +43,7 @@ It writes the manifest before spawning anything, starts each worker as its own s
 Run the wait **in the background**, so you are notified once, when every worker has reported:
 
 ```bash
-{{SEEMUX_BIN}} wait <dispatch-id>
+{{SEAMUX_BIN}} wait <dispatch-id>
 ```
 
 It exits 0 when all workers have reported, and 2 on timeout (default one hour, `--timeout <seconds>`), printing JSON either way:
@@ -53,7 +53,7 @@ It exits 0 when all workers have reported, and 2 on timeout (default one hour, `
   "handbacks": { "batch-01": { "status": "ok", "summary": "...", "result": "out/batch-01.md" }, ... } }
 ```
 
-Check progress without blocking with `{{SEEMUX_BIN}} status <dispatch-id>`.
+Check progress without blocking with `{{SEAMUX_BIN}} status <dispatch-id>`.
 
 ## 4. Merge
 
@@ -66,5 +66,5 @@ Check progress without blocking with `{{SEEMUX_BIN}} status <dispatch-id>`.
 Workers get their reporting instructions appended to their prompt. For reference, a worker reports with:
 
 ```bash
-{{SEEMUX_BIN}} done <dispatch-id> <worker-key> --summary "<what it did and found>" [--result <path>] [--status failed]
+{{SEAMUX_BIN}} done <dispatch-id> <worker-key> --summary "<what it did and found>" [--result <path>] [--status failed]
 ```

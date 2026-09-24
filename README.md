@@ -1,4 +1,4 @@
-# seemux
+# seamux
 
 **A root repo you open a Claude Code session in, which spawns and tracks all the other sessions, and serves a board over them.**
 
@@ -12,7 +12,7 @@ Jakob's sketch, 2026-09-23. It settles several things the research left open, an
 
 ## If you are picking this up cold
 
-**All five phases are built**, in `~/code/seemux`, and the board is in daily use so Jakob can give feedback on it. Read **Running it** first, then **Findings while building**, which records every place the build corrected the research. The rest of this document is the design those phases implement.
+**All five phases are built**, in `~/code/seamux`, and the board is in daily use so Jakob can give feedback on it. Read **Running it** first, then **Findings while building**, which records every place the build corrected the research. The rest of this document is the design those phases implement.
 
 Re-verify the foundation in under a minute if you want to trust it yourself:
 
@@ -42,15 +42,15 @@ npm run serve    # run the board on http://127.0.0.1:5173 and keep it running
 `setup` writes to two places outside the repo, both idempotent and both reversible:
 
 - **`~/.claude/settings.json`** gains `SubagentStart` and `SubagentStop` hooks that run `hooks/subagent-event.ts`. It backs the file up first. `npm run hooks:uninstall` removes exactly its own entries.
-- **`~/.claude/skills/seemux-dispatch/`** holds the protocol skill, rendered with this checkout's `bin/seemux` path. `npm run skills:uninstall` removes it, and never removes a skill it did not write.
+- **`~/.claude/skills/seamux-dispatch/`** holds the protocol skill, rendered with this checkout's `bin/seamux` path. `npm run skills:uninstall` removes it, and never removes a skill it did not write.
 
 Run `npm run serve` in its own cmux workspace. It serves the dev server from this checkout, so a change landed on `main` goes live by hot reload. It restarts the server if it exits, if it stops answering, or when `npm run land` asks after reinstalling dependencies. It also stops a server orphaned by an earlier supervisor that was killed, and refuses to run twice. The supervisor is plain Node with no macOS dependency, so it runs under Linux and WSL too, polling for file changes on WSL's `/mnt/` drives.
 
 A landing can reload the board mid-sentence, so unsent text survives it: the dispatch prompt, its directory and worktree choice, and each card's reply draft are kept in the tab's `sessionStorage`, and so is which of those boxes had focus and where its cursor was: the reload puts the cursor back. An open chat stays open, scrolled to where it was, or to the end if you were reading the latest message; the page's own scroll position is restored by React Router. Sending clears the draft and the focus at once, so a reload while the send is in flight can't bring them back, and a failed send puts the draft back.
 
-To change seemux, work in a worktree on your own branch, commit, and run `npm run land` there. `CLAUDE.md` has the details, for people and agents alike.
+To change seamux, work in a worktree on your own branch, commit, and run `npm run land` there. `CLAUDE.md` has the details, for people and agents alike.
 
-The store is SQLite at `data/seemux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents, pins, settings and fan-out records, never a session.
+The store is SQLite at `data/seamux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents, pins, settings and fan-out records, never a session.
 
 This README is the brief and its own source of truth: edit it here. Prose in this repo is checked with Taskless.
 
@@ -89,7 +89,7 @@ This README is the brief and its own source of truth: edit it here. Prose in thi
 
 **Subagent visibility** is the first, and nothing in the field has it. `is_subagent` is `0` on all 14,393 rows of cmux's journal, and `claude agents` treats a session as one row. During the 272-firm sweep Jakob's vault ran 14 subagents inside one session, and every tool available would have shown a single calm card.
 
-Closable two ways. **`SubagentStart`** and **`SubagentStop`** hooks carry `agent_id`, `agent_type` and `session_id`, with `last_assistant_message` on stop, and tool events fired inside a subagent carry `agent_id` too. Verified: this is what seemux uses. Separately, **`--forward-subagent-text`** emits subagent messages with `parent_tool_use_id` set when a session runs in `--print` with `--output-format stream-json`.
+Closable two ways. **`SubagentStart`** and **`SubagentStop`** hooks carry `agent_id`, `agent_type` and `session_id`, with `last_assistant_message` on stop, and tool events fired inside a subagent carry `agent_id` too. Verified: this is what seamux uses. Separately, **`--forward-subagent-text`** emits subagent messages with `parent_tool_use_id` set when a session runs in `--print` with `--output-format stream-json`.
 
 **The coordination protocol** is the second. The parent's confusion is a concurrency problem and the mitigations are mechanical, set out below.
 
@@ -99,7 +99,7 @@ Closable two ways. **`SubagentStart`** and **`SubagentStop`** hooks carry `agent
 
 ## Architecture
 
-### The seemux repo
+### The seamux repo
 
 The simplest possible git repo, opened as a Claude Code session. It is the thing you talk to, and it holds:
 
@@ -153,11 +153,11 @@ The board follows the OS's light or dark theme until a sun or moon button beside
 
 **Background sessions are not cards.** A background session belongs to the chat that spawned it, and Jakob never drives one directly, so the board shows only that it exists, as a marker on its parent's card. Every piece of dispatched work is a new top-level session, which is what gets a card. `claude agents` records no parent, so a background session is attached to the live chats in its directory that started before it, since a chat cannot have spawned something older than itself. Jakob, 2026-09-23: *"backgound sessions have a parent. Those are just part of the main chat (mainly that they exist)... Every piece of dispatched \"Work\" is a new top level agent."*
 
-**A background session that matches no open chat is listed below the board**, under "Background sessions not matched to an open chat". Its chat has closed, or runs in another directory. Clicking one opens a dialog showing its `claude rm <id>` command, with two buttons. Resume runs `claude attach <id>` in a new cmux workspace, which restarts it with its conversation. Delete dispatches a chat into the session's main checkout that checks it and runs `claude rm <id>` itself, stopping to ask before discarding unpushed work, because seemux never deletes. Jakob, 2026-09-23: *"I would make those that can be resumed, resumable with a play and an X that opens a modal with instructions to destroy the abandoned session."* Later that day: *"the modal with the command can have dangerous \"delete this session\" and \"resume this session\" button. This removes the tiny buttons from the pill"*
+**A background session that matches no open chat is listed below the board**, under "Background sessions not matched to an open chat". Its chat has closed, or runs in another directory. Clicking one opens a dialog showing its `claude rm <id>` command, with two buttons. Resume runs `claude attach <id>` in a new cmux workspace, which restarts it with its conversation. Delete dispatches a chat into the session's main checkout that checks it and runs `claude rm <id>` itself, stopping to ask before discarding unpushed work, because seamux never deletes. Jakob, 2026-09-23: *"I would make those that can be resumed, resumable with a play and an X that opens a modal with instructions to destroy the abandoned session."* Later that day: *"the modal with the command can have dangerous \"delete this session\" and \"resume this session\" button. This removes the tiny buttons from the pill"*
 
 **DONE is entered by a human closing the chat**, which is the distinction that separates it from IDLE. A session that finishes its turn and has nothing left to do is **IDLE**: alive, holding its worktree, ready for more work. It becomes **DONE** when Jakob closes it. Jakob, 2026-09-23: *"when I close a chat, it's done."*
 
-**Closing a chat runs the close-session macro, then closes its cmux tab.** The macro is a prompt, by default the cleanup prompt below; the board sends it, waits for that turn to end, and only then sends `/exit`. It leaves the chat open, with a note on the card, when the turn ends on a question, leaves uncommitted changes or the session's worktree behind, never starts, or runs past 30 minutes; closing it again exits without the macro. Stopping the turn calls the close off. With the macro empty, close exits straight away. The board then waits for Claude to leave the tab and closes that tab, or its workspace when it was the only tab. A workspace seemux launched would close itself, but a chat Jakob started by hand in his own tab would otherwise leave its shell open. The conversation stays on disk, so the chat can still be resumed. If Claude has not exited within ten seconds, the board leaves the tab open.
+**Closing a chat runs the close-session macro, then closes its cmux tab.** The macro is a prompt, by default the cleanup prompt below; the board sends it, waits for that turn to end, and only then sends `/exit`. It leaves the chat open, with a note on the card, when the turn ends on a question, leaves uncommitted changes or the session's worktree behind, never starts, or runs past 30 minutes; closing it again exits without the macro. Stopping the turn calls the close off. With the macro empty, close exits straight away. The board then waits for Claude to leave the tab and closes that tab, or its workspace when it was the only tab. A workspace seamux launched would close itself, but a chat Jakob started by hand in his own tab would otherwise leave its shell open. The conversation stays on disk, so the chat can still be resumed. If Claude has not exited within ten seconds, the board leaves the tab open.
 
 From there it decays on two timers, and both are display rules:
 
@@ -181,7 +181,7 @@ Both halves are available today.
 
 **What a waiting card is waiting on:** `claude agents` gives the kind, `waitingFor: "input needed"` for a question and `"permission prompt"` for an approval, and the transcript's last message is the tool call the dialog belongs to. An approval shows its command or path on the card, to approve in the terminal. An AskUserQuestion is answered on the card: the board drives the dialog with the same keys Jakob would press, so the model gets real answers, not an interrupted turn. Jakob, 2026-09-23: *"I don't want to reimplement the tools, but reimplementing things like AskUserQuestions might actually save us some headache."*
 
-**Writing into a conversation:** a paste into the session's cmux surface, then Enter. `claude -p --resume <session-id>` looked like the path, but on a live session it starts a second process on the same conversation, so seemux never uses it on anything live. A closed chat is resumed in a new cmux workspace instead, so that it becomes live and drivable again.
+**Writing into a conversation:** a paste into the session's cmux surface, then Enter. `claude -p --resume <session-id>` looked like the path, but on a live session it starts a second process on the same conversation, so seamux never uses it on anything live. A closed chat is resumed in a new cmux workspace instead, so that it becomes live and drivable again.
 
 ### Cleanup is a prompt the session acts on
 
@@ -229,7 +229,7 @@ Controls differ by column, and the sketch is specific:
 
 **DISPATCH NEW WORK is the primary action**, a full-width bar above the columns with a **directory picker** beside it. Putting it there fixes the cost asymmetry, since the most prominent control on the screen starts a new session in a chosen directory, and spawning one becomes visibly cheaper than cramming another goal into an existing session.
 
-**A cog beside the seemux name opens the config dialog**, the start of seemux's own settings, kept in the store. Its General tab holds the directories the picker offers, which replace the discovered list when any are set, and whether "new worktree" starts ticked. Its Macros tab holds the system macros, prompts the dispatcher sends as if Jakob typed them, with `{{name}}` variables filled in on sending:
+**A cog beside the seamux name opens the config dialog**, the start of seamux's own settings, kept in the store. Its General tab holds the directories the picker offers, which replace the discovered list when any are set, and whether "new worktree" starts ticked. Its Macros tab holds the system macros, prompts the dispatcher sends as if Jakob typed them, with `{{name}}` variables filled in on sending:
 
 - **New session** wraps the first prompt of every dispatched session, from the board or a fan-out. It must contain `{{prompt}}`, and defaults to just that. The card's goal shows what was typed, not the wrapped prompt.
 - **Close session** is sent when Jakob closes an idle chat, as described above. It defaults to the cleanup prompt.
@@ -245,7 +245,7 @@ That resolves the own-versus-adopt question into two tiers rather than a choice:
 
 Both work. Owning is better, and adopting is not a dead end, so the dispatcher can adopt from day one without painting itself into a corner.
 
-**As built, there is one tier.** Sessions seemux starts are interactive sessions in cmux like any other, because Jakob drives them from the board and from the terminal alike, and stream mode would give up the terminal. So the hooks cover every session, owned or adopted. The stream tier remains available if inline subagent text becomes worth the trade.
+**As built, there is one tier.** Sessions seamux starts are interactive sessions in cmux like any other, because Jakob drives them from the board and from the terminal alike, and stream mode would give up the terminal. So the hooks cover every session, owned or adopted. The stream tier remains available if inline subagent text becomes worth the trade.
 
 ### The coordination protocol
 
@@ -258,7 +258,7 @@ The part nobody else is building, and the reason the parent gets confused.
 5. **Merges are idempotent and honour a protected list.** That sweep survived its own early-parse bug only because re-running was safe and hand-authored entries were protected.
 6. **Cursors are monotonic sequences.** cmux's `sequence` column, and `cmux events --cursor-file`.
 
-**As built:** `bin/seemux fanout` writes the manifest, then spawns each worker as a top-level session with reporting instructions appended to its prompt. `bin/seemux done` writes `<worker>.done.json` by temp file and rename, and refuses a worker the manifest did not declare. `bin/seemux wait` is the barrier: run in the background, it exits once, when every worker has reported, and prints all handbacks keyed by worker. `PostToolBatch` was not needed, since a background command's exit already notifies the parent exactly once. Points 5 and 6 live in the skill's merge guidance rather than in code, because only the parent knows what its merge target is.
+**As built:** `bin/seamux fanout` writes the manifest, then spawns each worker as a top-level session with reporting instructions appended to its prompt. `bin/seamux done` writes `<worker>.done.json` by temp file and rename, and refuses a worker the manifest did not declare. `bin/seamux wait` is the barrier: run in the background, it exits once, when every worker has reported, and prints all handbacks keyed by worker. `PostToolBatch` was not needed, since a background command's exit already notifies the parent exactly once. Points 5 and 6 live in the skill's merge guidance rather than in code, because only the parent knows what its merge target is.
 
 ### Web surface
 
@@ -270,7 +270,7 @@ Every write checks that the request's Host is local and its Origin matches it. A
 
 ## Phasing
 
-All five are built, each as one commit on seemux's `phase-1-board` branch.
+All five are built, each as one commit on seamux's `phase-1-board` branch.
 
 **Phase 1, read-only board**, being `claude agents --json` plus cmux enrichment served locally. Built as planned, plus a popout modal per card with the full conversation.
 
@@ -280,7 +280,7 @@ All five are built, each as one commit on seemux's `phase-1-board` branch.
 
 **Phase 4, spawn**: the dispatch bar starts a new session with a directory, an optional worktree and a first prompt, and fork splits a tangent out of any chat. Each records its intent, which the card shows.
 
-**Phase 5, the protocol**: manifests, completion markers and a barrier, as `bin/seemux` and the `seemux-dispatch` skill. The board shows each fan-out set and which workers have reported.
+**Phase 5, the protocol**: manifests, completion markers and a barrier, as `bin/seamux` and the `seamux-dispatch` skill. The board shows each fan-out set and which workers have reported.
 
 ## Decisions
 
@@ -302,9 +302,9 @@ Each of these corrected something the research had marked verified or documented
 - **Helper agents fire `SubagentStop` with an empty `agent_type` and never fire `SubagentStart`.** The hook ignores them. Counting them showed three subagents where there was one.
 - **Claude Code records subagents on disk.** Each session's transcript directory holds `subagents/agent-<id>.jsonl` and `agent-<id>.meta.json`, with the description, type, parent tool call and spawn depth. The research's "nothing has it" held for cmux and `claude agents`, but not for the transcripts. The board reads descriptions from there rather than storing them.
 - **`workspace.create` ignores `command`.** The field is `initial_command`, run through `zsh -lc`.
-- **That login shell does not read `~/.zshrc`**, so neither `claude` nor `node` is on its `PATH`. seemux launches through cmux's own `cmux-claude-wrapper`, which also registers the session with cmux, with `~/.local/bin` and the server's Node directory prepended. Launching `claude` directly starts a session cmux never learns about, which the board then cannot drive.
-- **cmux RPCs default to the caller's own surface.** A call without a `surface_id` acts on whatever terminal seemux itself runs in. seemux always resolves the surface server-side and passes it explicitly.
-- **A workspace closes itself when its `initial_command` exits**, but a chat started by hand leaves its shell prompt behind after `/exit`. **`surface.close` refuses a workspace's last tab** (`Cannot close the last surface`), so for the last tab seemux calls `workspace.close` instead.
+- **That login shell does not read `~/.zshrc`**, so neither `claude` nor `node` is on its `PATH`. seamux launches through cmux's own `cmux-claude-wrapper`, which also registers the session with cmux, with `~/.local/bin` and the server's Node directory prepended. Launching `claude` directly starts a session cmux never learns about, which the board then cannot drive.
+- **cmux RPCs default to the caller's own surface.** A call without a `surface_id` acts on whatever terminal seamux itself runs in. seamux always resolves the surface server-side and passes it explicitly.
+- **A workspace closes itself when its `initial_command` exits**, but a chat started by hand leaves its shell prompt behind after `/exit`. **`surface.close` refuses a workspace's last tab** (`Cannot close the last surface`), so for the last tab seamux calls `workspace.close` instead.
 - **A resumed chat is invisible for a few seconds.** Until the new workspace starts Claude, nothing reports the session as live, so a second resume in that window started a second process on the same conversation. The server now claims a session before its first check and holds the claim for 60 seconds.
 - **Idle and waiting are separate `status` values.** `claude agents` reports `status: waiting` while a dialog is open, with `waitingFor` set to `input needed` for AskUserQuestion or `permission prompt` for an approval. The research listed only `idle` and `busy`, so the board used to depend on cmux for WAITING and missed sessions outside it.
 - **cmux's `any_agent_needs_input` goes stale.** It stayed `true` on a session that `claude agents` reported `busy` and whose screen showed a running command, with no dialog open. The board no longer reads it.
@@ -313,7 +313,7 @@ Each of these corrected something the research had marked verified or documented
 - **A background session without a process is still listed.** `claude agents --json --all` keeps a stopped or dead background session with its last `state`, `blocked` for one that stopped on a question, but with no `pid` or `status`, and `claude logs` reports it not found. `claude attach <id>` restarts it with its conversation, even when its transcript file is missing, since it restores from the job in `~/.claude/jobs/<id>`. Once running it has a `pid` and `status` again.
 - **cmux's wrapper passes `claude` subcommands straight through.** `attach`, `agents` and the rest get no session id or hook settings, so a session opened with `claude attach` has no cmux surface the board can find, and its card cannot be typed into from the board.
 - **Transcripts do not record the context window.** Each response logs its token usage, but a 1M-token Opus session is logged as plain `claude-opus-5`, the same as a 200k one; only `/context` output names `[1m]`. Opus sessions here have run to 999k, so the context bar assumes 1M for Opus and 200k for anything else, raising it to 1M once a response holds more than 200k.
-- **The global hook is required.** A hook fires in the session that starts the subagent, so a hook in seemux's own project settings would only ever see seemux's own subagents.
+- **The global hook is required.** A hook fires in the session that starts the subagent, so a hook in seamux's own project settings would only ever see seamux's own subagents.
 
 ## What is left open
 

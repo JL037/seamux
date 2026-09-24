@@ -4,7 +4,7 @@
 // type stripping. So: relative imports with extensions, `import type`, and
 // no TypeScript-only runtime syntax.
 
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,13 @@ import { fileURLToPath } from "node:url";
 // Two levels up is the repo root both from app/lib/ and from the bundled
 // build/server/index.js. Keep it that way if either moves.
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "../..");
-export const DB_PATH = process.env.SEEMUX_DB ?? join(REPO, "data/seemux.db");
+// The store kept the old name, seemux.db, until the rename to seamux. A
+// checkout that has one keeps using it rather than starting empty; moving it
+// under a running board, with its WAL open, could lose writes.
+const LEGACY_DB = join(REPO, "data/seemux.db");
+export const DB_PATH =
+  process.env.SEAMUX_DB ??
+  (existsSync(LEGACY_DB) ? LEGACY_DB : join(REPO, "data/seamux.db"));
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS subagents (
@@ -27,7 +33,7 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS subagents_session ON subagents (session_id);
 
-  -- Sessions seemux started, and why. Nothing else records a session's goal.
+  -- Sessions seamux started, and why. Nothing else records a session's goal.
   CREATE TABLE IF NOT EXISTS dispatches (
     session_id     TEXT PRIMARY KEY,
     cwd            TEXT NOT NULL,

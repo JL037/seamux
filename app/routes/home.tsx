@@ -121,7 +121,7 @@ function shortPath(cwd: string): string {
 }
 
 // Colours picked for projects, keyed by project path. Kept in this browser
-// for now, until seemux has a config of its own.
+// for now, until seamux has a config of its own.
 const ProjectColorsContext = createContext<{
   colors: Record<string, string>;
   setColor: (project: string, color: string | null) => void;
@@ -189,7 +189,7 @@ function ChatInput({ card }: { card: BoardCard }) {
   const { drafts, setDraft } = useContext(DraftsContext);
   // Kept across a reload, like the draft, so an open chat stays open.
   const [open, setOpen] = useSessionStorage(
-    `seemux:chat-open:${card.sessionId}`,
+    `seamux:chat-open:${card.sessionId}`,
     false,
   );
   const draft = drafts[card.sessionId] ?? "";
@@ -355,7 +355,7 @@ function CardControl({ card }: { card: BoardCard }) {
 
 // A background session no open chat owns. The pill opens a dialog that
 // resumes it with `claude attach`, or deletes it by dispatching a chat that
-// runs `claude rm`, since seemux never deletes.
+// runs `claude rm`, since seamux never deletes.
 function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
@@ -387,7 +387,7 @@ function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
             Resume brings it back in a new cmux workspace with its
             conversation. Delete starts a chat that runs this command, which
             removes the session and its worktree, and stops to ask before
-            discarding unpushed work. seemux never deletes on its own.
+            discarding unpushed work. seamux never deletes on its own.
           </p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
@@ -646,14 +646,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
   // Done is hidden until asked for, and the choice outlives the tab.
-  const [showDone, setShowDone] = useLocalStorage("seemux:show-done", false);
+  const [showDone, setShowDone] = useLocalStorage("seamux:show-done", false);
   const doneCount = board.cards.filter(
     (c) => !c.pinned && c.column === "done",
   ).length;
   const columns = COLUMNS.filter((c) => showDone || c !== "done");
   const columnCount = columns.length + (pinned.length > 0 ? 1 : 0);
   const [drafts, setDrafts] = useSessionStorage<Record<string, string>>(
-    "seemux:drafts",
+    "seamux:drafts",
     {},
   );
   const setDraft = (sessionId: string, draft: string) =>
@@ -662,7 +662,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       return draft ? { ...rest, [sessionId]: draft } : rest;
     });
   const [colors, setColors] = useLocalStorage<Record<string, string>>(
-    "seemux:project-colors",
+    "seamux:project-colors",
     {},
   );
   const setColor = (project: string, color: string | null) =>

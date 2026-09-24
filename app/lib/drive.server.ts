@@ -140,7 +140,7 @@ export async function answerQuestion(
 // The conversation is kept, and the card moves to DONE, where it can be
 // resumed.
 //
-// A workspace seemux launched closes itself when Claude exits, but a chat
+// A workspace seamux launched closes itself when Claude exits, but a chat
 // Jakob started by hand leaves its shell behind, so the tab is closed once
 // Claude is gone. cmux refuses to close a workspace's last tab, so then the
 // workspace goes instead. A Claude that has not exited keeps its tab.
@@ -363,7 +363,7 @@ async function finishClose(
   }
 }
 
-// Every session seemux starts runs in its own cmux workspace.
+// Every session seamux starts runs in its own cmux workspace.
 //
 // cmux runs the command in a login shell that does not read ~/.zshrc, so
 // `claude` is not on its PATH. Launch through cmux's own wrapper, which
@@ -372,7 +372,7 @@ async function finishClose(
 const CMUX_CLAUDE_WRAPPER =
   "/Applications/cmux.app/Contents/Resources/bin/cmux-claude-wrapper";
 const CLAUDE_BIN_DIR = join(homedir(), ".local/bin");
-// Node, for bin/seemux and the subagent hook inside the new session: the
+// Node, for bin/seamux and the subagent hook inside the new session: the
 // same one this server runs on.
 const NODE_BIN_DIR = dirname(process.execPath);
 
@@ -409,7 +409,7 @@ const TRUST_WAIT_MS = 30_000;
 
 // Claude Code stops on a new folder to ask whether Jakob trusts it, before
 // the session exists anywhere the board could see it. Choosing the folder
-// to dispatch into is that decision, so seemux answers yes. Enter alone
+// to dispatch into is that decision, so seamux answers yes. Enter alone
 // would pick the default, "No, exit".
 async function acceptTrust(surface: Surface) {
   const deadline = Date.now() + TRUST_WAIT_MS;
@@ -481,7 +481,7 @@ export async function attach(
   }
 }
 
-// Deleting a background session no open chat owns. seemux never deletes, so
+// Deleting a background session no open chat owns. seamux never deletes, so
 // it dispatches a chat that checks the session and runs `claude rm` itself,
 // stopping to ask before discarding unpushed work. The chat starts in the
 // session's main checkout, since `claude rm` may remove the worktree the
@@ -550,7 +550,7 @@ export function nameFrom(prompt: string): string {
 const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
 
 // A new worktree for dispatched work, branched from what the chosen checkout
-// has checked out now. seemux makes it rather than `claude --worktree`, which
+// has checked out now. seamux makes it rather than `claude --worktree`, which
 // branches from the remote's default branch (stale when main is unpushed)
 // and stops on exit to ask whether to keep the worktree.
 async function createWorktree(cwd: string, name: string): Promise<string> {

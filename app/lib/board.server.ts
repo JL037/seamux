@@ -704,13 +704,13 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
 }
 
 // Two levels up is the repo root from app/lib/ and from build/server/.
-const SEEMUX_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
+const SEAMUX_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 async function servedVersion(): Promise<string | null> {
   try {
     const { stdout } = await run(
       "git",
-      ["-C", SEEMUX_ROOT, "log", "-1", "--format=%h %s"],
+      ["-C", SEAMUX_ROOT, "log", "-1", "--format=%h %s"],
       { timeout: 5_000 },
     );
     return stdout.trim();
@@ -721,7 +721,7 @@ async function servedVersion(): Promise<string | null> {
 
 const REPO_ROOTS = [join(homedir(), "code")];
 
-// Git repos up to two levels under each root, e.g. ~/code/seemux and
+// Git repos up to two levels under each root, e.g. ~/code/seamux and
 // ~/code/taskless/cli.
 async function gitRepos(): Promise<string[]> {
   const found: string[] = [];

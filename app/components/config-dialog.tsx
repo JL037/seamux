@@ -43,7 +43,7 @@ function useConfigAction() {
   };
 }
 
-// The cog in the header, and the dialog it opens: seemux's own settings.
+// The cog in the header, and the dialog it opens: seamux's own settings.
 export function ConfigDialog({ config }: { config: Config }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("general");
@@ -52,8 +52,8 @@ export function ConfigDialog({ config }: { config: Config }) {
       <Button
         size="icon-xs"
         variant="ghost"
-        title="Configure seemux"
-        aria-label="Configure seemux"
+        title="Configure seamux"
+        aria-label="Configure seamux"
         onClick={() => setOpen(true)}
       >
         <Settings />
@@ -61,9 +61,9 @@ export function ConfigDialog({ config }: { config: Config }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)] sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Configure seemux</DialogTitle>
+            <DialogTitle>Configure seamux</DialogTitle>
             <DialogDescription>
-              Kept in seemux's store, and applied as soon as you change it.
+              Kept in seamux's store, and applied as soon as you change it.
             </DialogDescription>
           </DialogHeader>
           <div role="tablist" className="flex gap-1 border-b">
@@ -132,7 +132,7 @@ function DirectoriesSetting({ directories }: { directories: string[] }) {
       <h3 className="font-medium">Directories</h3>
       <p className="text-muted-foreground">
         What the dispatch bar's directory picker offers. With none listed, it
-        offers every directory seemux can find: live sessions, past dispatches,
+        offers every directory seamux can find: live sessions, past dispatches,
         and repos under your code folders.
       </p>
       {directories.length > 0 && (
@@ -166,7 +166,7 @@ function DirectoriesSetting({ directories }: { directories: string[] }) {
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-background px-2">
           <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
           <input
-            list="seemux-config-directories"
+            list="seamux-config-directories"
             value={path}
             onChange={(e) => setPath(e.target.value)}
             onFocus={() => {
@@ -176,7 +176,7 @@ function DirectoriesSetting({ directories }: { directories: string[] }) {
             placeholder="/Users/you/code/project"
             className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-xs outline-none placeholder:text-muted-foreground"
           />
-          <datalist id="seemux-config-directories">
+          <datalist id="seamux-config-directories">
             {suggestions.map((d) => (
               <option key={d} value={d} />
             ))}

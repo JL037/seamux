@@ -80,7 +80,7 @@ export interface Card {
   // null until the chat's first response, and again just after a compaction.
   context: ContextUsage | null;
   workspaceRef: string | null;
-  // What the session was dispatched or forked to do, if seemux started it.
+  // What the session was dispatched or forked to do, if seamux started it.
   intent: string | null;
   forkedFrom: string | null;
   // Set when the session is a worker in a fan-out.

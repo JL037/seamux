@@ -13,7 +13,7 @@ process.stdin.on("end", () => {
   try {
     recordHook(JSON.parse(input) as HookPayload);
   } catch (err) {
-    process.stderr.write(`seemux hook: ${(err as Error).message}\n`);
+    process.stderr.write(`seamux hook: ${(err as Error).message}\n`);
   }
   process.exit(0);
 });

@@ -22,7 +22,7 @@ const POLL_MS = 3000;
 const AT_END_PX = 40;
 
 function scrollKey(sessionId: string) {
-  return `seemux:chat-scroll:${sessionId}`;
+  return `seamux:chat-scroll:${sessionId}`;
 }
 
 // Full-screen view of one card: the conversation, and room to write the

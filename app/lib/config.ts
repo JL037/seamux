@@ -1,4 +1,4 @@
-// seemux's own settings, set from the board's config dialog. Safe to import
+// seamux's own settings, set from the board's config dialog. Safe to import
 // from client and server, and from scripts Node runs directly.
 
 // System macros: text the dispatcher sends into a session as a user prompt,
@@ -18,7 +18,7 @@ export interface MacroInfo {
 export const MACROS: Record<MacroName, MacroInfo> = {
   newSession: {
     label: "New session",
-    when: "The first prompt of every session seemux dispatches, from the board or a fan-out.",
+    when: "The first prompt of every session seamux dispatches, from the board or a fan-out.",
     variables: [
       { name: "prompt", meaning: "what you typed into the dispatch bar" },
       { name: "cwd", meaning: "the directory the session starts in" },
@@ -53,7 +53,7 @@ export const MAX_MACRO = 20_000;
 
 export interface Config {
   // What the dispatch bar's directory picker offers. Empty means every
-  // directory seemux can find.
+  // directory seamux can find.
   directories: string[];
   // The dispatch bar's "new worktree" box starts ticked.
   worktreeByDefault: boolean;

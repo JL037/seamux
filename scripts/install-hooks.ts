@@ -1,4 +1,4 @@
-// Adds (or with --uninstall, removes) the seemux SubagentStart and
+// Adds (or with --uninstall, removes) the seamux SubagentStart and
 // SubagentStop hooks in ~/.claude/settings.json, so every session reports
 // its subagents to the store. Idempotent, and it backs the file up first.
 //
@@ -40,7 +40,7 @@ const hooks: Record<string, HookGroup[]> = (settings.hooks ??= {});
 // Match on the script's tail rather than the full command, so an install
 // from a moved checkout replaces the old entry instead of adding a second.
 const isOurs = (g: HookGroup) =>
-  g.hooks.some((h) => h.command?.endsWith("seemux/hooks/subagent-event.ts"));
+  g.hooks.some((h) => h.command?.endsWith("seamux/hooks/subagent-event.ts"));
 
 for (const event of EVENTS) {
   const groups = (hooks[event] ?? []).filter((g) => !isOurs(g));
@@ -54,12 +54,12 @@ for (const event of EVENTS) {
 }
 if (Object.keys(hooks).length === 0) delete settings.hooks;
 
-if (existsSync(SETTINGS)) copyFileSync(SETTINGS, `${SETTINGS}.seemux-backup`);
+if (existsSync(SETTINGS)) copyFileSync(SETTINGS, `${SETTINGS}.seamux-backup`);
 writeFileSync(SETTINGS, `${JSON.stringify(settings, null, 2)}\n`);
 
 console.log(
   uninstall
-    ? `Removed seemux hooks from ${SETTINGS}`
-    : `Installed seemux hooks in ${SETTINGS}:\n  ${EVENTS.join(", ")} -> ${COMMAND}`,
+    ? `Removed seamux hooks from ${SETTINGS}`
+    : `Installed seamux hooks in ${SETTINGS}:\n  ${EVENTS.join(", ")} -> ${COMMAND}`,
 );
-console.log(`Backup: ${SETTINGS}.seemux-backup`);
+console.log(`Backup: ${SETTINGS}.seamux-backup`);

@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 
 // Read by the inline script in root.tsx before first paint, so a chosen
 // theme never flashes the OS one. Stored as JSON, like useLocalStorage.
-export const THEME_KEY = "seemux:theme";
+export const THEME_KEY = "seamux:theme";
 
 // The sun or moon beside the cog: flips the board between light and dark,
 // and remembers the choice. Until one is made, the board follows the OS.

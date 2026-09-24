@@ -1,5 +1,5 @@
 // Reads and writes the config table. Imported by drive.server.ts, which
-// scripts/seemux.ts runs under plain Node: relative imports with extensions.
+// scripts/seamux.ts runs under plain Node: relative imports with extensions.
 
 import {
   DEFAULT_CONFIG,

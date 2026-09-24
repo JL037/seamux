@@ -4,9 +4,9 @@ import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 
 // WSL does not deliver file events for Windows drives under /mnt/, so hot
-// reload has to poll there. SEEMUX_POLL=1 forces it anywhere.
+// reload has to poll there. SEAMUX_POLL=1 forces it anywhere.
 function needsPolling(): boolean {
-  if (process.env.SEEMUX_POLL === "1") return true;
+  if (process.env.SEAMUX_POLL === "1") return true;
   if (process.platform !== "linux" || !process.cwd().startsWith("/mnt/")) {
     return false;
   }

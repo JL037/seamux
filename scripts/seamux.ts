@@ -1,13 +1,13 @@
-// seemux protocol CLI, for sessions to call through bin/seemux.
+// seamux protocol CLI, for sessions to call through bin/seamux.
 //
-//   seemux fanout <manifest.json | ->   declare a set of workers, then spawn each
+//   seamux fanout <manifest.json | ->   declare a set of workers, then spawn each
 //                                       as its own top-level session
-//   seemux wait <dispatch-id>           barrier: block until every worker has
+//   seamux wait <dispatch-id>           barrier: block until every worker has
 //                                       reported, then print all handbacks
-//   seemux done <dispatch-id> <worker> --summary "…" [--result <path>] [--status ok|failed]
+//   seamux done <dispatch-id> <worker> --summary "…" [--result <path>] [--status ok|failed]
 //                                       a worker's completion marker
-//   seemux status <dispatch-id>         where a dispatch stands, without waiting
-//   seemux list                         every dispatch
+//   seamux status <dispatch-id>         where a dispatch stands, without waiting
+//   seamux list                         every dispatch
 
 import { readFileSync } from "node:fs";
 
@@ -85,7 +85,7 @@ async function fanout() {
     workers: Object.fromEntries(
       manifest.workers.map((w) => [w.key, w.sessionId]),
     ),
-    next: `seemux wait ${manifest.id}   (run it in the background; it exits when every worker has reported)`,
+    next: `seamux wait ${manifest.id}   (run it in the background; it exits when every worker has reported)`,
   });
 }
 
@@ -175,6 +175,6 @@ try {
   else if (command === "list") list();
   else usage();
 } catch (err) {
-  process.stderr.write(`seemux: ${(err as Error).message}\n`);
+  process.stderr.write(`seamux: ${(err as Error).message}\n`);
   process.exit(1);
 }

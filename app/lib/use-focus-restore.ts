@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-const FOCUS_KEY = "seemux:focus";
+const FOCUS_KEY = "seamux:focus";
 // How long a reload waits for the remembered box to appear: drafts come back
 // in effects of their own, and a reopened chat modal renders a little later.
 const WAIT_MS = 2000;

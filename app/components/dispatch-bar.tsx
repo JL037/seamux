@@ -8,10 +8,10 @@ import { releaseFocus } from "~/lib/use-focus-restore";
 import { useSessionStorage } from "~/lib/use-session-storage";
 import type { DispatchResult } from "~/routes/dispatch";
 
-const LAST_DIR_KEY = "seemux:last-dir";
-const PROMPT_KEY = "seemux:dispatch:prompt";
-const CWD_KEY = "seemux:dispatch:cwd";
-const WORKTREE_KEY = "seemux:dispatch:worktree";
+const LAST_DIR_KEY = "seamux:last-dir";
+const PROMPT_KEY = "seamux:dispatch:prompt";
+const CWD_KEY = "seamux:dispatch:cwd";
+const WORKTREE_KEY = "seamux:dispatch:worktree";
 
 function readLastDir(): string {
   try {
@@ -33,7 +33,7 @@ export function DispatchBar({
   directories,
   worktreeByDefault,
 }: {
-  // The configured directories; empty means offer every one seemux finds.
+  // The configured directories; empty means offer every one seamux finds.
   directories: string[];
   worktreeByDefault: boolean;
 }) {
@@ -121,14 +121,14 @@ export function DispatchBar({
           <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
           <input
             data-focus-key="dispatch:cwd"
-            list="seemux-directories"
+            list="seamux-directories"
             value={cwd}
             onChange={(e) => setCwd(e.target.value)}
             onFocus={loadDirs}
             placeholder="/dir pick"
             className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-sm outline-none placeholder:text-muted-foreground"
           />
-          <datalist id="seemux-directories">
+          <datalist id="seamux-directories">
             {options.map((d) => (
               <option key={d} value={d} />
             ))}
