@@ -29,12 +29,30 @@ function writeLastDir(dir: string) {
 
 // The primary action: start new work as its own session, in a chosen
 // directory, instead of cramming another goal into an existing chat.
-export function DispatchBar() {
+export function DispatchBar({
+  directories,
+  worktreeByDefault,
+}: {
+  // The configured directories; empty means offer every one seemux finds.
+  directories: string[];
+  worktreeByDefault: boolean;
+}) {
   const dispatcher = useFetcher<DispatchResult>();
   const dirs = useFetcher<{ directories: string[] }>();
   const [prompt, setPrompt] = useSessionStorage(PROMPT_KEY, "");
   const [cwd, setCwd] = useSessionStorage(CWD_KEY, "");
-  const [worktree, setWorktree] = useSessionStorage(WORKTREE_KEY, false);
+  // Starts from the configured default; a tick changed here holds for the
+  // tab, until the default itself changes.
+  const [worktree, setWorktree] = useSessionStorage(
+    WORKTREE_KEY,
+    worktreeByDefault,
+  );
+  const lastDefault = useRef(worktreeByDefault);
+  useEffect(() => {
+    if (lastDefault.current === worktreeByDefault) return;
+    lastDefault.current = worktreeByDefault;
+    setWorktree(worktreeByDefault);
+  }, [worktreeByDefault, setWorktree]);
   const [started, setStarted] = useState<string | null>(null);
   const handled = useRef<DispatchResult | undefined>(undefined);
   // The prompt is cleared, from state and storage, as it is sent, so a
@@ -64,8 +82,11 @@ export function DispatchBar() {
   }, [pending, result, cwd, setPrompt]);
 
   const loadDirs = () => {
-    if (dirs.state === "idle" && !dirs.data) dirs.load("/directories");
+    if (directories.length === 0 && dirs.state === "idle" && !dirs.data)
+      dirs.load("/directories");
   };
+  const options =
+    directories.length > 0 ? directories : (dirs.data?.directories ?? []);
 
   const canDispatch = !pending && prompt.trim() !== "" && cwd.trim() !== "";
   const submit = () => {
@@ -108,7 +129,7 @@ export function DispatchBar() {
             className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-sm outline-none placeholder:text-muted-foreground"
           />
           <datalist id="seemux-directories">
-            {dirs.data?.directories.map((d) => (
+            {options.map((d) => (
               <option key={d} value={d} />
             ))}
           </datalist>

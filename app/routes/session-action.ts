@@ -5,7 +5,8 @@ import { closable, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
   answerQuestion,
-  closeChat,
+  cancelClose,
+  closeSession,
   fork,
   interrupt,
   resume,
@@ -70,13 +71,14 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     await sendMessage(sessionId, text);
   } else if (intent === "close") {
     // Only a chat at rest: closing a working one would cut its turn off.
-    const card = (await loadBoard()).cards.find(
-      (c) => c.sessionId === sessionId,
-    );
+    const { cards } = await loadBoard();
+    const card = cards.find((c) => c.sessionId === sessionId);
     if (!card || !closable(card)) {
       throw new Error("Only idle chats can be closed");
     }
-    await closeChat(sessionId);
+    await closeSession(card, cards, async () =>
+      (await loadBoard()).cards.find((c) => c.sessionId === sessionId),
+    );
   } else if (intent === "answer") {
     // Only the question still open: keys sent after it closed would land
     // in the prompt box instead.
@@ -93,6 +95,7 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     );
     await answerQuestion(sessionId, ask.questions, answers);
   } else if (intent === "interrupt") {
+    cancelClose(sessionId);
     await interrupt(sessionId);
   } else if (intent === "resume") {
     const closed = await closedSession(sessionId);

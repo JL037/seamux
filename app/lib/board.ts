@@ -91,6 +91,9 @@ export interface Card {
   pinned: boolean;
   // Set when the chat itself is blocked on a dialog.
   waiting: Waiting | null;
+  // Set while the board is closing it through the close-session macro, or
+  // when such a close was held and left the chat open.
+  closing: { state: "cleaning" | "held"; note: string | null } | null;
   background: BackgroundSession[];
   subagents: Subagent[];
 }

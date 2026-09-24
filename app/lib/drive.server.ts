@@ -10,7 +10,15 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
-import type { Answer, Question } from "./board.ts";
+import {
+  ASKED_IN_REPLY,
+  type Answer,
+  type Card,
+  type Question,
+} from "./board.ts";
+import { renderMacro } from "./config.ts";
+import { configOrDefaults } from "./config.server.ts";
+import { projectOf } from "./project-colors.ts";
 import { recordDispatch } from "./store.server.ts";
 
 const run = promisify(execFile);
@@ -164,6 +172,194 @@ export async function closeChat(sessionId: string) {
     await rpc("surface.close", target(surface));
   } else {
     await rpc("workspace.close", { workspace_id: surface.workspaceId });
+  }
+}
+
+// Closing with the close-session macro: the macro goes in as a prompt, and
+// the chat exits once that turn ends. Held in memory only, since a restart
+// mid-close just leaves the chat open, which loses nothing.
+//
+// A close is held, leaving the chat open with a note, when the turn never
+// starts or never ends, when it ends on a question, or when it leaves
+// uncommitted changes or its worktree behind: the session said why in its
+// reply, which Jakob should read before it goes. Closing a held chat again exits it without the macro.
+export interface Closing {
+  state: "cleaning" | "held";
+  note: string | null;
+  since: number;
+}
+
+const closing = new Map<string, Closing>();
+const CLOSE_POLL_MS = 3000;
+const CLOSE_START_MS = 60_000;
+const CLOSE_TURN_MS = 30 * 60_000;
+// A held note stays on the card this long.
+const HELD_VISIBLE_MS = 10 * 60_000;
+
+export function closingState(sessionId: string): Closing | null {
+  const c = closing.get(sessionId);
+  if (c?.state === "held" && Date.now() - c.since > HELD_VISIBLE_MS) {
+    closing.delete(sessionId);
+    return null;
+  }
+  return c ?? null;
+}
+
+// Stopping the clean-up turn calls the close off.
+export function cancelClose(sessionId: string) {
+  if (closing.get(sessionId)?.state === "cleaning") closing.delete(sessionId);
+}
+
+function hold(sessionId: string, note: string) {
+  closing.set(sessionId, { state: "held", note, since: Date.now() });
+}
+
+// The other live sessions under the same repo, in a sentence, so the
+// session knows what a repo-wide command would reach.
+function describeSiblings(card: Card, cards: Card[]): string {
+  const repo = projectOf(card.cwd);
+  const others = cards.filter(
+    (c) =>
+      c.sessionId !== card.sessionId &&
+      c.column !== "done" &&
+      projectOf(c.cwd) === repo,
+  );
+  if (others.length === 0) {
+    return `No other sessions are live under ${repo} right now.`;
+  }
+  const where = (c: Card) => {
+    const wt = worktreeOf(c.cwd);
+    if (wt) return `worktree ${wt.split("/").at(-1)}`;
+    return c.cwd === repo ? "the main checkout" : c.cwd;
+  };
+  const list = others.map((c) => `${c.name} (${where(c)})`);
+  const named =
+    list.length === 1
+      ? list[0]
+      : `${list.slice(0, -1).join(", ")} and ${list.at(-1)}`;
+  const count =
+    others.length === 1
+      ? "is 1 other session"
+      : `are ${others.length} other sessions`;
+  return `There ${count} live under ${repo} right now: ${named}.`;
+}
+
+// The worktree a directory sits in, if any.
+function worktreeOf(cwd: string): string | null {
+  return cwd.match(/^.*\/(?:\.claude\/)?worktrees\/[^/]+/)?.[0] ?? null;
+}
+
+async function uncommitted(cwd: string): Promise<boolean> {
+  if (!existsSync(cwd)) return false;
+  try {
+    const { stdout } = await run("git", ["-C", cwd, "status", "--porcelain"]);
+    return stdout.trim() !== "";
+  } catch {
+    // Not a git checkout: nothing to lose by exiting.
+    return false;
+  }
+}
+
+// Close an idle chat, running the close-session macro first when one is
+// set. `lookup` re-reads the card, since the board is derived per poll.
+export async function closeSession(
+  card: Card,
+  cards: Card[],
+  lookup: () => Promise<Card | undefined>,
+) {
+  const sessionId = card.sessionId;
+  const current = closingState(sessionId);
+  if (current?.state === "cleaning") {
+    throw new Error("Already cleaning up before it closes");
+  }
+  const macro = configOrDefaults().macros.closeSession.text.trim();
+  if (!macro || current?.state === "held") {
+    closing.delete(sessionId);
+    await closeChat(sessionId);
+    return;
+  }
+  const text = renderMacro(macro, {
+    cwd: card.cwd,
+    repo: projectOf(card.cwd),
+    siblings: describeSiblings(card, cards),
+  });
+  const sentAt = Date.now();
+  closing.set(sessionId, { state: "cleaning", note: null, since: sentAt });
+  try {
+    await sendMessage(sessionId, text);
+  } catch (err) {
+    closing.delete(sessionId);
+    throw err;
+  }
+  void finishClose(sessionId, sentAt, lookup).catch((err: Error) => {
+    if (closing.get(sessionId)?.state === "cleaning")
+      hold(sessionId, `Not closed: ${err.message}`);
+  });
+}
+
+async function finishClose(
+  sessionId: string,
+  sentAt: number,
+  lookup: () => Promise<Card | undefined>,
+) {
+  let started = false;
+  for (;;) {
+    await pause(CLOSE_POLL_MS);
+    // Stopped, or closed another way, in the meantime.
+    if (closing.get(sessionId)?.state !== "cleaning") return;
+    const card = await lookup();
+    if (!card || card.column === "done") {
+      closing.delete(sessionId);
+      return;
+    }
+    // The transcript moving on after the paste is the turn starting.
+    if ((card.lastActivityAt ?? 0) > sentAt) started = true;
+    const waited = Date.now() - sentAt;
+    if (!started && waited > CLOSE_START_MS) {
+      hold(
+        sessionId,
+        "The close-session macro never started a turn, so it was left open",
+      );
+      return;
+    }
+    if (waited > CLOSE_TURN_MS) {
+      hold(
+        sessionId,
+        "Clean-up was still running after 30 minutes, so it was left open",
+      );
+      return;
+    }
+    if (!started) continue;
+    // A turn that ended by asking Jakob something wants an answer, not an
+    // exit.
+    if (card.waiting?.reason === ASKED_IN_REPLY) {
+      hold(
+        sessionId,
+        "Left open: it asked you something. Close again to exit anyway",
+      );
+      return;
+    }
+    // Waiting on a dialog counts as still running.
+    if (card.column === "idle") {
+      if (await uncommitted(card.cwd)) {
+        hold(
+          sessionId,
+          "Left open: uncommitted changes remain. Close again to exit anyway",
+        );
+        return;
+      }
+      const worktree = worktreeOf(card.cwd);
+      if (worktree && existsSync(worktree)) {
+        hold(
+          sessionId,
+          "Left open: its worktree is still there. Close again to exit anyway",
+        );
+        return;
+      }
+      await closeChat(sessionId);
+      closing.delete(sessionId);
+      return;
+    }
   }
 }
 
@@ -351,8 +547,14 @@ export async function dispatch(input: DispatchInput): Promise<string> {
   }
 
   const sessionId = randomUUID();
-  const args = ["--session-id", sessionId, "--name", name, asPrompt(prompt)];
   const where = worktree ? await createWorktree(cwd, worktree) : cwd;
+  // The session gets the prompt inside the new-session macro; the card
+  // shows what was typed.
+  const first = renderMacro(configOrDefaults().macros.newSession.text, {
+    prompt,
+    cwd: where,
+  });
+  const args = ["--session-id", sessionId, "--name", name, asPrompt(first)];
 
   recordDispatch({
     session_id: sessionId,

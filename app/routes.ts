@@ -6,4 +6,5 @@ export default [
   route("sessions/:sessionId/action", "routes/session-action.ts"),
   route("dispatch", "routes/dispatch.ts"),
   route("directories", "routes/directories.ts"),
+  route("config", "routes/config.ts"),
 ] satisfies RouteConfig;

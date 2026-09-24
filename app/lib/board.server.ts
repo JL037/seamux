@@ -26,7 +26,7 @@ import {
   type Subagent,
   type Waiting,
 } from "./board";
-import { listSurfaces, type Surface } from "./drive.server";
+import { closingState, listSurfaces, type Surface } from "./drive.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
 import {
   dispatchesFor,
@@ -563,6 +563,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         turnRunning: busy,
         pinned: false,
         waiting,
+        closing: closingState(row.sessionId),
         background: children,
         subagents,
       };
@@ -604,6 +605,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         turnRunning: false,
         pinned: false,
         waiting: null,
+        closing: null,
         background: [],
         subagents: [],
       };

@@ -23,6 +23,7 @@ import {
 
 import type { Route } from "./+types/home";
 import { ChatModal } from "~/components/chat-modal";
+import { ConfigDialog } from "~/components/config-dialog";
 import { DispatchBar } from "~/components/dispatch-bar";
 import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { Markdown } from "~/components/markdown";
@@ -51,6 +52,7 @@ import {
   type Column,
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
+import { configOrDefaults } from "~/lib/config.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useSessionAction } from "~/lib/use-session-action";
 import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
@@ -67,7 +69,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader() {
-  return loadBoard();
+  return { board: await loadBoard(), config: configOrDefaults() };
 }
 
 // Re-run the loader on an interval while the tab is visible.
@@ -294,12 +296,20 @@ function CardControl({ card }: { card: BoardCard }) {
     );
   }
   if (closable(card)) {
+    const held = card.closing?.state === "held";
     return (
       <Button
         size="icon-xs"
         variant="outline"
-        disabled={!card.drivable || pending}
-        title={error ?? "Close this chat (it moves to Done and can be resumed)"}
+        disabled={
+          !card.drivable || pending || card.closing?.state === "cleaning"
+        }
+        title={
+          error ??
+          (held
+            ? "Close now, without the close-session macro"
+            : "Close this chat: the close-session macro runs first, if set, then it moves to Done and can be resumed")
+        }
         // No confirmation: a closed chat is resumable from Done.
         onClick={() => submit("close")}
       >
@@ -438,6 +448,20 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           </p>
         )}
         {card.lastReply && <ReplyExcerpt text={card.lastReply} />}
+        {card.closing && (
+          <p
+            className={cn(
+              "rounded-md px-2 py-1",
+              card.closing.state === "held"
+                ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            {card.closing.state === "cleaning"
+              ? "Closing: running the close-session macro, then it exits."
+              : card.closing.note}
+          </p>
+        )}
         <WaitingPanel card={card} />
         <SubagentSummary subagents={card.subagents} now={now} />
         {card.background.length > 0 && (
@@ -517,7 +541,8 @@ function BoardColumn({
 export default function Home({ loaderData }: Route.ComponentProps) {
   usePoll(POLL_MS);
   useFocusRestore();
-  const board: Board = loaderData;
+  const board: Board = loaderData.board;
+  const { config } = loaderData;
   const now = board.generatedAt;
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
@@ -552,7 +577,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <ProjectColorsContext.Provider value={{ colors, setColor }}>
         <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
           <header className="flex items-center justify-between text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">seemux</span>
+            <span className="flex items-center gap-1">
+              <span className="font-semibold text-foreground">seemux</span>
+              <ConfigDialog config={config} />
+            </span>
             <span className="flex min-w-0 items-center gap-3">
               <Button
                 size="xs"
@@ -568,7 +596,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 {showDone ? "Hide done" : `Show done (${doneCount})`}
               </Button>
               {board.version && (
-                <span className="truncate font-mono" title="Commit being served">
+                <span
+                  className="truncate font-mono"
+                  title="Commit being served"
+                >
                   {board.version}
                 </span>
               )}
@@ -578,7 +609,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </span>
           </header>
 
-          <DispatchBar />
+          <DispatchBar
+            directories={config.directories}
+            worktreeByDefault={config.worktreeByDefault}
+          />
           <DispatchStrip sets={board.dispatches} />
 
           {board.warnings.map((w) => (

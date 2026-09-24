@@ -45,6 +45,13 @@ const SCHEMA = `
     session_id TEXT PRIMARY KEY,
     pinned_at  INTEGER NOT NULL
   );
+
+  -- Jakob's settings, from the board's config dialog. A JSON value per key;
+  -- a missing key means the default.
+  CREATE TABLE IF NOT EXISTS config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `;
 
 let db: DatabaseSync | null = null;

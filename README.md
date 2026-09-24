@@ -50,7 +50,7 @@ A landing can reload the board mid-sentence, so unsent text survives it: the dis
 
 To change seemux, work in a worktree on your own branch, commit, and run `npm run land` there. `CLAUDE.md` has the details, for people and agents alike.
 
-The store is SQLite at `data/seemux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents, pins and fan-out records, never a session.
+The store is SQLite at `data/seemux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents, pins, settings and fan-out records, never a session.
 
 This README is the brief and its own source of truth: edit it here. Prose in this repo is checked with Taskless.
 
@@ -127,6 +127,7 @@ The rule is **never store what can be re-derived.** Two tiers:
 | Work log | The durable cross-session record, which survives a session being disposed |
 | Subagent tree | Only exists in hook events, nowhere else |
 | Pins | Jakob's word that a session is meant to run for a long time. Nothing about the session says so |
+| Settings | Jakob's choices in the config dialog: picker directories, the worktree default, and the system macros |
 | Dependencies | Which cards gate which |
 
 ### The board, from the sketch
@@ -152,7 +153,7 @@ DONE is hidden by default; a **Show done** toggle in the header, remembered per 
 
 **DONE is entered by a human closing the chat**, which is the distinction that separates it from IDLE. A session that finishes its turn and has nothing left to do is **IDLE**: alive, holding its worktree, ready for more work. It becomes **DONE** when Jakob closes it. Jakob, 2026-09-23: *"when I close a chat, it's done."*
 
-**Closing a chat closes its cmux tab.** The board sends `/exit`, waits for Claude to leave the tab, then closes that tab, or its workspace when it was the only tab. A workspace seemux launched would close itself, but a chat Jakob started by hand in his own tab would otherwise leave its shell open. The conversation stays on disk, so the chat can still be resumed. If Claude has not exited within ten seconds, the board leaves the tab open.
+**Closing a chat runs the close-session macro, then closes its cmux tab.** The macro is a prompt, by default the cleanup prompt below; the board sends it, waits for that turn to end, and only then sends `/exit`. It leaves the chat open, with a note on the card, when the turn ends on a question, leaves uncommitted changes or the session's worktree behind, never starts, or runs past 30 minutes; closing it again exits without the macro. Stopping the turn calls the close off. With the macro empty, close exits straight away. The board then waits for Claude to leave the tab and closes that tab, or its workspace when it was the only tab. A workspace seemux launched would close itself, but a chat Jakob started by hand in his own tab would otherwise leave its shell open. The conversation stays on disk, so the chat can still be resumed. If Claude has not exited within ten seconds, the board leaves the tab open.
 
 From there it decays on two timers, and both are display rules:
 
@@ -182,9 +183,9 @@ Both halves are available today.
 
 Deleting a worktree is real work that sometimes needs doing, and the dispatcher still should not do it. Jakob, 2026-09-23: *"deleting probably has a cleanup prompt. Something like 'remove your worktree and clean up after yourself. There may be other agents still working in this directory you're not aware of'."*
 
-So cleanup is **a message sent into the session**, using the same reply path as every other write: a paste into the session's cmux surface. The dispatcher gains no destructive capability, and the agent that owns the worktree is the one deciding what is safe to remove, with its own knowledge of which changes are already committed.
+So cleanup is **a message sent into the session**, using the same reply path as every other write: a paste into the session's cmux surface. As built, it is the **close-session macro**, sent whenever Jakob closes an idle chat, and editable in the config dialog. The dispatcher gains no destructive capability, and the agent that owns the worktree is the one deciding what is safe to remove, with its own knowledge of which changes are already committed.
 
-**The dispatcher's contribution is the part the agent cannot see**, since a session knows its own cwd and its own commits. It has no idea that two other sessions are live under the same repo. The dispatcher knows exactly that, from `claude agents --json`, so the prompt should carry the facts rather than a generic caution:
+**The dispatcher's contribution is the part the agent cannot see**, since a session knows its own cwd and its own commits. It has no idea that two other sessions are live under the same repo. The dispatcher knows exactly that, from `claude agents --json`, so the prompt should carry the facts rather than a generic caution. The macro's `{{siblings}}` fills them in from the board's live cards:
 
 ```
 Clean up after yourself and remove your worktree.
@@ -219,11 +220,14 @@ Controls differ by column, and the sketch is specific:
 - Every card but a DONE one carries a **pin** button, which moves it into PINNED or back out. A closed chat can't be pinned; one pinned before it closed keeps its unpin button.
 - An expanded card shows the transcript with an **input** field beneath it.
 - A card shows the start of its last reply **as markdown**, clipped to a few lines and faded when there is more, so the shape of the reply reads at a glance. The expanded chat renders every reply the same way. Links in either open in a new tab, so following one never navigates the board away.
-- Every card's path carries a **coloured square** for its project, so cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` belongs to its repo. The colour is one of 24, hashed from the project's path until one is picked by clicking the square. Picks are kept in the browser's localStorage for now, until seemux has a config of its own.
+- Every card's path carries a **coloured square** for its project, so cards from one repo can be picked out at a glance. A worktree under `.claude/worktrees/` or `worktrees/` belongs to its repo. The colour is one of 24, hashed from the project's path until one is picked by clicking the square. Picks are still kept in the browser's localStorage; they have not moved into the config yet.
 
 **DISPATCH NEW WORK is the primary action**, a full-width bar above the columns with a **directory picker** beside it. Putting it there fixes the cost asymmetry, since the most prominent control on the screen starts a new session in a chosen directory, and spawning one becomes visibly cheaper than cramming another goal into an existing session.
 
-A strip above it holds configuration links.
+**A cog beside the seemux name opens the config dialog**, the start of seemux's own settings, kept in the store. Its General tab holds the directories the picker offers, which replace the discovered list when any are set, and whether "new worktree" starts ticked. Its Macros tab holds the system macros, prompts the dispatcher sends as if Jakob typed them, with `{{name}}` variables filled in on sending:
+
+- **New session** wraps the first prompt of every dispatched session, from the board or a fan-out. It must contain `{{prompt}}`, and defaults to just that. The card's goal shows what was typed, not the wrapped prompt.
+- **Close session** is sent when Jakob closes an idle chat, as described above. It defaults to the cleanup prompt.
 
 ### Subagents come free when the dispatcher owns the session
 
@@ -308,8 +312,7 @@ Each of these corrected something the research had marked verified or documented
 Nothing blocking. These wait on feedback from daily use:
 
 1. **The status override**, Jakob's correction when a column is wrong. Worth building only once the columns are wrong often enough to matter.
-2. **A cleanup button**, sending the cleanup prompt above with the live sibling sessions filled in. The reply box can send it by hand today.
-3. **The 30m to 24h tier**: closed chats past 30 minutes are off the board with no search yet.
-4. **The work log**, which still has nothing writing to it.
-5. **Polling versus `cmux events`**: the board polls every 3 seconds, at about half a second per poll. The event stream would cut both, if polling ever feels slow.
-6. **Leaving localhost**, which remains a deliberate later decision with its own auth answer.
+2. **The 30m to 24h tier**: closed chats past 30 minutes are off the board with no search yet.
+3. **The work log**, which still has nothing writing to it.
+4. **Polling versus `cmux events`**: the board polls every 3 seconds, at about half a second per poll. The event stream would cut both, if polling ever feels slow.
+5. **Leaving localhost**, which remains a deliberate later decision with its own auth answer.
