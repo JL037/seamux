@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { useRevalidator } from "react-router";
 import {
@@ -436,34 +437,64 @@ function PinToggle({ card }: { card: BoardCard }) {
   );
 }
 
-// The card's last reply, as markdown, clipped to a few lines; faded at the
-// bottom when there's more, which the chat shows in full.
-function ReplyExcerpt({ text }: { text: string }) {
+// Clipped to its box, and faded on the side where there is more. `from`
+// says which end stays in view: a prompt reads from its start, a reply from
+// its end, so the two fade toward each other.
+function Faded({
+  from,
+  className,
+  children,
+}: {
+  from: "start" | "end";
+  className?: string;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [clipped, setClipped] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    const measure = () => {
+      setClipped(el.scrollHeight > el.clientHeight + 1);
+      if (from === "end") el.scrollTop = el.scrollHeight;
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [text]);
+  }, [from, children]);
   return (
     <div
       ref={ref}
       className={cn(
-        "prose prose-sm max-h-40 max-w-none overflow-hidden break-words text-xs dark:prose-invert",
+        "overflow-hidden",
+        clipped &&
+          (from === "start"
+            ? "[mask-image:linear-gradient(to_bottom,black_60%,transparent)]"
+            : "[mask-image:linear-gradient(to_top,black_70%,transparent)]"),
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+// The end of the card's last reply, as markdown: what was done, or what it
+// asks. The chat shows it in full.
+function ReplyExcerpt({ text }: { text: string }) {
+  return (
+    <Faded
+      from="end"
+      className={cn(
+        "prose prose-sm max-h-40 max-w-none break-words text-xs dark:prose-invert",
         "prose-headings:my-1 prose-headings:text-xs prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-2",
         "prose-pre:my-1 prose-pre:bg-muted prose-pre:p-2 prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
-        "prose-table:my-1 [&>:first-child]:mt-0",
-        clipped &&
-          "[mask-image:linear-gradient(to_bottom,black_70%,transparent)]",
+        "prose-table:my-1 [&>:first-child]:mt-0 [&>:last-child]:mb-0",
       )}
     >
       <Markdown>{text}</Markdown>
-    </div>
+    </Faded>
   );
 }
 
@@ -534,10 +565,10 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           </p>
         )}
         {card.lastPrompt && card.lastPrompt !== card.intent && (
-          <p className="line-clamp-2 text-muted-foreground">
+          <Faded from="start" className="max-h-12 text-muted-foreground">
             <span className="font-medium text-foreground">You: </span>
             {card.lastPrompt}
-          </p>
+          </Faded>
         )}
         {card.lastReply && <ReplyExcerpt text={card.lastReply} />}
         {card.closing && (

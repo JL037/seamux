@@ -182,15 +182,20 @@ function excerpt(text: string): string {
     : flat;
 }
 
-// Like excerpt, but keeps the line breaks the reply's markdown is built on.
+// The end of a reply, where it says what was done or asks what's next, with
+// the line breaks its markdown is built on. It starts at a line, and reopens
+// a code block it starts inside.
 function replyExcerpt(text: string): string {
   const kept = text
     .replace(/[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return kept.length > REPLY_EXCERPT_CHARS
-    ? `${kept.slice(0, REPLY_EXCERPT_CHARS - 1)}…`
-    : kept;
+  if (kept.length <= REPLY_EXCERPT_CHARS) return kept;
+  let tail = kept.slice(-REPLY_EXCERPT_CHARS);
+  const line = tail.indexOf("\n");
+  if (line >= 0 && line < tail.length - 1) tail = tail.slice(line + 1);
+  const fences = (tail.match(/^\s*```/gm) ?? []).length;
+  return fences % 2 ? `\`\`\`\n${tail}` : tail;
 }
 
 // Harness-generated user turns (slash commands, caveats, reminders,
