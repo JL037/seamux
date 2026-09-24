@@ -40,7 +40,7 @@ export const MACROS: Record<MacroName, MacroInfo> = {
     variables: [
       { name: "worktree", meaning: "the new worktree's directory" },
       { name: "branch", meaning: "its branch" },
-      { name: "repo", meaning: "the checkout it was branched from" },
+      { name: "repo", meaning: "the repo's main checkout, which holds it" },
     ],
     required: null,
   },
@@ -63,9 +63,9 @@ export const DEFAULT_MACROS: Record<MacroName, string> = {
   newSession: "{{prompt}}\n\n{{how_to_worktree}}",
   howToWorktree: `## How to worktree
 
-You are working in a new git worktree, {{worktree}}, on branch {{branch}}, made from {{repo}}. This repo has no worktree convention yet, so its worktrees go under worktrees/ at the root of the repo, which git should ignore.
+You are working in a new git worktree, {{worktree}}, on branch {{branch}}. This repo has no worktree convention yet, so its worktrees go under worktrees/ in its main checkout, {{repo}}, which git should ignore. Worktrees never go inside other worktrees.
 
-1. Before anything else, check that the repo ignores worktrees/: \`git check-ignore -q worktrees/\` succeeds when it does. If it doesn't, add \`/worktrees/\` to .gitignore and commit that first, so the change lands with your work.
+1. Before anything else, check that the repo ignores worktrees/: \`git -C {{repo}} check-ignore -q worktrees/\` succeeds when it does. If it doesn't, add \`/worktrees/\` to .gitignore and commit that first, so the change lands with your work.
 2. Install the project's dependencies in this worktree before running any of its scripts. Package managers hoist dependencies inconsistently, so what is installed in {{repo}} may not resolve from here.
 3. Do all your work in this worktree, never in {{repo}}.`,
   closeSession: `Clean up after yourself: if you are working in a worktree, remove it and its branch.

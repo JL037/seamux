@@ -693,7 +693,7 @@ const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
 interface NewWorktree {
   path: string;
   branch: string;
-  // The checkout it was branched from.
+  // The repo's main checkout, which holds every worktree.
   repo: string;
   // Whether the repo already had somewhere for worktrees. Without one, the
   // session is told how this one was set up.
@@ -705,35 +705,39 @@ interface NewWorktree {
 // branches from the remote's default branch (stale when main is unpushed)
 // and stops on exit to ask whether to keep the worktree.
 //
-// It goes where the repo keeps its worktrees: .claude/worktrees if that
-// exists, else worktrees/. A repo with neither that directory nor worktrees/
-// in its ignores has no convention yet, and gets worktrees/.
+// It goes in the repo's main checkout, even when the chosen checkout is
+// itself a worktree, so worktrees never nest: under .claude/worktrees if
+// that exists, else worktrees/. A repo with neither that directory nor
+// worktrees/ in its ignores has no convention yet, and gets worktrees/.
 async function createWorktree(cwd: string, name: string): Promise<NewWorktree> {
-  let root: string;
+  let list: string;
   try {
-    ({ stdout: root } = await run("git", [
+    ({ stdout: list } = await run("git", [
       "-C",
       cwd,
-      "rev-parse",
-      "--show-toplevel",
+      "worktree",
+      "list",
+      "--porcelain",
     ]));
   } catch {
     throw new Error("A new worktree needs a git repository");
   }
-  root = root.trim();
-  const claudeHome = existsSync(join(root, ".claude/worktrees"));
-  const path = join(root, claudeHome ? ".claude/worktrees" : "worktrees", name);
+  // The main checkout is the first entry git lists, from any worktree.
+  const repo = list.split("\n")[0].replace(/^worktree /, "");
+  const claudeHome = existsSync(join(repo, ".claude/worktrees"));
+  const path = join(repo, claudeHome ? ".claude/worktrees" : "worktrees", name);
   const convention =
     claudeHome ||
-    (await run("git", ["-C", root, "check-ignore", "-q", "worktrees/"]).then(
+    (await run("git", ["-C", repo, "check-ignore", "-q", "worktrees/"]).then(
       () => true,
       () => false,
     ));
   if (existsSync(path))
     throw new Error(`A worktree named ${name} already exists`);
   const branch = `worktree-${name}`;
-  await run("git", ["-C", root, "worktree", "add", path, "-b", branch, "HEAD"]);
-  return { path, branch, repo: root, convention };
+  // HEAD as the chosen checkout sees it, not the main checkout's.
+  await run("git", ["-C", cwd, "worktree", "add", path, "-b", branch, "HEAD"]);
+  return { path, branch, repo, convention };
 }
 
 // The first prompt of a dispatched session: the new-session macro around
