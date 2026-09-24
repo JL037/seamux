@@ -194,7 +194,7 @@ export function ChatModal({
                     ? "Next message (⌘↵ to queue it for when this turn ends), or a tangent to fork"
                     : "Next message (⌘↵ to send), or a tangent to fork"
               }
-              className="min-h-32 resize-y rounded-b-none"
+              className="max-h-[40dvh] min-h-32 resize-y overflow-y-auto rounded-b-none"
             />
             <ContextBar context={card.context} className="border-input" />
           </div>
