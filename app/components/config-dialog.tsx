@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { FolderOpen, Plus, RotateCcw, Save, Settings, X } from "lucide-react";
+import { Plus, RotateCcw, Save, Settings, X } from "lucide-react";
 
+import { DirectoryPicker } from "~/components/directory-picker";
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import {
@@ -181,25 +182,18 @@ function DirectoriesSetting({ directories }: { directories: string[] }) {
           add();
         }}
       >
-        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-background px-2">
-          <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
-          <input
-            list="seamux-config-directories"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            onFocus={() => {
-              if (discovered.state === "idle" && !discovered.data)
-                discovered.load("/directories?discovered");
-            }}
-            placeholder="/Users/you/code/project"
-            className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-xs outline-none placeholder:text-muted-foreground"
-          />
-          <datalist id="seamux-config-directories">
-            {suggestions.map((d) => (
-              <option key={d} value={d} />
-            ))}
-          </datalist>
-        </label>
+        <DirectoryPicker
+          value={path}
+          onValueChange={setPath}
+          options={suggestions}
+          onFocus={() => {
+            if (discovered.state === "idle" && !discovered.data)
+              discovered.load("/directories?discovered");
+          }}
+          placeholder="/Users/you/code/project"
+          className="flex-1"
+          inputClassName="text-xs"
+        />
         <Button
           type="submit"
           size="sm"

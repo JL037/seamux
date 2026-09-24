@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { FolderOpen, SendHorizontal } from "lucide-react";
+import { SendHorizontal } from "lucide-react";
+
+import { DirectoryPicker } from "~/components/directory-picker";
 
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
@@ -144,23 +146,16 @@ export function DispatchBar({
         className="min-h-0 resize-y border-0 bg-transparent text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex min-w-0 flex-1 basis-64 items-center gap-2 rounded-lg border bg-background px-2">
-          <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
-          <input
-            data-focus-key="dispatch:cwd"
-            list="seamux-directories"
-            value={cwd}
-            onChange={(e) => setCwd(e.target.value)}
-            onFocus={loadDirs}
-            placeholder="/dir pick"
-            className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-sm outline-none placeholder:text-muted-foreground"
-          />
-          <datalist id="seamux-directories">
-            {options.map((d) => (
-              <option key={d} value={d} />
-            ))}
-          </datalist>
-        </label>
+        <DirectoryPicker
+          data-focus-key="dispatch:cwd"
+          value={cwd}
+          onValueChange={setCwd}
+          options={options}
+          onFocus={loadDirs}
+          placeholder="/dir pick"
+          className="flex-1 basis-64"
+          inputClassName="text-sm"
+        />
         {available.length > 1 && (
           <select
             value={chosen}
