@@ -684,7 +684,9 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         turnRunning: busy,
         pinned: false,
         waiting,
-        closing: closingState(row.sessionId),
+        closing: closingState(row.sessionId, {
+          lastPrompt: summary?.lastPrompt ?? null,
+        }),
         background: children,
         subagents,
       };
@@ -925,7 +927,7 @@ async function codexCard(
     drivable: true,
     turnRunning: busy,
     waiting,
-    closing: closingState(sessionId),
+    closing: closingState(sessionId, { lastPrompt: s.lastPrompt }),
   };
 }
 

@@ -355,6 +355,10 @@ export interface Closing {
   since: number;
 }
 
+// The prompt a held chat was last given when it was held, to tell when it
+// has taken another turn since. Undefined when the hold had no card to read.
+const heldOn = new Map<string, string | null>();
+
 const closing = new Map<string, Closing>();
 const CLOSE_POLL_MS = 3000;
 const CLOSE_START_MS = 60_000;
@@ -362,13 +366,22 @@ const CLOSE_TURN_MS = 30 * 60_000;
 // A held note stays on the card this long.
 const HELD_VISIBLE_MS = 10 * 60_000;
 
-export function closingState(sessionId: string): Closing | null {
+// A held note goes once the chat is given another prompt, since whatever
+// it said no longer holds: Jakob answered it, and it may have cleaned up.
+export function closingState(
+  sessionId: string,
+  now: { lastPrompt: string | null },
+): Closing | null {
   const c = closing.get(sessionId);
-  if (c?.state === "held" && Date.now() - c.since > HELD_VISIBLE_MS) {
+  if (c?.state !== "held") return c ?? null;
+  const prompt = heldOn.get(sessionId);
+  const prompted = prompt !== undefined && now.lastPrompt !== prompt;
+  if (prompted || Date.now() - c.since > HELD_VISIBLE_MS) {
     closing.delete(sessionId);
+    heldOn.delete(sessionId);
     return null;
   }
-  return c ?? null;
+  return c;
 }
 
 // Stopping the clean-up turn calls the close off.
@@ -376,8 +389,10 @@ export function cancelClose(sessionId: string) {
   if (closing.get(sessionId)?.state === "cleaning") closing.delete(sessionId);
 }
 
-function hold(sessionId: string, note: string) {
+function hold(sessionId: string, note: string, card?: Card) {
   closing.set(sessionId, { state: "held", note, since: Date.now() });
+  if (card) heldOn.set(sessionId, card.lastPrompt);
+  else heldOn.delete(sessionId);
 }
 
 // The other live sessions under the same repo, in a sentence, so the
@@ -434,7 +449,7 @@ export async function closeSession(
   lookup: () => Promise<Card | undefined>,
 ) {
   const sessionId = card.sessionId;
-  const current = closingState(sessionId);
+  const current = closingState(sessionId, card);
   if (current?.state === "cleaning") {
     throw new Error("Already cleaning up before it closes");
   }
@@ -485,6 +500,7 @@ async function finishClose(
       hold(
         sessionId,
         "The close-session macro never started a turn, so it was left open",
+        card,
       );
       return;
     }
@@ -492,6 +508,7 @@ async function finishClose(
       hold(
         sessionId,
         "Clean-up was still running after 30 minutes, so it was left open",
+        card,
       );
       return;
     }
@@ -502,6 +519,7 @@ async function finishClose(
       hold(
         sessionId,
         "Left open: it asked you something. Close again to exit anyway",
+        card,
       );
       return;
     }
@@ -511,6 +529,7 @@ async function finishClose(
         hold(
           sessionId,
           "Left open: uncommitted changes remain. Close again to exit anyway",
+          card,
         );
         return;
       }
@@ -519,6 +538,7 @@ async function finishClose(
         hold(
           sessionId,
           "Left open: its worktree is still there. Close again to exit anyway",
+          card,
         );
         return;
       }
