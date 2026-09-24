@@ -288,9 +288,14 @@ function ChatInput({
             />
             {multiline ? (
               <>
-                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                <button
+                  type="button"
+                  title="Open full view"
+                  onClick={() => setOpen(true)}
+                  className="shrink-0 cursor-pointer text-[10px] tabular-nums text-muted-foreground hover:text-foreground"
+                >
                   {lines} lines
-                </span>
+                </button>
                 {expand}
               </>
             ) : (

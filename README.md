@@ -97,7 +97,7 @@ Background sessions (`claude --bg`) belong to the chat that started them. They s
 A card shows the last prompt and the end of the latest reply, with a reply box beneath. Clicking it opens the whole conversation.
 
 - **Replying** pastes your text into the session's terminal and presses Enter. If the chat is working, the message waits in seamux's queue, and the card shows `working +N`. The server sends queued messages one per turn once the chat is idle, even with no board open.
-- **A multiline draft** can't be edited in the card's one-line reply box without losing its line breaks, so the box shows its first line and line count across the full width, and its button opens the full view instead of sending.
+- **A multiline draft** can't be edited in the card's one-line reply box without losing its line breaks, so the box shows its first line and line count across the full width. The box, the line count and its button all open the full view instead of sending.
 - **Dialogs** are answered from the card. An approval gets Approve and Deny, an AskUserQuestion gets its options, and any other numbered dialog gets one button per option. seamux presses the same keys you would.
 - **Stop** presses Esc in the session's terminal. **Fork** starts a new session with a copy of this chat's context. **Pin** moves a card into or out of PINNED.
 - **Rename** by double-clicking a card's name. A chat that is open in cmux is sent `/rename`, which takes effect even mid-turn and retitles its tab, but not while a dialog is open in it. Its cmux workspace is renamed too when the chat is the workspace's only tab. A closed chat gets the lines `/rename` would have written appended to its transcript, and keeps the name when resumed.
