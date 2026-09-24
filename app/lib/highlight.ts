@@ -1,4 +1,9 @@
-import type { Root as HastRoot } from "hast";
+import type {
+  Element,
+  ElementContent,
+  Root as HastRoot,
+  RootContent,
+} from "hast";
 import type { Code, Root } from "mdast";
 import { common, createLowlight } from "lowlight";
 
@@ -59,4 +64,32 @@ export function remarkFrontmatterAsCode() {
     };
     tree.children[0] = code;
   };
+}
+
+// A highlighted file as one list of nodes per line, for showing each line
+// beside its number. A span that runs across lines, like a block comment,
+// is opened again on each of them.
+export function splitLines(root: HastRoot): ElementContent[][] {
+  const lines: ElementContent[][] = [[]];
+  const walk = (nodes: RootContent[], open: Element[]) => {
+    for (const node of nodes) {
+      if (node.type === "text") {
+        node.value.split("\n").forEach((part, i) => {
+          if (i > 0) lines.push([]);
+          if (part === "") return;
+          let out: ElementContent = { type: "text", value: part };
+          for (let j = open.length - 1; j >= 0; j--) {
+            out = { ...open[j], children: [out] };
+          }
+          lines[lines.length - 1].push(out);
+        });
+      } else if (node.type === "element") {
+        walk(node.children, [...open, node]);
+      }
+    }
+  };
+  walk(root.children, []);
+  // A file's final newline ends its last line; it doesn't start another.
+  if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop();
+  return lines;
 }

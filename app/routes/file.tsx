@@ -7,7 +7,7 @@ import {
   useSearchParams,
   type ShouldRevalidateFunctionArgs,
 } from "react-router";
-import { File, Folder } from "lucide-react";
+import { File, Folder, ListOrdered } from "lucide-react";
 
 import type { Route } from "./+types/file";
 import { Code } from "~/components/code";
@@ -18,6 +18,7 @@ import {
 } from "~/components/product-name";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
+import { Button } from "~/components/ui/button";
 import {
   dirnameOf,
   fileRawUrl,
@@ -26,6 +27,7 @@ import {
 } from "~/lib/files";
 import { loadFile, SANDBOX_BASE } from "~/lib/files.server";
 import { assertLocalRead } from "~/lib/guard.server";
+import { useLocalStorage } from "~/lib/use-session-storage";
 import { cn } from "~/lib/utils";
 
 export function meta({ data, matches }: Route.MetaArgs) {
@@ -96,6 +98,15 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
     file.type === "file" && (file.kind === "markdown" || file.kind === "html");
   const view: FileView =
     renderable && params.get("view") !== "raw" ? "rendered" : "raw";
+  const [lineNumbers, setLineNumbers] = useLocalStorage(
+    "seamux:line-numbers",
+    false,
+  );
+  const numbered =
+    file.type === "file" &&
+    view === "raw" &&
+    file.kind !== "image" &&
+    file.text !== null;
 
   return (
     <div className="flex h-dvh flex-col">
@@ -133,6 +144,18 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
             <option value="raw">Raw</option>
             {renderable && <option value="rendered">Rendered</option>}
           </select>
+        )}
+        {numbered && (
+          <Button
+            size="icon-xs"
+            variant={lineNumbers ? "secondary" : "ghost"}
+            title={lineNumbers ? "Hide line numbers" : "Show line numbers"}
+            aria-label="Line numbers"
+            aria-pressed={lineNumbers}
+            onClick={() => setLineNumbers((on) => !on)}
+          >
+            <ListOrdered />
+          </Button>
         )}
         <ThemeToggle />
       </header>
@@ -202,6 +225,7 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
           <Code
             text={file.text}
             path={file.path}
+            lineNumbers={lineNumbers}
             className="p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground"
           />
         ) : (
