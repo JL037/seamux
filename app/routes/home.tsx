@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRevalidator } from "react-router";
+import { useFetcher, useRevalidator } from "react-router";
 import {
   GitBranch,
   CircleCheck,
@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 import type { Route } from "./+types/home";
+import type { ActionResult } from "./session-action";
 import { ChatModal } from "~/components/chat-modal";
 import { ConfigDialog } from "~/components/config-dialog";
 import { ContextBar } from "~/components/context-bar";
@@ -548,7 +549,18 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
                 title={COLUMN_LABELS[card.column]}
               />
             )}
-            <span className="truncate">{card.name}</span>
+            {card.pinned ? (
+              <span
+                draggable
+                onDragStart={(e) => startPinDrag(e, card.sessionId)}
+                className="cursor-grab truncate active:cursor-grabbing"
+                title="Drag to reorder Pinned"
+              >
+                {card.name}
+              </span>
+            ) : (
+              <span className="truncate">{card.name}</span>
+            )}
           </span>
           <span className="flex shrink-0 items-center gap-1">
             <PinToggle card={card} />
@@ -689,6 +701,115 @@ function CardState({
   );
 }
 
+// A pinned card is dragged by its name, carrying its session id. The whole
+// card follows the pointer, held where it was picked up.
+const PIN_DRAG = "application/x-seamux-pin";
+
+function startPinDrag(e: React.DragEvent<HTMLElement>, sessionId: string) {
+  e.dataTransfer.setData(PIN_DRAG, sessionId);
+  e.dataTransfer.effectAllowed = "move";
+  const card = e.currentTarget.closest<HTMLElement>("[data-pin-card]");
+  if (card) {
+    const box = card.getBoundingClientRect();
+    e.dataTransfer.setDragImage(card, e.clientX - box.left, e.clientY - box.top);
+  }
+}
+
+// `ids` with `id` moved to just before `before`, or to the end.
+function movedBefore(ids: string[], id: string, before: string): string[] {
+  const rest = ids.filter((x) => x !== id);
+  const at = before ? rest.indexOf(before) : -1;
+  rest.splice(at === -1 ? rest.length : at, 0, id);
+  return rest;
+}
+
+// Pinned cards in Jakob's order, which he changes by dragging a card's name.
+// A line marks where it will land; the move shows at once, ahead of the
+// board that confirms it.
+function PinnedCards({ cards, now }: { cards: BoardCard[]; now: number }) {
+  const fetcher = useFetcher<ActionResult>();
+  const [dropAt, setDropAt] = useState<number | null>(null);
+  const ids = cards.map((c) => c.sessionId);
+  const moving = fetcher.formData;
+  const order = moving
+    ? movedBefore(
+        ids,
+        String(moving.get("moved")),
+        String(moving.get("before")),
+      )
+    : ids;
+  const shown = order.flatMap((id) => cards.find((c) => c.sessionId === id) ?? []);
+  const isPinDrag = (e: React.DragEvent) =>
+    e.dataTransfer.types.includes(PIN_DRAG);
+
+  return (
+    <div
+      className="flex flex-col gap-3"
+      onDragOver={(e) => {
+        if (!isPinDrag(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setDropAt(null);
+        }
+      }}
+      onDragEnd={() => setDropAt(null)}
+      onDrop={(e) => {
+        const id = e.dataTransfer.getData(PIN_DRAG);
+        const at = dropAt;
+        setDropAt(null);
+        if (!id || at === null || !order.includes(id)) return;
+        e.preventDefault();
+        const rest = order.filter((x) => x !== id);
+        const before =
+          rest[order.slice(0, at).filter((x) => x !== id).length] ?? "";
+        if (movedBefore(order, id, before).join() === order.join()) return;
+        fetcher.submit(
+          { intent: "pin-move", moved: id, before },
+          { method: "post", action: `/sessions/${id}/action` },
+        );
+      }}
+    >
+      {shown.map((card, i) => (
+        <div
+          key={card.sessionId}
+          data-pin-card
+          className="relative"
+          onDragOver={(e) => {
+            if (!isPinDrag(e)) return;
+            const box = e.currentTarget.getBoundingClientRect();
+            setDropAt(e.clientY > box.top + box.height / 2 ? i + 1 : i);
+          }}
+        >
+          {dropAt === i && <DropLine edge="top" />}
+          {dropAt === i + 1 && i === shown.length - 1 && (
+            <DropLine edge="bottom" />
+          )}
+          <SessionCard card={card} now={now} />
+        </div>
+      ))}
+      {fetcher.data?.error && (
+        <p className="text-xs text-destructive">{fetcher.data.error}</p>
+      )}
+    </div>
+  );
+}
+
+// Centred in the gap between two cards.
+function DropLine({ edge }: { edge: "top" | "bottom" }) {
+  return (
+    <span
+      className={cn(
+        "pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full",
+        PINNED_ACCENT,
+        edge === "top" ? "-top-[7px]" : "-bottom-[7px]",
+      )}
+    />
+  );
+}
+
 // Pinned sits left of the state columns; its cards show their state as a dot.
 type BoardColumnKey = Column | "pinned";
 
@@ -731,9 +852,13 @@ function BoardColumn({
           </span>
         )}
       </h2>
-      {cards.map((card) => (
-        <SessionCard key={card.sessionId} card={card} now={now} />
-      ))}
+      {column === "pinned" ? (
+        <PinnedCards cards={cards} now={now} />
+      ) : (
+        cards.map((card) => (
+          <SessionCard key={card.sessionId} card={card} now={now} />
+        ))
+      )}
       {cards.length === 0 && (
         <p className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
           Nothing {label.toLowerCase()}

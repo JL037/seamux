@@ -13,6 +13,7 @@ type Intent =
   | "close"
   | "pin"
   | "unpin"
+  | "pin-move"
   | "answer"
   | "approve"
   | "deny"

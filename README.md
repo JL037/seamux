@@ -50,7 +50,7 @@ A landing can reload the board mid-sentence, so unsent text survives it: the dis
 
 To change seamux, work in a worktree on your own branch, commit, and run `npm run land` there. `CLAUDE.md` has the details, for people and agents alike.
 
-The store is SQLite at `data/seamux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents, pins, queued messages, settings and fan-out records, never a session.
+The store is SQLite at `data/seamux.db`, and fan-out files live in `data/dispatches/`. Both are gitignored, and deleting them loses only subagent history, card intents, pins and their order, queued messages, settings and fan-out records, never a session.
 
 This README is the brief and its own source of truth: edit it here. Prose in this repo is checked with Taskless.
 
@@ -143,9 +143,11 @@ Four columns: **IDLE**, **WAITING**, **WORKING**, **DONE**. Simpler than the uni
 
 DONE is hidden by default; a **Show done** toggle in the header, remembered per browser, brings it back.
 
+**Each column lists its oldest card first**, by last activity, so the stalest work is on top where it is easiest to address, and a card keeps its place while newer work moves between columns. Jakob, 2026-09-23: *"Sort order for the columns should be oldest-first"*
+
 The board follows the OS's light or dark theme until a sun or moon button beside the cog picks one, which is remembered per browser.
 
-**PINNED sits left of the four**, for sessions that are meant to run for a long time by design. It appears only while something is pinned. A pin is Jakob's call, since nothing about a session says it is long-running, so it is one of the few things the store records. A pinned card stays in PINNED whatever its state, shown as a coloured dot beside its name, with the same controls it would have in its state's column. Closing a pinned chat keeps it in PINNED with its resume button for as long as its transcript exists, rather than letting it age off after 30 minutes. Unpinning puts it back in its state's column. Jakob, 2026-09-23: *"some sessions are meant to be long running by design."*
+**PINNED sits left of the four**, for sessions that are meant to run for a long time by design. It appears only while something is pinned. A pin is Jakob's call, since nothing about a session says it is long-running, so it is one of the few things the store records. A pinned card stays in PINNED whatever its state, shown as a coloured dot beside its name, with the same controls it would have in its state's column. Closing a pinned chat keeps it in PINNED with its resume button for as long as its transcript exists, rather than letting it age off after 30 minutes. Unpinning puts it back in its state's column. Jakob, 2026-09-23: *"some sessions are meant to be long running by design."* PINNED keeps Jakob's own order rather than sorting by activity: a card is moved by dragging its name, a new pin goes last, and the order is kept in the store with the pins. Jakob, 2026-09-23: *"The pinned column should allow manual sorting by dragging the session's name."*
 
 **WAITING means something is stopped until Jakob answers.** A blocked background session is; a failed one is over, so its parent stays where its own state puts it, with the failure shown as a red marker. This reverses an earlier call that failed meant waiting. Jakob, 2026-09-23: *"A failed background job is still idle then. It's not blocked waiting on me... right?"*
 

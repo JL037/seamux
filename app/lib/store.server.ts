@@ -40,10 +40,12 @@ const SCHEMA = `
     created_at     INTEGER NOT NULL
   );
 
-  -- Sessions Jakob pinned, because they are meant to run for a long time.
+  -- Sessions Jakob pinned, because they are meant to run for a long time,
+  -- in the order he dragged them into; a new pin goes last.
   CREATE TABLE IF NOT EXISTS pins (
     session_id TEXT PRIMARY KEY,
-    pinned_at  INTEGER NOT NULL
+    pinned_at  INTEGER NOT NULL,
+    position   INTEGER NOT NULL DEFAULT 0
   );
 
   -- Messages Jakob wrote while a chat was working, held here instead of in
@@ -68,6 +70,21 @@ const SCHEMA = `
 
 let db: DatabaseSync | null = null;
 
+// Columns added after a table first shipped, which CREATE TABLE IF NOT
+// EXISTS leaves out of an existing store.
+function migrate(store: DatabaseSync): void {
+  const pinColumns = store
+    .prepare(`PRAGMA table_info(pins)`)
+    .all() as unknown as { name: string }[];
+  if (!pinColumns.some((c) => c.name === "position")) {
+    store.exec(`
+      ALTER TABLE pins ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+      UPDATE pins SET position =
+        (SELECT COUNT(*) FROM pins p WHERE p.pinned_at < pins.pinned_at);
+    `);
+  }
+}
+
 export function openStore(): DatabaseSync {
   if (db) return db;
   mkdirSync(dirname(DB_PATH), { recursive: true });
@@ -76,6 +93,7 @@ export function openStore(): DatabaseSync {
   db = new DatabaseSync(DB_PATH, { timeout: 5000 });
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 
@@ -219,7 +237,7 @@ export function recentDispatchCwds(limit = 50): string[] {
 export function pinnedSessions(): string[] {
   return (
     openStore()
-      .prepare(`SELECT session_id FROM pins ORDER BY pinned_at`)
+      .prepare(`SELECT session_id FROM pins ORDER BY position, pinned_at`)
       .all() as unknown as { session_id: string }[]
   ).map((r) => r.session_id);
 }
@@ -233,12 +251,35 @@ export function setPinned(
   if (pinned) {
     store
       .prepare(
-        `INSERT INTO pins (session_id, pinned_at) VALUES (?, ?)
+        `INSERT INTO pins (session_id, pinned_at, position)
+         VALUES (?, ?, (SELECT COALESCE(MAX(position) + 1, 0) FROM pins))
          ON CONFLICT (session_id) DO NOTHING`,
       )
       .run(sessionId, now);
   } else {
     store.prepare(`DELETE FROM pins WHERE session_id = ?`).run(sessionId);
+  }
+}
+
+// Moves a pinned session to just before `before`, or to the end when
+// `before` is null or not pinned, and renumbers the rest.
+export function movePin(sessionId: string, before: string | null): void {
+  const store = openStore();
+  store.exec("BEGIN IMMEDIATE");
+  try {
+    const order = pinnedSessions();
+    if (!order.includes(sessionId)) throw new Error("Not pinned");
+    const rest = order.filter((id) => id !== sessionId);
+    const at = before === null ? -1 : rest.indexOf(before);
+    rest.splice(at === -1 ? rest.length : at, 0, sessionId);
+    const update = store.prepare(
+      `UPDATE pins SET position = ? WHERE session_id = ?`,
+    );
+    rest.forEach((id, i) => update.run(i, id));
+    store.exec("COMMIT");
+  } catch (err) {
+    store.exec("ROLLBACK");
+    throw err;
   }
 }
 

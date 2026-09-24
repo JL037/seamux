@@ -660,12 +660,14 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     }),
   );
 
-  let pinned = new Set<string>();
+  // In the order Jakob dragged them into.
+  let pinOrder: string[] = [];
   try {
-    pinned = new Set(pinnedSessions());
+    pinOrder = pinnedSessions();
   } catch (err) {
     warnings.push(`Pin store unavailable: ${(err as Error).message}`);
   }
+  const pinned = new Set(pinOrder);
 
   // DONE: a chat Jakob closed recently, or a pinned one closed at any time.
   // It is no longer live, is not a background job, and its transcript was
@@ -740,7 +742,13 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   } catch (err) {
     warnings.push(`Dispatch store unavailable: ${(err as Error).message}`);
   }
-  cards.sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+  // Oldest first, so the stalest card in each column is on top and a card
+  // keeps its place as newer work moves between columns. Pinned cards keep
+  // the order Jakob dragged them into instead.
+  cards.sort((a, b) => (a.lastActivityAt ?? 0) - (b.lastActivityAt ?? 0));
+  const pinRank = new Map(pinOrder.map((id, i) => [id, i]));
+  const rank = (c: Card) => pinRank.get(c.sessionId) ?? pinOrder.length;
+  cards.sort((a, b) => rank(a) - rank(b));
   const dispatches = loadDispatchSets(now, warnings);
   const reported = new Map(
     dispatches.flatMap((d) =>

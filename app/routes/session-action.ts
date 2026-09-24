@@ -19,6 +19,7 @@ import { assertFromBoard, SESSION_ID } from "~/lib/guard.server";
 import { startQueue } from "~/lib/queue.server";
 import {
   editQueued,
+  movePin,
   queueMessage,
   restoreQueued,
   setPinned,
@@ -35,6 +36,7 @@ const INTENTS = new Set([
   "close",
   "pin",
   "unpin",
+  "pin-move",
   "answer",
   "approve",
   "deny",
@@ -179,6 +181,10 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     await fork(sessionId, info.cwd, String(form.get("text") ?? ""));
   } else if (intent === "pin" || intent === "unpin") {
     setPinned(sessionId, intent === "pin");
+  } else if (intent === "pin-move") {
+    const before = String(form.get("before") ?? "");
+    if (before && !SESSION_ID.test(before)) throw new Error("Bad session id");
+    movePin(sessionId, before || null);
   }
 }
 
