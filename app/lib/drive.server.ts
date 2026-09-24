@@ -4,6 +4,7 @@
 
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -82,6 +83,12 @@ export async function sendMessage(sessionId: string, text: string) {
 export async function interrupt(sessionId: string) {
   const surface = await surfaceFor(sessionId);
   await rpc("surface.send_key", { ...target(surface), key: "escape" });
+}
+
+// Close a chat the way Jakob would: /exit. The conversation is kept, and
+// the card moves to DONE, where it can be resumed.
+export async function closeChat(sessionId: string) {
+  await sendMessage(sessionId, "/exit");
 }
 
 // Every session seemux starts runs in its own cmux workspace.
@@ -176,6 +183,39 @@ export function nameFrom(prompt: string): string {
 
 const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
 
+// A new worktree for dispatched work, branched from what the chosen checkout
+// has checked out now. seemux makes it rather than `claude --worktree`, which
+// branches from the remote's default branch (stale when main is unpushed)
+// and stops on exit to ask whether to keep the worktree.
+async function createWorktree(cwd: string, name: string): Promise<string> {
+  let root: string;
+  try {
+    ({ stdout: root } = await run("git", [
+      "-C",
+      cwd,
+      "rev-parse",
+      "--show-toplevel",
+    ]));
+  } catch {
+    throw new Error("A new worktree needs a git repository");
+  }
+  root = root.trim();
+  const path = join(root, ".claude/worktrees", name);
+  if (existsSync(path))
+    throw new Error(`A worktree named ${name} already exists`);
+  await run("git", [
+    "-C",
+    root,
+    "worktree",
+    "add",
+    path,
+    "-b",
+    `worktree-${name}`,
+    "HEAD",
+  ]);
+  return path;
+}
+
 // A leading dash would be read as a flag.
 const asPrompt = (p: string) => (p.startsWith("-") ? `Task: ${p}` : p);
 
@@ -200,13 +240,12 @@ export async function dispatch(input: DispatchInput): Promise<string> {
   }
 
   const sessionId = randomUUID();
-  const args = ["--session-id", sessionId, "--name", name];
-  if (worktree) args.push("--worktree", worktree);
-  args.push(asPrompt(prompt));
+  const args = ["--session-id", sessionId, "--name", name, asPrompt(prompt)];
+  const where = worktree ? await createWorktree(cwd, worktree) : cwd;
 
   recordDispatch({
     session_id: sessionId,
-    cwd,
+    cwd: where,
     prompt,
     name,
     worktree,
@@ -214,7 +253,7 @@ export async function dispatch(input: DispatchInput): Promise<string> {
     dispatch_id: input.dispatchId ?? null,
     worker: input.worker ?? null,
   });
-  await launch(cwd, name, args, false);
+  await launch(where, name, args, false);
   return sessionId;
 }
 

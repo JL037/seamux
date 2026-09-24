@@ -13,6 +13,7 @@ import {
   Play,
   SendHorizontal,
   Square,
+  X,
 } from "lucide-react";
 
 import type { Route } from "./+types/home";
@@ -174,6 +175,25 @@ function CardControl({ card }: { card: BoardCard }) {
         onClick={() => submit("interrupt")}
       >
         <Square />
+      </Button>
+    );
+  }
+  if (card.column === "idle") {
+    return (
+      <Button
+        size="icon-xs"
+        variant="outline"
+        disabled={!card.drivable || pending}
+        title={error ?? "Close this chat (it moves to Done and can be resumed)"}
+        onClick={() => {
+          if (
+            window.confirm(`Close “${card.name}”? It can be resumed from Done.`)
+          ) {
+            submit("close");
+          }
+        }}
+      >
+        <X />
       </Button>
     );
   }

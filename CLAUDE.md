@@ -20,10 +20,10 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 
 The board runs from the main checkout, on `main`, under `npm run serve`, which keeps the dev server up and restarts it when needed. Never edit the main checkout directly: it is what the board serves.
 
-1. Work in your own worktree, on your own branch. Sessions started with a new worktree already have one under `.claude/worktrees/`; otherwise make one under `worktrees/<name>`.
+1. Work in your own worktree, on your own branch. A session dispatched from the board with "new worktree" already has one, under `.claude/worktrees/`, branched from main; otherwise make one under `worktrees/<name>`.
 2. Commit, then run `npm run land` from the worktree. It waits for any other landing to finish, rebases your branch onto main, typechecks it, fast-forwards main, and restarts the board only if dependencies changed; otherwise hot reload picks the change up within seconds.
 3. If it reports a conflict, rebase onto main yourself, resolve, and run it again. main is untouched until a landing succeeds.
-4. Once landed, remove your own worktree and branch (`git worktree remove`, `git branch -d`), and never anyone else's.
+4. Once landed, as your very last step, remove your own worktree and branch (`git -C <main checkout> worktree remove <your worktree>`, then `git branch -d`), and never anyone else's. Jakob closes the chat from the board.
 
 ## Checking changes
 

@@ -3,7 +3,7 @@ import { useFetcher } from "react-router";
 
 import type { ActionResult } from "~/routes/session-action";
 
-type Intent = "send" | "interrupt" | "resume" | "fork";
+type Intent = "send" | "interrupt" | "resume" | "fork" | "close";
 
 // Posts one of the board's write verbs for a session. `onSuccess` runs once
 // per successful submission, e.g. to clear a sent draft.
