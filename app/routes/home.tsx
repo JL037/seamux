@@ -191,13 +191,16 @@ const DraftsContext = createContext<{
 // The card's next chat line, with a popout into the full-size modal for
 // longer messages. Both send through cmux into the session's surface, or,
 // while the chat works or already has messages waiting, into seamux's queue.
-function ChatInput({ card }: { card: BoardCard }) {
+function ChatInput({
+  card,
+  open,
+  setOpen,
+}: {
+  card: BoardCard;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}) {
   const { drafts, setDraft } = useContext(DraftsContext);
-  // Kept across a reload, like the draft, so an open chat stays open.
-  const [open, setOpen] = useSessionStorage(
-    `seamux:chat-open:${card.sessionId}`,
-    false,
-  );
   const draft = drafts[card.sessionId] ?? "";
   const onDraftChange = (d: string) => setDraft(card.sessionId, d);
   // A draft is cleared, from state and storage, as it is sent, so a reload
@@ -517,6 +520,11 @@ const CARD_EDGE: Partial<Record<Column, string>> = {
 };
 
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
+  // Kept across a reload, like the draft, so an open chat stays open.
+  const [chatOpen, setChatOpen] = useSessionStorage(
+    `seamux:chat-open:${card.sessionId}`,
+    false,
+  );
   return (
     <Card
       size="sm"
@@ -620,38 +628,65 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
         <CardState
           column={card.column}
           queued={card.terminalQueue.length + card.boardQueue.length}
+          onOpen={() => setChatOpen(true)}
         />
-        <ChatInput card={card} />
+        <ChatInput card={card} open={chatOpen} setOpen={setChatOpen} />
       </CardContent>
     </Card>
   );
 }
 
-// Waiting shows nothing here: the card already carries the prompt or tool
-// that is waiting, and done cards are over.
-function CardState({ column, queued }: { column: Column; queued: number }) {
-  if (column === "idle") {
-    return (
-      <span className="flex items-center gap-1.5 text-muted-foreground">
+// Waiting shows no state here: the card already carries the prompt or tool
+// that is waiting, and done cards are over. Anything queued shows as +N, and
+// the line then opens the chat, where the queue is listed.
+function CardState({
+  column,
+  queued,
+  onOpen,
+}: {
+  column: Column;
+  queued: number;
+  onOpen: () => void;
+}) {
+  const state =
+    column === "idle" ? (
+      <>
         <CircleCheck className="size-3.5" />
         ready
-      </span>
-    );
-  }
-  if (column === "working") {
-    return (
-      <span className="flex items-center gap-1.5 text-brand-cyan">
+      </>
+    ) : column === "working" ? (
+      <>
         <LoaderCircle className="size-3.5 animate-spin" />
         working
-        {queued > 0 && (
-          <span title={`${queued} queued for when this turn ends; open the chat to see them`}>
-            +{queued}
-          </span>
-        )}
-      </span>
+      </>
+    ) : null;
+  const tone =
+    column === "working" ? "text-brand-cyan" : "text-muted-foreground";
+  if (queued === 0) {
+    return (
+      state && (
+        <span className={cn("flex items-center gap-1.5", tone)}>{state}</span>
+      )
     );
   }
-  return null;
+  if (column === "done") return null;
+  const when =
+    column === "idle"
+      ? "seamux sends it on its next check"
+      : column === "working"
+        ? "sent once this turn ends"
+        : "sent once the chat is ready again";
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={`${queued} queued, ${when}. Open the chat to see or edit it`}
+      className={cn("flex w-fit items-center gap-1.5 hover:underline", tone)}
+    >
+      {state}
+      <span>{state ? `+${queued}` : `+${queued} queued`}</span>
+    </button>
+  );
 }
 
 // Pinned sits left of the state columns; its cards show their state as a dot.
