@@ -169,7 +169,11 @@ export function ChatModal({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
+                  // ⌘↵ sends and returns to the board; a failed send
+                  // shows on the card, with the draft put back.
+                  if (!canSend) return;
                   onSend();
+                  onOpenChange(false);
                 }
               }}
               placeholder={
