@@ -5,6 +5,7 @@ import {
   addDirectory,
   isMacroName,
   removeDirectory,
+  setDefaultEngine,
   setMacro,
   setWorktreeByDefault,
 } from "~/lib/config.server";
@@ -15,6 +16,7 @@ const INTENTS = new Set([
   "add-directory",
   "remove-directory",
   "worktree-default",
+  "default-engine",
   "save-macro",
   "reset-macro",
 ]);
@@ -32,6 +34,8 @@ async function perform(intent: string, form: FormData) {
     removeDirectory(field("path"));
   } else if (intent === "worktree-default") {
     setWorktreeByDefault(field("on") === "true");
+  } else if (intent === "default-engine") {
+    setDefaultEngine(field("engine"));
   } else if (intent === "save-macro" || intent === "reset-macro") {
     const name = field("name");
     if (!isMacroName(name)) throw new Error("Unknown macro");

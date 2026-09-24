@@ -5,6 +5,7 @@ import { FolderOpen, SendHorizontal } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
+import { ENGINE_LABELS, ENGINES, type Engine } from "~/lib/config";
 import { releaseFocus } from "~/lib/use-focus-restore";
 import { useSessionStorage } from "~/lib/use-session-storage";
 import type { DispatchResult } from "~/routes/dispatch";
@@ -13,6 +14,7 @@ const LAST_DIR_KEY = "seamux:last-dir";
 const PROMPT_KEY = "seamux:dispatch:prompt";
 const CWD_KEY = "seamux:dispatch:cwd";
 const WORKTREE_KEY = "seamux:dispatch:worktree";
+const ENGINE_KEY = "seamux:dispatch:engine";
 
 function readLastDir(): string {
   try {
@@ -33,10 +35,15 @@ function writeLastDir(dir: string) {
 export function DispatchBar({
   directories,
   worktreeByDefault,
+  defaultEngine,
+  engines,
 }: {
   // The configured directories; empty means offer every one seamux finds.
   directories: string[];
   worktreeByDefault: boolean;
+  defaultEngine: Engine;
+  // Which agents this Mac can launch.
+  engines: Record<Engine, boolean>;
 }) {
   const dispatcher = useFetcher<DispatchResult>();
   const dirs = useFetcher<{ directories: string[] }>();
@@ -54,6 +61,20 @@ export function DispatchBar({
     lastDefault.current = worktreeByDefault;
     setWorktree(worktreeByDefault);
   }, [worktreeByDefault, setWorktree]);
+  // The agent, the same way: the configured default until changed here.
+  const [engine, setEngine] = useSessionStorage<Engine>(
+    ENGINE_KEY,
+    defaultEngine,
+  );
+  const lastEngine = useRef(defaultEngine);
+  useEffect(() => {
+    if (lastEngine.current === defaultEngine) return;
+    lastEngine.current = defaultEngine;
+    setEngine(defaultEngine);
+  }, [defaultEngine, setEngine]);
+  const available = ENGINES.filter((e) => engines[e]);
+  // One remembered from before it was uninstalled falls back to one that is.
+  const chosen = engines[engine] ? engine : (available[0] ?? "claude");
   const [started, setStarted] = useState<string | null>(null);
   const handled = useRef<DispatchResult | undefined>(undefined);
   // The prompt is cleared, from state and storage, as it is sent, so a
@@ -96,7 +117,12 @@ export function DispatchBar({
     sent.current = prompt;
     setPrompt("");
     dispatcher.submit(
-      { prompt, cwd: cwd.trim(), ...(worktree ? { worktree: "on" } : {}) },
+      {
+        prompt,
+        cwd: cwd.trim(),
+        engine: chosen,
+        ...(worktree ? { worktree: "on" } : {}),
+      },
       { method: "post", action: "/dispatch" },
     );
   };
@@ -135,6 +161,20 @@ export function DispatchBar({
             ))}
           </datalist>
         </label>
+        {available.length > 1 && (
+          <select
+            value={chosen}
+            onChange={(e) => setEngine(e.target.value as Engine)}
+            title="The agent the new session runs"
+            className="rounded-lg border bg-background px-2 py-1.5 text-sm"
+          >
+            {available.map((e) => (
+              <option key={e} value={e}>
+                {ENGINE_LABELS[e]}
+              </option>
+            ))}
+          </select>
+        )}
         <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
           <Switch
             checked={worktree}

@@ -165,10 +165,10 @@ async function perform(sessionId: string, intent: string, form: FormData) {
       (c) => c.sessionId === sessionId,
     );
     const approval = card?.waiting?.approval;
-    if (!approval || approval.toolUseId !== form.get("toolUseId")) {
+    if (!card || !approval || approval.toolUseId !== form.get("toolUseId")) {
       throw new Error("That approval is no longer open");
     }
-    await answerApproval(sessionId, intent === "approve");
+    await answerApproval(sessionId, intent === "approve", card.engine);
   } else if (intent === "choose") {
     // answerDialog reads the screen again, so only the dialog still open
     // gets the key.
@@ -184,7 +184,7 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     const closed = await closedSession(sessionId);
     if (!closed)
       throw new Error("This chat is still live, or has no transcript");
-    await resume(sessionId, closed.cwd, closed.name);
+    await resume(sessionId, closed.cwd, closed.name, closed.engine);
   } else if (intent === "attach") {
     // Only a background session the board lists on its own; one with a
     // parent chat belongs to that chat.
@@ -202,6 +202,8 @@ async function perform(sessionId: string, intent: string, form: FormData) {
   } else if (intent === "fork") {
     const info = await sessionInfo(sessionId);
     if (!info) throw new Error("No transcript to fork from");
+    if (info.engine !== "claude")
+      throw new Error("Only Claude Code chats can be forked");
     await fork(sessionId, info.cwd, String(form.get("text") ?? ""));
   } else if (intent === "pin" || intent === "unpin") {
     setPinned(sessionId, intent === "pin");
@@ -209,7 +211,7 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     const name = sessionName(form);
     const closed = await closedSession(sessionId);
     if (closed) {
-      await renameClosed(sessionId, closed.transcript, name);
+      await renameClosed(sessionId, closed.transcript, name, closed.engine);
     } else {
       // A live chat renames itself, which takes effect even mid-turn. Not
       // while a dialog is open: the keys would land in it.

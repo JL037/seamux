@@ -1,6 +1,6 @@
 # seamux
 
-A board over every Claude Code session on this Mac, and the tools to drive and dispatch them. Each card is a live chat you can read and reply to. The columns show what each chat needs from you, and one bar starts new work as its own session.
+A board over every Claude Code and Codex session on this Mac, and the tools to drive and dispatch them. Each card is a live chat you can read and reply to. The columns show what each chat needs from you, and one bar starts new work as its own session.
 
 ![Board sketch](docs/board-sketch.png)
 
@@ -10,6 +10,7 @@ You need:
 
 - **macOS** with [cmux](https://cmux.dev). seamux drives sessions by typing into their cmux terminals, so a session outside cmux is shown but can't be driven.
 - **Claude Code**, with `claude` on your `PATH` (`~/.local/bin` is where the installer puts it).
+- **Codex**, optionally, installed with npm or pnpm (next to `node`) or Homebrew. Run `cmux hooks setup codex` once so cmux tracks its sessions.
 - **Node 24** or later, for `node:sqlite` and for running TypeScript directly.
 
 ```bash
@@ -32,6 +33,7 @@ Most settings live in the board. Click the cog beside the seamux name.
 
 **General**
 
+- **Default agent**: what the dispatch bar starts new sessions with, Claude Code or Codex. An agent that isn't installed is greyed out. The dispatch bar has a picker to change it for one dispatch. Fan-out workers always run Claude Code, since they rely on its hooks and the dispatch skill.
 - **Directories**: what the dispatch bar's directory picker offers. When this is empty, the picker lists directories with live sessions, past dispatches, and every git repo up to two levels under `~/code`.
 - **New worktree by default**: whether the dispatch bar's "new worktree" switch starts on.
 
@@ -73,9 +75,9 @@ Some choices are kept in the browser rather than the store: light or dark theme,
 
 The board is rebuilt every 3 seconds while the tab is visible, from:
 
-- `claude agents --json --all`, for which sessions exist and what state each is in.
-- `cmux sessions list`, which finds each session's terminal (its cmux surface) so seamux can type into it.
-- The transcripts in `~/.claude/projects/`, which hold each conversation, whether a turn is still running, open questions, subagents, and how full the context window is.
+- `claude agents --json --all`, for which Claude Code sessions exist and what state each is in.
+- `cmux sessions list`, which finds each session's terminal (its cmux surface) so seamux can type into it. It is also the only list of live Codex sessions, which is why seamux sees a Codex session only if it runs in cmux.
+- The transcripts in `~/.claude/projects/` and `~/.codex/sessions/`, which hold each conversation, whether a turn is still running, open questions, subagents, and how full the context window is. cmux's own idle/running state for Codex goes stale, so a Codex card takes it from the transcript, and reads an approval off the terminal.
 
 The store at `data/seamux.db` holds only what those don't record: subagent lifecycle from the hooks, what each dispatched session was started for, pins and their order, queued messages, settings, and fan-out records. Deleting `data/` loses those and never a session.
 
@@ -104,11 +106,12 @@ A card shows the last prompt and the end of the latest reply, with a reply box b
 - **Rename** by double-clicking a card's name. A chat that is open in cmux is sent `/rename`, which takes effect even mid-turn and retitles its tab, but not while a dialog is open in it. Its cmux workspace is renamed too when the chat is the workspace's only tab. A closed chat gets the lines `/rename` would have written appended to its transcript, and keeps the name when resumed.
 - **Close** sends the close-session macro, waits for that turn, then sends `/exit` and closes the cmux tab. If the turn ends on a question or leaves work behind, the chat stays open with a note. Closing it again exits without sending the macro. The conversation is kept, so **resume** reopens it in a new cmux workspace.
 - The **context bar** under each input fills from green to red as the context window fills, so you can wrap up or fork a chat before Claude Code compacts it.
+- **Codex cards** are marked Codex. They reply, stop, approve and deny, rename, close and resume like the rest. They have no subagents, background sessions or Fork, and a Codex dialog other than a command approval has to be answered in its terminal. A Codex chat renamed while closed gets a line in `~/.codex/session_index.jsonl`, where Codex's own `/rename` writes.
 - Links to files in a reply, and paths written bare like `./content/post.md` or `app/root.tsx:12`, open in seamux's own viewer, highlighted, with rendered markdown and HTML, and it reloads while the file changes. The header's list button numbers the lines of a raw file, and the choice is remembered. A link to `app/root.tsx:12` opens the file raw, scrolled to line 12 and marked. A path into a worktree that has since been removed opens the same file in the checkout it was made from.
 
 ### Dispatching
 
-The **dispatch bar** at the top starts a new top-level session in a chosen directory, optionally in a new worktree, with your prompt wrapped in the new-session macro. seamux makes that worktree itself, branched from what the directory has checked out, and puts it in the repo's main checkout even when the directory is itself a worktree, so worktrees never nest: under `.claude/worktrees/` if the repo has one, otherwise under `worktrees/`. A repo with neither `.claude/worktrees/` nor an ignored `worktrees/` has no worktree convention, so the session also gets the How to worktree macro. Starting new work in its own session is the point: that's cheaper than piling another goal into a chat that's already running.
+The **dispatch bar** at the top starts a new top-level session in a chosen directory, with the chosen agent, optionally in a new worktree, with your prompt wrapped in the new-session macro. seamux makes that worktree itself, branched from what the directory has checked out, and puts it in the repo's main checkout even when the directory is itself a worktree, so worktrees never nest: under `.claude/worktrees/` if the repo has one, otherwise under `worktrees/`. A repo with neither `.claude/worktrees/` nor an ignored `worktrees/` has no worktree convention, so the session also gets the How to worktree macro. Starting new work in its own session is the point: that's cheaper than piling another goal into a chat that's already running.
 
 A session can split a task into several at once with the `seamux-dispatch` skill, which calls `bin/seamux`:
 

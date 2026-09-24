@@ -77,18 +77,36 @@ If you have uncommitted work, say so and stop rather than discarding it.`,
 
 export const MAX_MACRO = 20_000;
 
+// The agents seamux can launch and drive, each through its cmux wrapper.
+// cmux integrates more (`cmux hooks setup` lists them), but only these have
+// been measured end to end; docs/findings.md has what each one does.
+export const ENGINES = ["claude", "codex"] as const;
+export type Engine = (typeof ENGINES)[number];
+
+export const ENGINE_LABELS: Record<Engine, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+};
+
+export function isEngine(name: string): name is Engine {
+  return (ENGINES as readonly string[]).includes(name);
+}
+
 export interface Config {
   // What the dispatch bar's directory picker offers. Empty means every
   // directory seamux can find.
   directories: string[];
   // The dispatch bar's "new worktree" switch starts on.
   worktreeByDefault: boolean;
+  // What the dispatch bar launches unless it is switched for one dispatch.
+  defaultEngine: Engine;
   macros: Record<MacroName, { text: string; custom: boolean }>;
 }
 
 export const DEFAULT_CONFIG: Config = {
   directories: [],
   worktreeByDefault: false,
+  defaultEngine: "claude",
   macros: Object.fromEntries(
     MACRO_NAMES.map((name) => [
       name,

@@ -1,5 +1,6 @@
 // Derives the board from the running tools. Nothing here writes anywhere:
-// session state comes from `claude agents --json`, and card content from
+// Claude Code's session state comes from `claude agents --json`, Codex's
+// from cmux and its transcripts (codex.server.ts), and card content from
 // the transcripts on disk. If this ever disagrees with the tools, the tools
 // win.
 
@@ -28,12 +29,31 @@ import {
   type Waiting,
 } from "./board";
 import {
+  indexCodexTranscripts,
+  codexNames,
+  isChatTranscript,
+  loadCodexMessages,
+  summarizeCodex,
+  type CodexSummary,
+  type CodexTranscript,
+} from "./codex.server";
+import type { Engine } from "./config";
+import {
   closingState,
-  listSurfaces,
+  listLive,
+  readCodexApproval,
   readDialog,
+  type LiveSession,
   type Surface,
 } from "./drive.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
+import {
+  clip,
+  endingQuestionIn,
+  excerpt,
+  readTail,
+  replyExcerpt,
+} from "./transcript.server";
 import {
   dispatchesFor,
   pinnedSessions,
@@ -45,10 +65,6 @@ import {
 
 const run = promisify(execFile);
 const CLAUDE_DIR = join(homedir(), ".claude");
-const TAIL_BYTES = 2 * 1024 * 1024;
-const EXCERPT_CHARS = 280;
-// A card renders its last reply as markdown, clipped to a few lines.
-const REPLY_EXCERPT_CHARS = 800;
 
 interface AgentRow {
   sessionId: string;
@@ -159,21 +175,6 @@ async function indexTranscripts(): Promise<Map<string, Transcript>> {
   return index;
 }
 
-async function readTail(path: string): Promise<string[]> {
-  const file = await open(path);
-  try {
-    const { size } = await file.stat();
-    const start = Math.max(0, size - TAIL_BYTES);
-    const buf = Buffer.alloc(size - start);
-    await file.read(buf, 0, buf.length, start);
-    const lines = buf.toString("utf8").split("\n");
-    // The first line is partial unless we read from the start.
-    return start > 0 ? lines.slice(1) : lines;
-  } finally {
-    await file.close();
-  }
-}
-
 function textOf(content: unknown): string | null {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return null;
@@ -181,29 +182,6 @@ function textOf(content: unknown): string | null {
     .filter((c) => c?.type === "text" && typeof c.text === "string")
     .map((c) => c.text as string);
   return parts.length ? parts.join("\n") : null;
-}
-
-function excerpt(text: string): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > EXCERPT_CHARS
-    ? `${flat.slice(0, EXCERPT_CHARS - 1)}…`
-    : flat;
-}
-
-// The end of a reply, where it says what was done or asks what's next, with
-// the line breaks its markdown is built on. It starts at a line, and reopens
-// a code block it starts inside.
-function replyExcerpt(text: string): string {
-  const kept = text
-    .replace(/[ \t]+$/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (kept.length <= REPLY_EXCERPT_CHARS) return kept;
-  let tail = kept.slice(-REPLY_EXCERPT_CHARS);
-  const line = tail.indexOf("\n");
-  if (line >= 0 && line < tail.length - 1) tail = tail.slice(line + 1);
-  const fences = (tail.match(/^\s*```/gm) ?? []).length;
-  return fences % 2 ? `\`\`\`\n${tail}` : tail;
 }
 
 // Harness-generated user turns (slash commands, caveats, reminders,
@@ -272,16 +250,11 @@ function pendingTool(o: any): TranscriptSummary["pendingTool"] {
     : null;
 }
 
-// The last paragraph of a reply that ended the turn on a question, so the
-// chat is waiting on Jakob although no dialog is open. Trailing markdown
-// such as bold or a closing quote does not hide the question mark.
+// A reply that ended the turn on a question.
 function endingQuestion(o: any): string | null {
   if (o.type !== "assistant" || o.message?.stop_reason !== "end_turn")
     return null;
-  const text = textOf(o.message?.content)?.trim();
-  if (!text || !/\?[*_`"')\]]*$/.test(text)) return null;
-  const last = text.split(/\n\s*\n/).at(-1) ?? text;
-  return excerpt(last.replace(/\*\*|__|`/g, ""));
+  return endingQuestionIn(textOf(o.message?.content));
 }
 
 // Transcripts record the model but not its window: a 1M session is logged
@@ -379,45 +352,79 @@ async function summarize(path: string): Promise<TranscriptSummary> {
   return summary;
 }
 
-const MESSAGE_CHARS = 20_000;
-
 // The visible conversation, oldest first: what Jakob and the agent said to
 // each other, without tool traffic, sidechains, or harness turns.
 // What resuming or renaming a closed chat needs, read server-side from its
 // transcript. null when the session is still live, since resuming would run
 // a second process on the same conversation.
-export async function closedSession(
-  sessionId: string,
-): Promise<{ cwd: string; name: string; transcript: string } | null> {
-  const [agents, transcripts] = await Promise.all([
+export async function closedSession(sessionId: string): Promise<{
+  cwd: string;
+  name: string;
+  transcript: string;
+  engine: Engine;
+} | null> {
+  const [agents, live] = await Promise.all([
     listAgents(),
-    indexTranscripts(),
+    listLive().catch(() => new Map<string, LiveSession>()),
   ]);
-  if (agents.some((a) => a.sessionId === sessionId)) return null;
-  const transcript = transcripts.get(sessionId);
-  const info = await infoFrom(sessionId, transcript);
-  return info && transcript ? { ...info, transcript: transcript.path } : null;
+  if (agents.some((a) => a.sessionId === sessionId) || live.has(sessionId))
+    return null;
+  const found = await findTranscript(sessionId);
+  if (!found) return null;
+  const info = await infoFrom(sessionId, found);
+  return info ? { ...info, transcript: found.path } : null;
 }
 
-// A session's directory and name, live or not, from its transcript.
+// A session's directory, name and engine, live or not, from its transcript.
 export async function sessionInfo(
   sessionId: string,
-): Promise<{ cwd: string; name: string } | null> {
-  return infoFrom(sessionId, (await indexTranscripts()).get(sessionId));
+): Promise<{ cwd: string; name: string; engine: Engine } | null> {
+  const found = await findTranscript(sessionId);
+  return found ? infoFrom(sessionId, found) : null;
 }
 
-async function infoFrom(sessionId: string, transcript: Transcript | undefined) {
-  if (!transcript) return null;
+// Claude Code's transcripts, then Codex's.
+async function findTranscript(
+  sessionId: string,
+): Promise<(Transcript & { engine: Engine }) | null> {
+  const claude = (await indexTranscripts()).get(sessionId);
+  if (claude) return { ...claude, engine: "claude" };
+  const codex = (await indexCodexTranscripts()).get(sessionId);
+  return codex ? { ...codex, engine: "codex" } : null;
+}
+
+async function infoFrom(
+  sessionId: string,
+  transcript: Transcript & { engine: Engine },
+) {
+  const fallback = sessionId.slice(0, 8);
+  if (transcript.engine === "codex") {
+    const [s, names] = await Promise.all([
+      summarizeCodex(transcript.path),
+      codexNames(),
+    ]);
+    return s.cwd
+      ? {
+          cwd: s.cwd,
+          name: names.get(sessionId) ?? fallback,
+          engine: "codex" as const,
+        }
+      : null;
+  }
   const s = await summarize(transcript.path);
-  return s.cwd ? { cwd: s.cwd, name: s.name ?? sessionId.slice(0, 8) } : null;
+  return s.cwd
+    ? { cwd: s.cwd, name: s.name ?? fallback, engine: "claude" as const }
+    : null;
 }
 
 export async function loadMessages(
   sessionId: string,
   limit = 60,
 ): Promise<ChatMessage[] | null> {
-  const transcript = (await indexTranscripts()).get(sessionId);
+  const transcript = await findTranscript(sessionId);
   if (!transcript) return null;
+  if (transcript.engine === "codex")
+    return (await loadCodexMessages(transcript.path)).slice(-limit);
 
   const messages: ChatMessage[] = [];
   for (const line of await readTail(transcript.path)) {
@@ -435,8 +442,7 @@ export async function loadMessages(
     if (o.type === "user" && SYNTHETIC_PROMPT.test(text)) continue;
     messages.push({
       role: o.type,
-      text:
-        text.length > MESSAGE_CHARS ? `${text.slice(0, MESSAGE_CHARS)}…` : text,
+      text: clip(text),
       at: o.timestamp ?? null,
     });
   }
@@ -574,20 +580,30 @@ function liveColumn(
 export async function loadBoard(now = Date.now()): Promise<Board> {
   const warnings: string[] = [];
 
-  const [agents, workspaces, transcripts] = await Promise.all([
-    listAgents(),
-    cmuxWorkspaces().catch((err) => {
-      warnings.push(`cmux unavailable, workspace refs missing: ${err.message}`);
-      return [] as Workspace[];
-    }),
-    indexTranscripts(),
-  ]);
-  const surfaces = await listSurfaces().catch((err) => {
+  const [agents, workspaces, transcripts, codexTranscripts, names] =
+    await Promise.all([
+      listAgents(),
+      cmuxWorkspaces().catch((err) => {
+        warnings.push(
+          `cmux unavailable, workspace refs missing: ${err.message}`,
+        );
+        return [] as Workspace[];
+      }),
+      indexTranscripts(),
+      indexCodexTranscripts(),
+      codexNames().catch(() => new Map<string, string>()),
+    ]);
+  const live = await listLive().catch((err) => {
     warnings.push(
       `cmux sessions unavailable, replies disabled: ${err.message}`,
     );
-    return new Map<string, Surface>();
+    return new Map<string, LiveSession>();
   });
+  const surfaces = new Map(
+    [...live]
+      .filter(([, l]) => l.engine === "claude")
+      .map(([id, l]) => [id, l.surface]),
+  );
 
   // A background session attached to a terminal has a live `status`; it is a
   // chat Jakob is in, so it gets a card like any interactive session.
@@ -649,6 +665,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       }
       return {
         sessionId: row.sessionId,
+        engine: "claude",
         name: row.name,
         cwd: row.cwd,
         column: liveColumn(busy, waiting != null, children, subagents),
@@ -674,6 +691,14 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     }),
   );
 
+  const codexLive = [...live].filter(([, l]) => l.engine === "codex");
+  const codexCards = await Promise.all(
+    codexLive.map(([sessionId, l]) =>
+      codexCard(sessionId, l, codexTranscripts.get(sessionId), names, workspaces),
+    ),
+  );
+  liveCards.push(...codexCards);
+
   // In the order Jakob dragged them into.
   let pinOrder: string[] = [];
   try {
@@ -686,16 +711,23 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   // DONE: a chat Jakob closed recently, or a pinned one closed at any time.
   // It is no longer live, is not a background job, and its transcript was
   // written within the window unless it is pinned.
-  const known = new Set(agents.map((a) => a.sessionId));
-  const recent = [...transcripts.entries()].filter(
-    ([id, t]) =>
-      !known.has(id) && (pinned.has(id) || now - t.mtimeMs < DONE_VISIBLE_MS),
-  );
+  const known = new Set([...agents.map((a) => a.sessionId), ...live.keys()]);
+  const shown = (id: string, t: { mtimeMs: number }) =>
+    !known.has(id) && (pinned.has(id) || now - t.mtimeMs < DONE_VISIBLE_MS);
+  const recent = [...transcripts.entries()].filter(([id, t]) => shown(id, t));
+  const recentCodex = (
+    await Promise.all(
+      [...codexTranscripts.entries()]
+        .filter(([id, t]) => shown(id, t))
+        .map(async (e) => ((await isChatTranscript(e[1].path)) ? e : null)),
+    )
+  ).filter((e) => e != null);
   const doneCards = await Promise.all(
     recent.map(async ([sessionId, t]): Promise<Card> => {
       const s = await summarize(t.path);
       return {
         sessionId,
+        engine: "claude",
         name: s.name ?? sessionId.slice(0, 8),
         cwd: s.cwd ?? "",
         column: "done",
@@ -721,7 +753,20 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     }),
   );
 
-  const cards = [...liveCards, ...doneCards];
+  const codexDone = await Promise.all(
+    recentCodex.map(async ([sessionId, t]) => {
+      const s = await summarizeCodex(t.path);
+      return {
+        ...codexFields(sessionId, s, t, names),
+        column: "done" as const,
+        branch: await branchOf(s.cwd),
+        turnRunning: false,
+        waiting: null,
+      };
+    }),
+  );
+
+  const cards = [...liveCards, ...doneCards, ...codexDone];
   for (const card of cards) card.pinned = pinned.has(card.sessionId);
   try {
     for (const row of queuedFor(cards.map((c) => c.sessionId))) {
@@ -787,6 +832,117 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     orphans,
     warnings,
   };
+}
+
+// What a Codex card shares whether it is live or closed.
+function codexFields(
+  sessionId: string,
+  s: CodexSummary,
+  t: CodexTranscript | undefined,
+  names: Map<string, string>,
+): Omit<Card, "column" | "branch" | "turnRunning" | "waiting"> {
+  return {
+    sessionId,
+    engine: "codex",
+    name: names.get(sessionId) ?? sessionId.slice(0, 8),
+    cwd: s.cwd ?? "",
+    lastActivityAt: t?.mtimeMs ?? null,
+    lastPrompt: s.lastPrompt,
+    lastReply: s.lastReply,
+    context: s.context,
+    terminalQueue: [],
+    boardQueue: [],
+    workspaceRef: null,
+    intent: null,
+    forkedFrom: null,
+    worker: null,
+    drivable: false,
+    pinned: false,
+    closing: null,
+    background: [],
+    subagents: [],
+  };
+}
+
+// A live Codex session. cmux's lifecycle for it goes stale, so the
+// transcript says whether a turn runs, and an approval, which nothing
+// records, is read off the screen while a tool call waits on its output.
+async function codexCard(
+  sessionId: string,
+  live: LiveSession,
+  indexed: CodexTranscript | undefined,
+  names: Map<string, string>,
+  workspaces: Workspace[],
+): Promise<Card> {
+  let t = indexed;
+  if (live.transcript && !t) {
+    try {
+      t = { path: live.transcript, mtimeMs: (await stat(live.transcript)).mtimeMs };
+    } catch {}
+  }
+  const s: CodexSummary = t
+    ? await summarizeCodex(t.path)
+    : {
+        cwd: live.cwd,
+        lastPrompt: null,
+        lastReply: null,
+        turnActive: null,
+        pendingTool: null,
+        question: null,
+        context: null,
+      };
+  s.cwd ??= live.cwd;
+  let waiting: Waiting | null = null;
+  if (s.question) {
+    waiting = {
+      reason: ASKED_IN_REPLY,
+      tool: null,
+      detail: s.question,
+      ask: null,
+      approval: null,
+      dialog: null,
+    };
+  } else if (s.pendingTool) {
+    const approval = await readCodexApproval(live.surface).catch(() => null);
+    if (approval) {
+      waiting = {
+        reason: "permission prompt",
+        tool: s.pendingTool.name,
+        detail: approval.detail,
+        ask: null,
+        approval: { toolUseId: s.pendingTool.id },
+        dialog: null,
+      };
+    }
+  }
+  const busy = s.turnActive === true;
+  return {
+    ...codexFields(sessionId, s, t, names),
+    column: waiting ? "waiting" : busy ? "working" : "idle",
+    branch: await branchOf(s.cwd),
+    workspaceRef:
+      workspaces.find((w) => w.id === live.surface.workspaceId)?.ref ?? null,
+    drivable: true,
+    turnRunning: busy,
+    waiting,
+    closing: closingState(sessionId),
+  };
+}
+
+// Codex's transcript records the branch only when the session starts, at
+// the head of a file only its tail is read from, so ask git.
+async function branchOf(cwd: string | null): Promise<string | null> {
+  if (!cwd) return null;
+  try {
+    const { stdout } = await run(
+      "git",
+      ["-C", cwd, "branch", "--show-current"],
+      { timeout: 5_000 },
+    );
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 // Two levels up is the repo root from app/lib/ and from build/server/.

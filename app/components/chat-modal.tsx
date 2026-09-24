@@ -52,7 +52,8 @@ export function ChatModal({
   queueing: boolean;
   pending: boolean;
   error: string | null;
-  onFork: () => void;
+  // null when the chat's agent can't fork: only Claude Code can.
+  onFork: (() => void) | null;
   forking: boolean;
 }) {
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
@@ -187,26 +188,34 @@ export function ChatModal({
                 }
               }}
               placeholder={
-                !card.drivable
-                  ? "Not running: write a tangent to fork from this chat"
-                  : queueing
-                    ? "Next message (⌘↵ to queue it for when this turn ends), or a tangent to fork"
-                    : "Next message (⌘↵ to send), or a tangent to fork"
+                !onFork
+                  ? card.drivable
+                    ? queueing
+                      ? "Next message (⌘↵ to queue it for when this turn ends)"
+                      : "Next message (⌘↵ to send)"
+                    : "Not running"
+                  : !card.drivable
+                    ? "Not running: write a tangent to fork from this chat"
+                    : queueing
+                      ? "Next message (⌘↵ to queue it for when this turn ends), or a tangent to fork"
+                      : "Next message (⌘↵ to send), or a tangent to fork"
               }
               className="max-h-[40dvh] min-h-32 resize-y overflow-y-auto rounded-b-none"
             />
             <ContextBar context={card.context} className="border-input" />
           </div>
           <div className="flex flex-col gap-2">
-            <Button
-              variant="outline"
-              disabled={forking || !draft.trim()}
-              onClick={onFork}
-              title="Start a new session with this chat's context and this message"
-            >
-              <GitFork />
-              {forking ? "Forking…" : "Fork"}
-            </Button>
+            {onFork && (
+              <Button
+                variant="outline"
+                disabled={forking || !draft.trim()}
+                onClick={onFork}
+                title="Start a new session with this chat's context and this message"
+              >
+                <GitFork />
+                {forking ? "Forking…" : "Fork"}
+              </Button>
+            )}
             <Button
               disabled={!canSend}
               onClick={send}

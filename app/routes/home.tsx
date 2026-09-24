@@ -72,7 +72,9 @@ import {
   type Column,
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
+import { ENGINE_LABELS } from "~/lib/config";
 import { configOrDefaults } from "~/lib/config.server";
+import { installedEngines } from "~/lib/drive.server";
 import { startQueue } from "~/lib/queue.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useSessionAction } from "~/lib/use-session-action";
@@ -91,7 +93,11 @@ export function meta({ matches }: Route.MetaArgs) {
 
 export async function loader() {
   startQueue();
-  return { board: await loadBoard(), config: configOrDefaults() };
+  return {
+    board: await loadBoard(),
+    config: configOrDefaults(),
+    engines: installedEngines(),
+  };
 }
 
 // Re-run the loader on an interval while the tab is visible.
@@ -325,8 +331,10 @@ function ChatInput({
         queueing={queueing}
         pending={pending}
         error={error ?? forker.error}
-        onFork={() =>
-          draft.trim() && forker.submit("fork", { text: takeDraft() })
+        onFork={
+          card.engine === "claude"
+            ? () => draft.trim() && forker.submit("fork", { text: takeDraft() })
+            : null
         }
         forking={forker.pending}
       />
@@ -685,6 +693,11 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             </span>
           )}
           <span>{ago(card.lastActivityAt, now)}</span>
+          {card.engine !== "claude" && (
+            <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+              {ENGINE_LABELS[card.engine]}
+            </Badge>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-xs">
@@ -979,7 +992,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   usePoll(POLL_MS);
   useFocusRestore();
   const board: Board = loaderData.board;
-  const { config } = loaderData;
+  const { config, engines } = loaderData;
   const now = board.generatedAt;
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
@@ -1021,7 +1034,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   {name}
                 </span>
               </span>
-              <ConfigDialog config={config} />
+              <ConfigDialog config={config} engines={engines} />
               <ThemeToggle />
             </span>
             <span className="flex min-w-0 items-center gap-3">
@@ -1055,6 +1068,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <DispatchBar
             directories={config.directories}
             worktreeByDefault={config.worktreeByDefault}
+            defaultEngine={config.defaultEngine}
+            engines={engines}
           />
           <DispatchStrip sets={board.dispatches} />
 

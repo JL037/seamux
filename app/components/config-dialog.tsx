@@ -14,9 +14,12 @@ import {
 import { Textarea } from "~/components/ui/textarea";
 import {
   DEFAULT_MACROS,
+  ENGINE_LABELS,
+  ENGINES,
   MACRO_NAMES,
   MACROS,
   type Config,
+  type Engine,
   type MacroName,
 } from "~/lib/config";
 import { cn } from "~/lib/utils";
@@ -45,7 +48,14 @@ function useConfigAction() {
 }
 
 // The cog in the header, and the dialog it opens: seamux's own settings.
-export function ConfigDialog({ config }: { config: Config }) {
+export function ConfigDialog({
+  config,
+  engines,
+}: {
+  config: Config;
+  // Which agents this Mac can launch.
+  engines: Record<Engine, boolean>;
+}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("general");
   return (
@@ -88,7 +98,7 @@ export function ConfigDialog({ config }: { config: Config }) {
           </div>
           <div className="-mx-4 overflow-y-auto px-4 pb-1">
             {tab === "general" ? (
-              <GeneralTab config={config} />
+              <GeneralTab config={config} engines={engines} />
             ) : (
               <MacrosTab config={config} />
             )}
@@ -99,9 +109,16 @@ export function ConfigDialog({ config }: { config: Config }) {
   );
 }
 
-function GeneralTab({ config }: { config: Config }) {
+function GeneralTab({
+  config,
+  engines,
+}: {
+  config: Config;
+  engines: Record<Engine, boolean>;
+}) {
   return (
     <div className="flex flex-col gap-6">
+      <EngineSetting current={config.defaultEngine} installed={engines} />
       <DirectoriesSetting directories={config.directories} />
       <WorktreeSetting on={config.worktreeByDefault} />
     </div>
@@ -195,6 +212,52 @@ function DirectoriesSetting({ directories }: { directories: string[] }) {
       {(adder.error ?? remover.error) && (
         <p className="text-destructive">{adder.error ?? remover.error}</p>
       )}
+    </section>
+  );
+}
+
+function EngineSetting({
+  current,
+  installed,
+}: {
+  current: Engine;
+  installed: Record<Engine, boolean>;
+}) {
+  const action = useConfigAction();
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-medium">Default agent</h3>
+      <p className="text-muted-foreground">
+        What the dispatch bar starts new sessions with, through cmux. You can
+        still pick another for a single dispatch. Fan-out workers always run
+        Claude Code.
+      </p>
+      <div role="radiogroup" className="flex flex-wrap gap-2">
+        {ENGINES.map((e) => (
+          <label
+            key={e}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-3 py-1.5",
+              installed[e]
+                ? "cursor-pointer"
+                : "cursor-not-allowed text-muted-foreground",
+              current === e && "border-foreground",
+            )}
+            title={installed[e] ? undefined : "Not found on this Mac"}
+          >
+            <input
+              type="radio"
+              name="default-engine"
+              checked={current === e}
+              disabled={!installed[e] || action.pending}
+              onChange={() => action.submit("default-engine", { engine: e })}
+            />
+            {ENGINE_LABELS[e]}
+            {!installed[e] && <span className="text-xs">not installed</span>}
+          </label>
+        ))}
+      </div>
+      {action.error && <p className="text-destructive">{action.error}</p>}
     </section>
   );
 }

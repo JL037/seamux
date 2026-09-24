@@ -17,7 +17,8 @@ import {
   type Dialog,
   type Question,
 } from "./board.ts";
-import { renderMacro, usesVariable } from "./config.ts";
+import { parseCodexApproval, renameCodexSession } from "./codex.server.ts";
+import { ENGINES, renderMacro, usesVariable, type Engine } from "./config.ts";
 import { configOrDefaults } from "./config.server.ts";
 import { projectOf } from "./project-colors.ts";
 import { recordDispatch } from "./store.server.ts";
@@ -47,25 +48,73 @@ interface CmuxSession {
   stored_pid_exists: boolean;
   surface_id: string;
   workspace_id: string;
+  cwd?: string;
+  transcript_path?: string | null;
 }
 
-// sessionId -> the cmux surface a live Claude session is running in.
-export async function listSurfaces(): Promise<Map<string, Surface>> {
+// A session running in a cmux surface, which the board can type into.
+export interface LiveSession {
+  engine: Engine;
+  surface: Surface;
+  cwd: string | null;
+  // Codex only: cmux records where its transcript is.
+  transcript: string | null;
+}
+
+// A resumed Codex session stays filed under its old surface until its next
+// prompt, so seamux remembers where it resumed it until cmux catches up.
+// Kept on globalThis, so a hot reload doesn't forget it.
+const codexResumed = ((globalThis as any).__seamuxCodexResumed ??= new Map<
+  string,
+  Surface
+>()) as Map<string, Surface>;
+
+// sessionId -> every live Claude or Codex session cmux hosts. Claude is live
+// while cmux marks it active for its surface. Codex never gets that mark,
+// so a Codex session is live while its process is.
+export async function listLive(): Promise<Map<string, LiveSession>> {
   const { stdout } = await run("cmux", ["sessions", "list", "--json"], {
     timeout: 10_000,
     maxBuffer: 16 * 1024 * 1024,
   });
   const { sessions } = JSON.parse(stdout) as { sessions: CmuxSession[] };
-  const map = new Map<string, Surface>();
+  const map = new Map<string, LiveSession>();
   for (const s of sessions) {
-    if (s.agent !== "claude" || !s.active_for_surface || !s.stored_pid_exists)
-      continue;
+    if (!s.stored_pid_exists) continue;
+    if (s.agent === "claude" && !s.active_for_surface) continue;
+    if (s.agent !== "claude" && s.agent !== "codex") continue;
     map.set(s.session_id, {
-      surfaceId: s.surface_id,
-      workspaceId: s.workspace_id,
+      engine: s.agent,
+      surface: { surfaceId: s.surface_id, workspaceId: s.workspace_id },
+      cwd: s.cwd ?? null,
+      transcript: s.transcript_path ?? null,
     });
   }
+  if (codexResumed.size > 0) {
+    const { workspaces } = await rpc<{ workspaces: { id: string }[] }>(
+      "workspace.list",
+      {},
+    );
+    for (const [id, surface] of codexResumed) {
+      const filed = sessions.find((s) => s.session_id === id);
+      if (filed?.surface_id === surface.surfaceId) {
+        codexResumed.delete(id);
+      } else if (!workspaces.some((w) => w.id === surface.workspaceId)) {
+        // Exited before its first prompt: its workspace closed with it.
+        codexResumed.delete(id);
+        map.delete(id);
+      } else {
+        map.set(id, { engine: "codex", surface, cwd: null, transcript: null });
+      }
+    }
+  }
   return map;
+}
+
+// sessionId -> the cmux surface a live session is running in.
+export async function listSurfaces(): Promise<Map<string, Surface>> {
+  const live = await listLive();
+  return new Map([...live].map(([id, l]) => [id, l.surface]));
 }
 
 // Always resolve the surface server-side, and always pass it explicitly:
@@ -140,10 +189,18 @@ export async function answerQuestion(
 // Answer an open permission prompt. Measured against Claude Code 2.1.281:
 // 1 is always "Yes", while "No" moves with the options offered, so a denial
 // is Esc, which refuses the call and ends the turn for Jakob to reply to.
-export async function answerApproval(sessionId: string, allow: boolean) {
+// Codex 0.156.1 approves on `y`, and Esc refuses there too.
+export async function answerApproval(
+  sessionId: string,
+  allow: boolean,
+  engine: Engine,
+) {
   const surface = await surfaceFor(sessionId);
   if (allow) {
-    await rpc("surface.send_text", { ...target(surface), text: "1" });
+    await rpc("surface.send_text", {
+      ...target(surface),
+      text: engine === "codex" ? "y" : "1",
+    });
   } else {
     await rpc("surface.send_key", { ...target(surface), key: "escape" });
   }
@@ -209,6 +266,10 @@ export async function readDialog(surface: Surface): Promise<Dialog | null> {
   return parseDialog(await readScreen(surface));
 }
 
+export async function readCodexApproval(surface: Surface) {
+  return parseCodexApproval(await readScreen(surface));
+}
+
 // Pick an option in the dialog read as `key`. Measured against Claude Code
 // 2.1.281 on /exit's "Background work is running": a digit picks and
 // confirms in one go. The screen is read again first, so a digit never
@@ -234,14 +295,15 @@ export async function answerDialog(
   });
 }
 
-// Close a chat the way Jakob would: /exit, then close the tab it ran in.
+// Close a chat the way Jakob would: /exit, which Claude Code and Codex both
+// take, then close the tab it ran in.
 // The conversation is kept, and the card moves to DONE, where it can be
 // resumed.
 //
-// A workspace seamux launched closes itself when Claude exits, but a chat
+// A workspace seamux launched closes itself when the agent exits, but a chat
 // Jakob started by hand leaves its shell behind, so the tab is closed once
-// Claude is gone. cmux refuses to close a workspace's last tab, so then the
-// workspace goes instead. A Claude that has not exited keeps its tab.
+// the agent is gone. cmux refuses to close a workspace's last tab, so then
+// the workspace goes instead. An agent that has not exited keeps its tab.
 const EXIT_WAIT_MS = 10_000;
 
 export async function closeChat(sessionId: string) {
@@ -252,24 +314,30 @@ export async function closeChat(sessionId: string) {
   const deadline = Date.now() + EXIT_WAIT_MS;
   while ((await listSurfaces()).has(sessionId)) {
     if (Date.now() > deadline)
-      throw new Error("Claude did not exit, so its tab was left open");
+      throw new Error("The chat did not exit, so its tab was left open");
     await pause(500);
   }
 
-  const { workspaces } = await rpc<{ workspaces: { id: string }[] }>(
-    "workspace.list",
-    {},
-  );
-  if (!workspaces.some((w) => w.id === surface.workspaceId)) return;
-  const { surfaces } = await rpc<{ surfaces: { id: string }[] }>(
-    "surface.list",
-    { workspace_id: surface.workspaceId },
-  );
-  if (!surfaces.some((s) => s.id === surface.surfaceId)) return;
-  if (surfaces.length > 1) {
-    await rpc("surface.close", target(surface));
-  } else {
-    await rpc("workspace.close", { workspace_id: surface.workspaceId });
+  // A workspace closing itself can go between any two of these calls: cmux
+  // reports a Codex session over before its process has quite exited.
+  try {
+    const { workspaces } = await rpc<{ workspaces: { id: string }[] }>(
+      "workspace.list",
+      {},
+    );
+    if (!workspaces.some((w) => w.id === surface.workspaceId)) return;
+    const { surfaces } = await rpc<{ surfaces: { id: string }[] }>(
+      "surface.list",
+      { workspace_id: surface.workspaceId },
+    );
+    if (!surfaces.some((s) => s.id === surface.surfaceId)) return;
+    if (surfaces.length > 1) {
+      await rpc("surface.close", target(surface));
+    } else {
+      await rpc("workspace.close", { workspace_id: surface.workspaceId });
+    }
+  } catch (err) {
+    if (!/not_found/.test((err as Error).message)) throw err;
   }
 }
 
@@ -464,65 +532,133 @@ async function finishClose(
 // Every session seamux starts runs in its own cmux workspace.
 //
 // cmux runs the command in a login shell that does not read ~/.zshrc, so
-// `claude` is not on its PATH. Launch through cmux's own wrapper, which
-// registers the session with cmux (so the board can find its surface), and
-// put Claude Code's install directory on PATH for the wrapper to find it.
-const CMUX_CLAUDE_WRAPPER =
-  "/Applications/cmux.app/Contents/Resources/bin/cmux-claude-wrapper";
+// neither `claude` nor `codex` is on its PATH. Launch through cmux's own
+// wrapper for the agent, which registers the session with cmux (so the
+// board can find its surface), and put the agents' install directories on
+// PATH for the wrapper to find them.
+const CMUX_BIN = "/Applications/cmux.app/Contents/Resources/bin";
 const CLAUDE_BIN_DIR = join(homedir(), ".local/bin");
 // Node, for bin/seamux and the subagent hook inside the new session: the
-// same one this server runs on.
+// same one this server runs on. A Codex installed with npm or pnpm is here.
 const NODE_BIN_DIR = dirname(process.execPath);
+const BIN_DIRS = [CLAUDE_BIN_DIR, NODE_BIN_DIR, "/opt/homebrew/bin"];
+
+interface EngineSpec {
+  bin: string;
+  wrapper: string;
+  // The dialog a new folder opens on, the keys that trust it, and what
+  // shows once the agent is up, past any dialog.
+  trust: { prompt: string; keys: string[] };
+  ready: string;
+}
+
+// Measured against Claude Code 2.1.281 and codex-cli 0.156.1.
+const ENGINE_SPECS: Record<Engine, EngineSpec> = {
+  claude: {
+    bin: "claude",
+    wrapper: join(CMUX_BIN, "cmux-claude-wrapper"),
+    // Its default is "No, exit", so Enter alone would refuse.
+    trust: { prompt: "Yes, I trust this folder", keys: ["down", "enter"] },
+    ready: "Claude Code v",
+  },
+  codex: {
+    bin: "codex",
+    wrapper: join(CMUX_BIN, "cmux-codex-wrapper"),
+    // Its default is "Trust and continue".
+    trust: { prompt: "Trust this folder?", keys: ["enter"] },
+    ready: "OpenAI Codex",
+  },
+};
+
+// Which agents this Mac can launch: cmux's wrapper for it, and the agent
+// itself where a launch would look.
+export function installedEngines(): Record<Engine, boolean> {
+  const dirs = [...BIN_DIRS, ...(process.env.PATH ?? "").split(":")].filter(
+    // cmux's per-terminal shims forward to its wrappers, not to an agent.
+    (d) => d && !d.includes("cmux-cli-shims"),
+  );
+  return Object.fromEntries(
+    ENGINES.map((e) => [
+      e,
+      existsSync(ENGINE_SPECS[e].wrapper) &&
+        dirs.some((d) => existsSync(join(d, ENGINE_SPECS[e].bin))),
+    ]),
+  ) as Record<Engine, boolean>;
+}
 
 const shq = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 async function launch(
+  engine: Engine,
   cwd: string,
   title: string,
   args: string[],
   focus: boolean,
-) {
+): Promise<Surface> {
+  const spec = ENGINE_SPECS[engine];
   const created = await rpc<{ surface_id: string; workspace_id: string }>(
     "workspace.create",
     {
       cwd,
       title,
       initial_command: [
-        `PATH=${shq(CLAUDE_BIN_DIR)}:${shq(NODE_BIN_DIR)}:"$PATH"`,
-        shq(CMUX_CLAUDE_WRAPPER),
+        `PATH=${BIN_DIRS.map(shq).join(":")}:"$PATH"`,
+        shq(spec.wrapper),
         ...args.map(shq),
       ].join(" "),
       focus,
     },
   );
-  // Not awaited: the dialog, if any, shows up seconds after the launch.
-  void acceptTrust({
+  const surface = {
     surfaceId: created.surface_id,
     workspaceId: created.workspace_id,
-  }).catch(() => {});
+  };
+  // Not awaited: the dialog, if any, shows up seconds after the launch.
+  void acceptTrust(surface, spec).catch(() => {});
+  return surface;
 }
 
-const TRUST_PROMPT = "Yes, I trust this folder";
 const TRUST_WAIT_MS = 30_000;
 
-// Claude Code stops on a new folder to ask whether Jakob trusts it, before
+// Both agents stop on a new folder to ask whether Jakob trusts it, before
 // the session exists anywhere the board could see it. Choosing the folder
-// to dispatch into is that decision, so seamux answers yes. Enter alone
-// would pick the default, "No, exit".
-async function acceptTrust(surface: Surface) {
+// to dispatch into is that decision, so seamux answers yes.
+async function acceptTrust(surface: Surface, spec: EngineSpec) {
   const deadline = Date.now() + TRUST_WAIT_MS;
   while (Date.now() < deadline) {
     await pause(1000);
     const screen = await readScreen(surface);
-    if (screen.includes(TRUST_PROMPT)) {
-      await rpc("surface.send_key", { ...target(surface), key: "down" });
-      await pause(KEY_GAP_MS);
-      await rpc("surface.send_key", { ...target(surface), key: "enter" });
+    if (screen.includes(spec.trust.prompt)) {
+      for (const [i, key] of spec.trust.keys.entries()) {
+        if (i > 0) await pause(KEY_GAP_MS);
+        await rpc("surface.send_key", { ...target(surface), key });
+      }
       return;
     }
-    // Claude Code is up, past any dialog.
-    if (screen.includes("Claude Code v")) return;
+    if (screen.includes(spec.ready)) return;
   }
+}
+
+// Codex picks its own session id, and cmux files it under the surface once
+// the first prompt goes in, a couple of seconds after the folder is
+// trusted. Dispatching waits for it, to know which card is the new one.
+const CODEX_FILED_MS = 60_000;
+
+async function codexSessionIn(surface: Surface): Promise<string> {
+  const deadline = Date.now() + CODEX_FILED_MS;
+  while (Date.now() < deadline) {
+    await pause(1000);
+    for (const [id, live] of await listLive()) {
+      if (
+        live.engine === "codex" &&
+        live.surface.surfaceId === surface.surfaceId
+      )
+        return id;
+    }
+  }
+  throw new Error(
+    "Codex started, but cmux never reported its session. Check its workspace",
+  );
 }
 
 // A new workspace starts Claude a few seconds after it is created, and
@@ -532,7 +668,12 @@ async function acceptTrust(surface: Surface) {
 const RESUME_GUARD_MS = 60_000;
 const resuming = new Map<string, number>();
 
-export async function resume(sessionId: string, cwd: string, title: string) {
+export async function resume(
+  sessionId: string,
+  cwd: string,
+  title: string,
+  engine: Engine,
+) {
   const now = Date.now();
   const started = resuming.get(sessionId);
   if (started && now - started < RESUME_GUARD_MS) {
@@ -544,14 +685,26 @@ export async function resume(sessionId: string, cwd: string, title: string) {
     if ((await listSurfaces()).has(sessionId)) {
       throw new Error("This chat is already open in cmux");
     }
-    await launch(cwd, title, ["--resume", sessionId], true);
+    if (engine === "codex") {
+      const surface = await launch(
+        "codex",
+        cwd,
+        title,
+        ["resume", sessionId],
+        true,
+      );
+      codexResumed.set(sessionId, surface);
+    } else {
+      await launch("claude", cwd, title, ["--resume", sessionId], true);
+    }
   } catch (err) {
     resuming.delete(sessionId);
     throw err;
   }
 }
 
-// An open chat renames itself with `/rename`, which also retitles its tab.
+// An open chat renames itself with `/rename`, which Codex takes too, and
+// which also retitles its tab.
 // cmux's workspace title is its own, so it is set too, but only when the
 // chat is the workspace's one tab: otherwise the title covers other chats.
 // The rename has happened by then, so a failure there is not reported.
@@ -578,14 +731,22 @@ export async function renameLive(sessionId: string, name: string) {
 // Appending adds to the transcript and changes nothing already in it. Not
 // while a resume is starting, since the new process would write its old
 // name back.
+//
+// Codex keeps names apart from transcripts, in its session index, where
+// `/rename` adds a line and the last one wins; seamux adds one the same way.
 export async function renameClosed(
   sessionId: string,
   transcript: string,
   name: string,
+  engine: Engine,
 ) {
   const started = resuming.get(sessionId);
   if (started && Date.now() - started < RESUME_GUARD_MS) {
     throw new Error("This chat is resuming; rename it once it is open");
+  }
+  if (engine === "codex") {
+    await renameCodexSession(sessionId, name);
+    return;
   }
   await appendFile(
     transcript,
@@ -615,7 +776,7 @@ export async function attach(
   }
   resuming.set(sessionId, now);
   try {
-    await launch(cwd, title, ["attach", shortId], true);
+    await launch("claude", cwd, title, ["attach", shortId], true);
   } catch (err) {
     resuming.delete(sessionId);
     throw err;
@@ -648,6 +809,7 @@ export async function askToDelete(orphan: {
   }
   return dispatch({
     cwd,
+    engine: "claude",
     name: `rm-${orphan.id}`,
     prompt: [
       `Delete the background session ${orphan.id} (${orphan.name}, in ${orphan.cwd}).`,
@@ -764,6 +926,8 @@ const asPrompt = (p: string) => (p.startsWith("-") ? `Task: ${p}` : p);
 
 export interface DispatchInput {
   cwd: string;
+  // Claude Code unless given: fan-out workers rely on its hooks and skill.
+  engine?: Engine;
   prompt: string;
   name?: string;
   worktree?: string | null;
@@ -782,25 +946,41 @@ export async function dispatch(input: DispatchInput): Promise<string> {
     throw new Error("Worktree names are lowercase letters, digits, - . _ /");
   }
 
-  const sessionId = randomUUID();
+  const engine = input.engine ?? "claude";
   const wt = worktree ? await createWorktree(cwd, worktree) : null;
   const where = wt?.path ?? cwd;
   // The session gets the prompt inside the new-session macro; the card
   // shows what was typed.
-  const first = firstPrompt(prompt, where, wt);
-  const args = ["--session-id", sessionId, "--name", name, asPrompt(first)];
+  const first = asPrompt(firstPrompt(prompt, where, wt));
+  const record = (sessionId: string) =>
+    recordDispatch({
+      session_id: sessionId,
+      cwd: where,
+      prompt,
+      name,
+      worktree,
+      forked_from: null,
+      dispatch_id: input.dispatchId ?? null,
+      worker: input.worker ?? null,
+    });
 
-  recordDispatch({
-    session_id: sessionId,
-    cwd: where,
-    prompt,
+  // Codex has no --session-id or --name: it picks its id, and titles the
+  // session itself after the first turn.
+  if (engine === "codex") {
+    const surface = await launch("codex", where, name, [first], false);
+    const sessionId = await codexSessionIn(surface);
+    record(sessionId);
+    return sessionId;
+  }
+  const sessionId = randomUUID();
+  record(sessionId);
+  await launch(
+    "claude",
+    where,
     name,
-    worktree,
-    forked_from: null,
-    dispatch_id: input.dispatchId ?? null,
-    worker: input.worker ?? null,
-  });
-  await launch(where, name, args, false);
+    ["--session-id", sessionId, "--name", name, first],
+    false,
+  );
   return sessionId;
 }
 
@@ -826,6 +1006,7 @@ export async function fork(
     worker: null,
   });
   await launch(
+    "claude",
     cwd,
     name,
     [

@@ -1,5 +1,7 @@
 // Shared board types. Safe to import from client and server.
 
+import type { Engine } from "./config.ts";
+
 export const COLUMNS = ["idle", "waiting", "working", "done"] as const;
 export type Column = (typeof COLUMNS)[number];
 
@@ -84,6 +86,9 @@ export interface ContextUsage {
 
 export interface Card {
   sessionId: string;
+  // The agent running the chat. Only Claude Code has subagents, background
+  // sessions, questions the board can answer, and forks.
+  engine: Engine;
   name: string;
   cwd: string;
   column: Column;

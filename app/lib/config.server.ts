@@ -3,6 +3,7 @@
 
 import {
   DEFAULT_CONFIG,
+  isEngine,
   DEFAULT_MACROS,
   MACRO_NAMES,
   MACROS,
@@ -52,6 +53,10 @@ export function readConfig(): Config {
       "worktreeByDefault",
       DEFAULT_CONFIG.worktreeByDefault,
     ),
+    defaultEngine: (() => {
+      const engine = get<string>("defaultEngine", DEFAULT_CONFIG.defaultEngine);
+      return isEngine(engine) ? engine : DEFAULT_CONFIG.defaultEngine;
+    })(),
     macros,
   };
 }
@@ -81,6 +86,14 @@ export function setWorktreeByDefault(on: boolean) {
   put(
     "worktreeByDefault",
     on === DEFAULT_CONFIG.worktreeByDefault ? undefined : on,
+  );
+}
+
+export function setDefaultEngine(engine: string) {
+  if (!isEngine(engine)) throw new Error("Unknown engine");
+  put(
+    "defaultEngine",
+    engine === DEFAULT_CONFIG.defaultEngine ? undefined : engine,
   );
 }
 
