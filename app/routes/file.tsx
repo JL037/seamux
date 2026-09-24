@@ -12,6 +12,10 @@ import { File, Folder } from "lucide-react";
 import type { Route } from "./+types/file";
 import { Code } from "~/components/code";
 import { Markdown } from "~/components/markdown";
+import {
+  productNameFromMatches,
+  useProductName,
+} from "~/components/product-name";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
 import {
@@ -24,9 +28,10 @@ import { loadFile, SANDBOX_BASE } from "~/lib/files.server";
 import { assertLocalRead } from "~/lib/guard.server";
 import { cn } from "~/lib/utils";
 
-export function meta({ data }: Route.MetaArgs) {
+export function meta({ data, matches }: Route.MetaArgs) {
+  const product = productNameFromMatches(matches);
   const name = data?.file.path.split("/").pop() || data?.file.path;
-  return [{ title: name ? `${name} · seamux` : "seamux" }];
+  return [{ title: name ? `${name} · ${product}` : product }];
 }
 
 // A file a reply linked to: `/file?path=/abs/path&view=raw|rendered`.
@@ -83,6 +88,7 @@ function formatSize(bytes: number): string {
 }
 
 export default function FileViewer({ loaderData }: Route.ComponentProps) {
+  const product = useProductName();
   const { file, sandboxBase } = loaderData;
   useWatch(file.path, file.mtime);
   const [params, setParams] = useSearchParams();
@@ -97,7 +103,7 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
         <Link to="/" className="flex shrink-0 items-center gap-2" title="Board">
           <SeamuxMark size={24} />
           <span className="font-bold tracking-tight text-foreground">
-            seamux
+            {product}
           </span>
         </Link>
         <span

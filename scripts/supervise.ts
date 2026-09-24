@@ -10,7 +10,7 @@
 // - on start, stops a dev server orphaned by a supervisor that was killed;
 // - refuses to run twice.
 //
-// The port comes from SEAMUX_PORT, else .seamux.json, else 5173, and is
+// The port comes from SEAMUX_PORT, else .seamux.json, else 54321, and is
 // written back to .seamux.json so `npm run land` checks the right board.
 //
 // Portable to Linux and WSL: Node APIs, POSIX process groups, and polling
@@ -27,13 +27,15 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { basicAuthHeader, readCredentials } from "../app/lib/credentials.ts";
+
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DATA = join(REPO, "data");
 export const RESTART_FILE = join(DATA, "board.restart");
 const SUPERVISOR_PID = join(DATA, "serve.pid");
 const CHILD_PID = join(DATA, "board.pid");
 
-const DEFAULT_PORT = 5173;
+const DEFAULT_PORT = 54321;
 const HEALTHY_MS = 60_000; // up this long resets the backoff
 const MAX_BACKOFF_MS = 30_000;
 const STARTUP_GRACE_MS = 30_000; // no health checks while it boots
@@ -78,6 +80,14 @@ function writeRunConfig(config: RunConfig) {
 
 export function boardUrl(repo = REPO): string {
   return `http://127.0.0.1:${readRunConfig(repo).port}/`;
+}
+
+// Headers that get a request past the board's HTTP Basic check, read from the
+// same place the board reads them. Without them a secured board answers 401,
+// and a health check would take that for a board that is down.
+export function boardHeaders(repo = REPO): Record<string, string> {
+  const credentials = readCredentials(repo);
+  return credentials ? { authorization: basicAuthHeader(credentials) } : {};
 }
 
 // The pid of the dev server the supervisor serving `repo` last started.
@@ -138,6 +148,7 @@ async function stopGroup(pid: number) {
 async function probe(url: string): Promise<boolean> {
   try {
     const res = await fetch(url, {
+      headers: boardHeaders(),
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     return res.ok;

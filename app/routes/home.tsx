@@ -33,6 +33,10 @@ import { ContextBar } from "~/components/context-bar";
 import { DispatchBar } from "~/components/dispatch-bar";
 import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { Markdown } from "~/components/markdown";
+import {
+  productNameFromMatches,
+  useProductName,
+} from "~/components/product-name";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
 import { ThemeToggle } from "~/components/theme-toggle";
@@ -81,8 +85,8 @@ import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
 
-export function meta({}: Route.MetaArgs) {
-  return [{ title: "seamux" }];
+export function meta({ matches }: Route.MetaArgs) {
+  return [{ title: productNameFromMatches(matches) }];
 }
 
 export async function loader() {
@@ -869,6 +873,7 @@ function BoardColumn({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+  const name = useProductName();
   usePoll(POLL_MS);
   useFocusRestore();
   const board: Board = loaderData.board;
@@ -911,7 +916,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <span className="flex items-center gap-2.5">
                 <SeamuxMark size={32} />
                 <span className="text-xl font-bold tracking-tight text-foreground">
-                  seamux
+                  {name}
                 </span>
               </span>
               <ConfigDialog config={config} />

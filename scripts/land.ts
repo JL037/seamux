@@ -28,7 +28,12 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { boardPid, boardUrl, requestRestart } from "./supervise.ts";
+import {
+  boardHeaders,
+  boardPid,
+  boardUrl,
+  requestRestart,
+} from "./supervise.ts";
 
 const LOCK_WAIT_MS = 20 * 60 * 1000;
 
@@ -135,7 +140,7 @@ async function restarted(before: string | null): Promise<void> {
 async function boardAnswers(): Promise<boolean> {
   for (let i = 0; i < 60; i++) {
     try {
-      if ((await fetch(BOARD)).ok) return true;
+      if ((await fetch(BOARD, { headers: boardHeaders(REPO) })).ok) return true;
     } catch {}
     await sleep(1000);
   }

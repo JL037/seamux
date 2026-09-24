@@ -14,7 +14,7 @@ You need:
 
 ```bash
 npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
-npm run seamux   # run the board on http://127.0.0.1:5173 and keep it running
+npm run seamux   # run the board on http://127.0.0.1:54321 and keep it running
 ```
 
 The same command is `bin/seamux`, also exposed as the package's `seamux` bin: run `npm link` once and `seamux` starts the board from anywhere. With a command, such as `seamux list`, it's the fan-out CLI described below.
@@ -47,16 +47,19 @@ Most settings live in the board. Click the cog beside the seamux name.
 **`.seamux.json`**, at the root of the checkout and gitignored, is how that checkout runs the board. `npm run seamux` writes it, and `npm run land` reads it to find the board:
 
 ```json
-{ "port": 5173 }
+{ "port": 54321 }
 ```
 
 Edit the port there, or start `npm run seamux` once with `SEAMUX_PORT` set, and it's kept for later runs.
+
+**Password.** Put `SEAMUX_USER` and `SEAMUX_PASS` in a `.env` at the root of the checkout (gitignored), or in the environment, and the board asks for them with HTTP Basic auth before serving anything. It reads them on every request, so a change takes effect without a restart. With either one unset the board still runs, but its background turns red and it calls itself "seamux (unsecured)".
 
 Environment variables, all optional:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SEAMUX_PORT` | from `.seamux.json` | Port for `npm run seamux`, saved to `.seamux.json` |
+| `SEAMUX_USER`, `SEAMUX_PASS` | unset | HTTP Basic credentials for the board, also read from `.env`. Unset leaves the board unsecured |
 | `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
 | `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |
 | `SEAMUX_POLL` | unset | `1` makes hot reload poll for file changes. It already polls on WSL's `/mnt/` drives |

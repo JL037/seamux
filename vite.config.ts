@@ -22,7 +22,7 @@ export default defineConfig({
   // Localhost only: this server spawns processes and reads every transcript.
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    port: 54321,
     strictPort: true,
     watch: needsPolling() ? { usePolling: true, interval: 500 } : undefined,
   },
