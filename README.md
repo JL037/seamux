@@ -46,7 +46,7 @@ npm run serve    # run the board on http://127.0.0.1:5173 and keep it running
 
 Run `npm run serve` in its own cmux workspace. It serves the dev server from this checkout, so a change landed on `main` goes live by hot reload. It restarts the server if it exits, if it stops answering, or when `npm run land` asks after reinstalling dependencies. It also stops a server orphaned by an earlier supervisor that was killed, and refuses to run twice. The supervisor is plain Node with no macOS dependency, so it runs under Linux and WSL too, polling for file changes on WSL's `/mnt/` drives.
 
-A landing can reload the board mid-sentence, so unsent text survives it: the dispatch prompt, its directory and worktree choice, and each card's reply draft are kept in the tab's `sessionStorage`. Sending clears a draft at once, so a reload while it is in flight can't bring it back, and a failed send puts it back. So is which of those boxes had focus, and the reload puts the cursor back in it, after the text. Sending clears both.
+A landing can reload the board mid-sentence, so unsent text survives it: the dispatch prompt, its directory and worktree choice, and each card's reply draft are kept in the tab's `sessionStorage`, and so is which of those boxes had focus: the reload puts the cursor back in it, after the text. Sending clears the draft and the focus at once, so a reload while the send is in flight can't bring them back, and a failed send puts the draft back.
 
 To change seemux, work in a worktree on your own branch, commit, and run `npm run land` there. `CLAUDE.md` has the details, for people and agents alike.
 
