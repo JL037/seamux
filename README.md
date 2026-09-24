@@ -206,6 +206,7 @@ Controls differ by column, and the sketch is specific:
 - **WORKING** cards carry a **stop** button.
 - **DONE** cards carry a **play / resume** button.
 - An expanded card shows the transcript with an **input** field beneath it.
+- Every card's path carries a **coloured square**, hashed from the full cwd, so it is the same on every poll and reload and cards from one directory can be picked out at a glance.
 
 **DISPATCH NEW WORK is the primary action**, a full-width bar above the columns with a **directory picker** beside it. Putting it there fixes the cost asymmetry, since the most prominent control on the screen starts a new session in a chosen directory, and spawning one becomes visibly cheaper than cramming another goal into an existing session.
 

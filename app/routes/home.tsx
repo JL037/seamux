@@ -88,6 +88,28 @@ function shortPath(cwd: string): string {
   return cwd.replace(/^\/Users\/[^/]+/, "~");
 }
 
+// A colour for the full project path, the same on every poll and every
+// reload, so cards from one directory can be spotted at a glance. FNV-1a
+// picks the hue; fixed lightness and chroma keep every hue equally legible.
+function pathColor(cwd: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < cwd.length; i++) {
+    h ^= cwd.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `oklch(0.7 0.15 ${(h >>> 0) % 360})`;
+}
+
+function PathSwatch({ cwd }: { cwd: string }) {
+  return (
+    <span
+      aria-hidden
+      className="size-2.5 shrink-0 rounded-[2px]"
+      style={{ backgroundColor: pathColor(cwd) }}
+    />
+  );
+}
+
 // Unsent drafts by session, held above the columns so a draft survives its
 // card moving between them.
 const DraftsContext = createContext<{
@@ -223,7 +245,10 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           <CardControl card={card} />
         </CardTitle>
         <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <span className="truncate font-mono">{shortPath(card.cwd)}</span>
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <PathSwatch cwd={card.cwd} />
+            <span className="truncate font-mono">{shortPath(card.cwd)}</span>
+          </span>
           {card.branch && (
             <span className="inline-flex items-center gap-1 font-mono">
               <GitBranch className="size-3" />
@@ -374,6 +399,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   variant="outline"
                   title={b.needs ?? undefined}
                 >
+                  <PathSwatch cwd={b.cwd} />
                   {b.name} · {b.state} · {shortPath(b.cwd)}
                 </Badge>
               ))}
