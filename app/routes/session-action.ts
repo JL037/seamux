@@ -36,6 +36,8 @@ const INTENTS = new Set([
   "pin",
   "unpin",
   "answer",
+  "approve",
+  "deny",
   "queue",
   "queue-edit",
   "queue-send",
