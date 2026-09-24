@@ -95,6 +95,7 @@ export function ChatModal({
   const messages = fetcher.data?.messages;
   const count = messages?.length ?? 0;
   useEffect(() => {
+    if (!open) return;
     if (messages && !restored.current) {
       restored.current = true;
       const key = scrollKey(card.sessionId);
@@ -109,9 +110,10 @@ export function ChatModal({
       }
     }
     endRef.current?.scrollIntoView({ block: "end" });
-    // Only a change in how many messages there are should move the view.
+    // Opening the chat, or a change in how many messages there are, moves the
+    // view to the end; nothing else should.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [count]);
+  }, [open, count]);
 
   // Sending returns to the board; a failed send shows on the card, with the
   // draft put back.
