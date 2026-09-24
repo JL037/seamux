@@ -481,6 +481,41 @@ export async function attach(
   }
 }
 
+// Deleting a background session no open chat owns. seemux never deletes, so
+// it dispatches a chat that checks the session and runs `claude rm` itself,
+// stopping to ask before discarding unpushed work. The chat starts in the
+// session's main checkout, since `claude rm` may remove the worktree the
+// session ran in.
+export async function askToDelete(orphan: {
+  id: string;
+  name: string;
+  cwd: string;
+}): Promise<string> {
+  let cwd = orphan.cwd;
+  try {
+    const { stdout } = await run("git", [
+      "-C",
+      cwd,
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir",
+    ]);
+    cwd = dirname(stdout.trim());
+  } catch {
+    // Not a repository, or already gone: the nearest directory that exists.
+    while (!existsSync(cwd) && cwd !== dirname(cwd)) cwd = dirname(cwd);
+  }
+  return dispatch({
+    cwd,
+    name: `rm-${orphan.id}`,
+    prompt: [
+      `Delete the background session ${orphan.id} (${orphan.name}, in ${orphan.cwd}).`,
+      `Check it with \`claude agents --json --all\`, then run \`claude rm ${orphan.id}\`.`,
+      "If it reports unpushed commits or uncommitted changes, stop and tell me instead of discarding them.",
+    ].join(" "),
+  });
+}
+
 // Only real directories inside the home folder can be dispatched into.
 export async function checkDirectory(path: string): Promise<string> {
   if (!path.startsWith("/")) throw new Error("Pick an absolute directory");

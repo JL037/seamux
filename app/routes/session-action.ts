@@ -5,6 +5,7 @@ import { closable, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
   answerQuestion,
+  askToDelete,
   attach,
   cancelClose,
   closeSession,
@@ -21,6 +22,7 @@ const INTENTS = new Set([
   "interrupt",
   "resume",
   "attach",
+  "delete",
   "fork",
   "close",
   "pin",
@@ -112,6 +114,12 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     );
     if (!orphan) throw new Error("No longer a background session on its own");
     await attach(sessionId, orphan.id, orphan.cwd, orphan.name);
+  } else if (intent === "delete") {
+    const orphan = (await loadBoard()).orphans.find(
+      (o) => o.sessionId === sessionId,
+    );
+    if (!orphan) throw new Error("No longer a background session on its own");
+    await askToDelete(orphan);
   } else if (intent === "fork") {
     const info = await sessionInfo(sessionId);
     if (!info) throw new Error("No transcript to fork from");

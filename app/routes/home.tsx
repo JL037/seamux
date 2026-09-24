@@ -18,6 +18,7 @@ import {
   Play,
   SendHorizontal,
   Square,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -351,57 +352,60 @@ function CardControl({ card }: { card: BoardCard }) {
   return null;
 }
 
-// A background session no open chat owns. Play brings it back with
-// `claude attach`; X explains how to delete it, since seemux never does.
+// A background session no open chat owns. The pill opens a dialog that
+// resumes it with `claude attach`, or deletes it by dispatching a chat that
+// runs `claude rm`, since seemux never deletes.
 function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
-  const { submit, pending, error } = useSessionAction(orphan.sessionId);
-  const [removing, setRemoving] = useState(false);
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  const { submit, pending, error } = useSessionAction(orphan.sessionId, close);
   return (
-    <Badge
-      variant="outline"
-      className="h-6 pr-0.5"
-      title={orphan.needs ?? undefined}
-    >
-      <PathSwatch cwd={orphan.cwd} />
-      {orphan.name} · {orphan.state} · {shortPath(orphan.cwd)}
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        disabled={pending}
-        title={error ?? "Resume in a new cmux workspace (claude attach)"}
-        onClick={() => submit("attach")}
+    <>
+      <Badge
+        variant="outline"
+        className="h-6 cursor-pointer hover:bg-muted"
+        title={orphan.needs ?? "Resume or delete"}
+        render={<button type="button" onClick={() => setOpen(true)} />}
       >
-        <Play />
-      </Button>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        title="How to delete this session"
-        onClick={() => setRemoving(true)}
-      >
-        <X />
-      </Button>
-      <Dialog open={removing} onOpenChange={setRemoving}>
+        <PathSwatch cwd={orphan.cwd} />
+        {orphan.name} · {orphan.state} · {shortPath(orphan.cwd)}
+      </Badge>
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {orphan.name}</DialogTitle>
+            <DialogTitle>{orphan.name}</DialogTitle>
             <DialogDescription>
-              seemux never deletes sessions. To remove this one for good, run
-              this in any Claude Code chat, or without the <code>!</code> in a
-              terminal:
+              A background session, {orphan.state}, in{" "}
+              {shortPath(orphan.cwd)}. No open chat owns it.
             </DialogDescription>
           </DialogHeader>
           <pre className="rounded-md bg-muted px-3 py-2 font-mono text-sm select-all">
-            ! claude rm {orphan.id}
+            claude rm {orphan.id}
           </pre>
           <p className="text-sm text-muted-foreground">
-            This deletes the session, and its worktree when that is safe. To
-            keep it, resume it with play instead.
+            Resume brings it back in a new cmux workspace with its
+            conversation. Delete starts a chat that runs this command, which
+            removes the session and its worktree, and stops to ask before
+            discarding unpushed work. seemux never deletes on its own.
           </p>
-          <DialogFooter showCloseButton />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => submit("delete")}
+            >
+              <Trash2 />
+              Delete this session
+            </Button>
+            <Button disabled={pending} onClick={() => submit("attach")}>
+              <Play />
+              Resume this session
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Badge>
+    </>
   );
 }
 

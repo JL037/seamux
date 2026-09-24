@@ -8,6 +8,7 @@ type Intent =
   | "interrupt"
   | "resume"
   | "attach"
+  | "delete"
   | "fork"
   | "close"
   | "pin"
