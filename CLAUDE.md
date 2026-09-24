@@ -6,13 +6,13 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 
 - **seamux never destroys.** The tool has no `claude rm`, no `git worktree remove`, nothing that deletes a session, worktree or transcript. When something should be removed, the session that owns it does it: seamux sends it a prompt asking.
 - **Localhost only.** The server binds `127.0.0.1`, and every action goes through `assertFromBoard` in `app/lib/guard.server.ts`.
-- **Derive, don't store.** Session state comes from `claude agents --json`, cmux, and the transcripts on every poll. The store (`app/lib/store.server.ts`) holds only what nothing else records: subagent lifecycle, dispatch intent, pins, and settings.
+- **Derive, don't store.** Session state comes from `claude agents --json`, cmux, and the transcripts on every poll. The store (`app/lib/store.server.ts`) holds only what nothing else records: subagent lifecycle, dispatch intent, pins, queued messages, and settings.
 - **Always pass a surface to cmux.** cmux RPCs default to the caller's own surface, which is whatever terminal seamux runs in.
 - **Verify tool behaviour by running it.** Several documented cmux and Claude Code behaviours turned out wrong; the brief's "Findings while building" lists them.
 
 ## Layout
 
-- `app/lib/board.server.ts`: derives the board. `drive.server.ts`: every write verb, through cmux. `protocol.server.ts`: fan-out manifests and markers. `config.ts` / `config.server.ts`: settings and the system macros' defaults.
+- `app/lib/board.server.ts`: derives the board. `drive.server.ts`: every write verb, through cmux. `queue.server.ts`: sends queued messages once their chat is idle. `protocol.server.ts`: fan-out manifests and markers. `config.ts` / `config.server.ts`: settings and the system macros' defaults.
 - `hooks/subagent-event.ts` and `scripts/seamux.ts` run under plain Node with type stripping, and so does everything they import: relative imports with `.ts` extensions, `import type`, no enums.
 - `skills/seamux-dispatch/SKILL.md` is a template; `npm run skills:install` renders it into `~/.claude/skills`.
 

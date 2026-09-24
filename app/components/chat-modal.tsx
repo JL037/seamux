@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { GitFork, SendHorizontal } from "lucide-react";
+import { Check, GitFork, Pencil, SendHorizontal, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -14,7 +14,8 @@ import { ContextBar } from "~/components/context-bar";
 import { Markdown } from "~/components/markdown";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
-import type { Card, ChatMessage } from "~/lib/board";
+import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
+import { useSessionAction } from "~/lib/use-session-action";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -35,6 +36,7 @@ export function ChatModal({
   onDraftChange,
   onSend,
   canSend,
+  queueing,
   pending,
   error,
   onFork,
@@ -47,6 +49,7 @@ export function ChatModal({
   onDraftChange: (draft: string) => void;
   onSend: () => void;
   canSend: boolean;
+  queueing: boolean;
   pending: boolean;
   error: string | null;
   onFork: () => void;
@@ -167,6 +170,8 @@ export function ChatModal({
           )}
         </div>
 
+        <QueuedList card={card} />
+
         <div className="flex items-end gap-2">
           <div className="flex min-w-0 flex-1 flex-col">
             <Textarea
@@ -181,9 +186,11 @@ export function ChatModal({
                 }
               }}
               placeholder={
-                card.drivable
-                  ? "Next message (⌘↵ to send), or a tangent to fork"
-                  : "Not running: write a tangent to fork from this chat"
+                !card.drivable
+                  ? "Not running: write a tangent to fork from this chat"
+                  : queueing
+                    ? "Next message (⌘↵ to queue it for when this turn ends), or a tangent to fork"
+                    : "Next message (⌘↵ to send), or a tangent to fork"
               }
               className="min-h-32 resize-y rounded-b-none"
             />
@@ -199,14 +206,152 @@ export function ChatModal({
               <GitFork />
               {forking ? "Forking…" : "Fork"}
             </Button>
-            <Button disabled={!canSend} onClick={send} title="Send (⌘↵)">
+            <Button
+              disabled={!canSend}
+              onClick={send}
+              title={
+                queueing ? "Queue, to send once this turn ends (⌘↵)" : "Send (⌘↵)"
+              }
+            >
               <SendHorizontal />
-              {pending ? "Sending…" : "Send"}
+              {pending
+                ? queueing
+                  ? "Queueing…"
+                  : "Sending…"
+                : queueing
+                  ? "Queue"
+                  : "Send"}
             </Button>
           </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// What waits for the chat's turn to end. Claude Code's own queue, typed in
+// the terminal, goes first and can only be read here; seamux's queue follows,
+// one message per turn, and can be edited, sent now, or removed.
+function QueuedList({ card }: { card: Card }) {
+  if (card.terminalQueue.length === 0 && card.boardQueue.length === 0) {
+    return null;
+  }
+  return (
+    <section className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Queued
+      </h3>
+      {card.terminalQueue.map((text, i) => (
+        <div
+          key={`terminal-${i}`}
+          className="flex items-start gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground"
+          title="Typed in the terminal, so Claude Code holds it"
+        >
+          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+            {text}
+          </p>
+          <span className="shrink-0 text-xs">in the terminal</span>
+        </div>
+      ))}
+      {card.boardQueue.map((m) => (
+        <QueuedItem key={m.id} card={card} message={m} />
+      ))}
+    </section>
+  );
+}
+
+function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(message.text);
+  const edit = useSessionAction(card.sessionId, () => setEditing(false));
+  const other = useSessionAction(card.sessionId);
+  const id = String(message.id);
+  const save = () =>
+    text.trim() && edit.submit("queue-edit", { id, text: text.trim() });
+  const error = edit.error ?? other.error;
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border px-3 py-2 text-sm">
+      <div className="flex items-start gap-2">
+        {editing ? (
+          <Textarea
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                save();
+              } else if (e.key === "Escape") {
+                // Cancel the edit, not the whole modal.
+                e.stopPropagation();
+                setEditing(false);
+              }
+            }}
+            className="min-h-20 flex-1 resize-y"
+          />
+        ) : (
+          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+            {message.text}
+          </p>
+        )}
+        <div className="flex shrink-0 gap-1">
+          {editing ? (
+            <>
+              <Button
+                size="icon-xs"
+                disabled={edit.pending || !text.trim()}
+                onClick={save}
+                title="Save (⌘↵)"
+              >
+                <Check />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={() => setEditing(false)}
+                title="Cancel (Esc)"
+              >
+                <X />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={() => {
+                  setText(message.text);
+                  setEditing(true);
+                }}
+                title="Edit"
+              >
+                <Pencil />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                disabled={!card.drivable || other.pending}
+                onClick={() => other.submit("queue-send", { id })}
+                title="Send now: Claude Code takes it at its next step"
+              >
+                <SendHorizontal />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                disabled={other.pending}
+                onClick={() => other.submit("queue-drop", { id })}
+                title="Remove from the queue"
+              >
+                <X />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
   );
 }

@@ -68,6 +68,7 @@ import {
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
 import { configOrDefaults } from "~/lib/config.server";
+import { startQueue } from "~/lib/queue.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useSessionAction } from "~/lib/use-session-action";
 import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
@@ -84,6 +85,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader() {
+  startQueue();
   return { board: await loadBoard(), config: configOrDefaults() };
 }
 
@@ -187,7 +189,8 @@ const DraftsContext = createContext<{
 }>({ drafts: {}, setDraft: () => {} });
 
 // The card's next chat line, with a popout into the full-size modal for
-// longer messages. Both send through cmux into the session's surface.
+// longer messages. Both send through cmux into the session's surface, or,
+// while the chat works or already has messages waiting, into seamux's queue.
 function ChatInput({ card }: { card: BoardCard }) {
   const { drafts, setDraft } = useContext(DraftsContext);
   // Kept across a reload, like the draft, so an open chat stays open.
@@ -222,7 +225,9 @@ function ChatInput({ card }: { card: BoardCard }) {
   );
   const forker = useSessionAction(card.sessionId, released, restore);
   const canSend = card.drivable && !pending && draft.trim().length > 0;
-  const send = () => canSend && submit("send", { text: takeDraft() });
+  const queueing = card.column === "working" || card.boardQueue.length > 0;
+  const send = () =>
+    canSend && submit(queueing ? "queue" : "send", { text: takeDraft() });
 
   return (
     <div className="flex flex-col gap-1">
@@ -239,7 +244,13 @@ function ChatInput({ card }: { card: BoardCard }) {
               data-focus-key={`reply:${card.sessionId}`}
               value={draft}
               onChange={(e) => onDraftChange(e.target.value)}
-              placeholder={card.drivable ? "Reply" : "Not in a cmux surface"}
+              placeholder={
+                !card.drivable
+                  ? "Not in a cmux surface"
+                  : queueing
+                    ? "Queue a reply"
+                    : "Reply"
+              }
               disabled={!card.drivable}
               className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
             />
@@ -247,7 +258,7 @@ function ChatInput({ card }: { card: BoardCard }) {
               type="submit"
               size="icon-xs"
               disabled={!canSend}
-              title="Send"
+              title={queueing ? "Queue, to send once this turn ends" : "Send"}
             >
               <SendHorizontal />
             </Button>
@@ -272,6 +283,7 @@ function ChatInput({ card }: { card: BoardCard }) {
         onDraftChange={onDraftChange}
         onSend={send}
         canSend={canSend}
+        queueing={queueing}
         pending={pending}
         error={error ?? forker.error}
         onFork={() =>
@@ -605,7 +617,10 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             ))}
           </div>
         )}
-        <CardState column={card.column} queued={card.queued} />
+        <CardState
+          column={card.column}
+          queued={card.terminalQueue.length + card.boardQueue.length}
+        />
         <ChatInput card={card} />
       </CardContent>
     </Card>
@@ -629,7 +644,7 @@ function CardState({ column, queued }: { column: Column; queued: number }) {
         <LoaderCircle className="size-3.5 animate-spin" />
         working
         {queued > 0 && (
-          <span title={`${queued} queued for when this turn ends`}>
+          <span title={`${queued} queued for when this turn ends; open the chat to see them`}>
             +{queued}
           </span>
         )}

@@ -46,6 +46,18 @@ const SCHEMA = `
     pinned_at  INTEGER NOT NULL
   );
 
+  -- Messages Jakob wrote while a chat was working, held here instead of in
+  -- Claude Code's queue so they can be edited. Sent in id order, one per
+  -- turn, once the chat is idle; a row goes as it is sent.
+  CREATE TABLE IF NOT EXISTS queued_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    queued_at  INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS queued_messages_session
+    ON queued_messages (session_id);
+
   -- Jakob's settings, from the board's config dialog. A JSON value per key;
   -- a missing key means the default.
   CREATE TABLE IF NOT EXISTS config (
@@ -228,4 +240,73 @@ export function setPinned(
   } else {
     store.prepare(`DELETE FROM pins WHERE session_id = ?`).run(sessionId);
   }
+}
+
+export interface QueuedRow {
+  id: number;
+  session_id: string;
+  text: string;
+  queued_at: number;
+}
+
+export function queueMessage(
+  sessionId: string,
+  text: string,
+  now = Date.now(),
+): void {
+  openStore()
+    .prepare(
+      `INSERT INTO queued_messages (session_id, text, queued_at) VALUES (?, ?, ?)`,
+    )
+    .run(sessionId, text, now);
+}
+
+export function queuedFor(sessionIds: string[]): QueuedRow[] {
+  if (sessionIds.length === 0) return [];
+  const marks = sessionIds.map(() => "?").join(", ");
+  return openStore()
+    .prepare(
+      `SELECT * FROM queued_messages WHERE session_id IN (${marks}) ORDER BY id`,
+    )
+    .all(...sessionIds) as unknown as QueuedRow[];
+}
+
+// Sessions with anything queued.
+export function queuedSessions(): string[] {
+  return (
+    openStore()
+      .prepare(`SELECT DISTINCT session_id FROM queued_messages`)
+      .all() as unknown as { session_id: string }[]
+  ).map((r) => r.session_id);
+}
+
+// Each of these names the session too, so a stale form can't reach another
+// chat's queue. False when the message was already sent or removed.
+export function editQueued(id: number, sessionId: string, text: string) {
+  const { changes } = openStore()
+    .prepare(
+      `UPDATE queued_messages SET text = ? WHERE id = ? AND session_id = ?`,
+    )
+    .run(text, id, sessionId);
+  return changes > 0;
+}
+
+export function takeQueued(id: number, sessionId: string): QueuedRow | null {
+  return (
+    (openStore()
+      .prepare(
+        `DELETE FROM queued_messages WHERE id = ? AND session_id = ? RETURNING *`,
+      )
+      .get(id, sessionId) as unknown as QueuedRow | undefined) ?? null
+  );
+}
+
+// Put back a message whose send failed, in its old place.
+export function restoreQueued(row: QueuedRow): void {
+  openStore()
+    .prepare(
+      `INSERT OR IGNORE INTO queued_messages (id, session_id, text, queued_at)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run(row.id, row.session_id, row.text, row.queued_at);
 }

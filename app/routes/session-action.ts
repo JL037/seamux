@@ -15,7 +15,14 @@ import {
   sendMessage,
 } from "~/lib/drive.server";
 import { assertFromBoard, SESSION_ID } from "~/lib/guard.server";
-import { setPinned } from "~/lib/store.server";
+import { startQueue } from "~/lib/queue.server";
+import {
+  editQueued,
+  queueMessage,
+  restoreQueued,
+  setPinned,
+  takeQueued,
+} from "~/lib/store.server";
 
 const INTENTS = new Set([
   "send",
@@ -28,6 +35,10 @@ const INTENTS = new Set([
   "pin",
   "unpin",
   "answer",
+  "queue",
+  "queue-edit",
+  "queue-send",
+  "queue-drop",
 ]);
 const MAX_MESSAGE = 100_000;
 
@@ -67,12 +78,41 @@ function parseAnswers(raw: string, questions: Question[]): Answer[] {
   });
 }
 
+function messageText(form: FormData): string {
+  const text = String(form.get("text") ?? "").trim();
+  if (!text) throw new Error("Nothing to send");
+  if (text.length > MAX_MESSAGE) throw new Error("Message too long");
+  return text;
+}
+
+function queuedId(form: FormData): number {
+  const id = Number(form.get("id"));
+  if (!Number.isInteger(id)) throw new Error("Bad queued message");
+  return id;
+}
+
 async function perform(sessionId: string, intent: string, form: FormData) {
   if (intent === "send") {
-    const text = String(form.get("text") ?? "").trim();
-    if (!text) throw new Error("Nothing to send");
-    if (text.length > MAX_MESSAGE) throw new Error("Message too long");
-    await sendMessage(sessionId, text);
+    await sendMessage(sessionId, messageText(form));
+  } else if (intent === "queue") {
+    queueMessage(sessionId, messageText(form));
+    startQueue();
+  } else if (intent === "queue-edit") {
+    if (!editQueued(queuedId(form), sessionId, messageText(form))) {
+      throw new Error("Already sent");
+    }
+  } else if (intent === "queue-send") {
+    // Into Claude Code now, which takes it at its next step.
+    const row = takeQueued(queuedId(form), sessionId);
+    if (!row) throw new Error("Already sent");
+    try {
+      await sendMessage(sessionId, row.text);
+    } catch (err) {
+      restoreQueued(row);
+      throw err;
+    }
+  } else if (intent === "queue-drop") {
+    takeQueued(queuedId(form), sessionId);
   } else if (intent === "close") {
     // Only a chat at rest: closing a working one would cut its turn off.
     const { cards } = await loadBoard();

@@ -79,8 +79,10 @@ export interface Card {
   lastReply: string | null;
   // null until the chat's first response, and again just after a compaction.
   context: ContextUsage | null;
-  // Prompts typed into the chat that wait for its current turn to end.
-  queued: number;
+  // Prompts typed into the terminal that wait in Claude Code's own queue.
+  terminalQueue: string[];
+  // Messages seamux holds for the chat, sent in order once it is idle.
+  boardQueue: QueuedMessage[];
   workspaceRef: string | null;
   // What the session was dispatched or forked to do, if seamux started it.
   intent: string | null;
@@ -106,6 +108,12 @@ export interface Card {
   closing: { state: "cleaning" | "held"; note: string | null } | null;
   background: BackgroundSession[];
   subagents: Subagent[];
+}
+
+export interface QueuedMessage {
+  id: number;
+  text: string;
+  queuedAt: number;
 }
 
 // A fan-out set from the protocol, and which workers have reported.

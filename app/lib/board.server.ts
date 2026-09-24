@@ -32,6 +32,7 @@ import { dispatchStatus, listDispatches } from "./protocol.server";
 import {
   dispatchesFor,
   pinnedSessions,
+  queuedFor,
   recentDispatchCwds,
   subagentsFor,
   type SubagentRow,
@@ -78,7 +79,7 @@ interface TranscriptSummary {
   // How full the context window is, from the last response's usage.
   context: ContextUsage | null;
   // Prompts Jakob typed while a turn ran, not yet taken up by the chat.
-  queued: number;
+  queued: string[];
 }
 
 async function readJson<T>(cmd: string, args: string[]): Promise<T> {
@@ -212,7 +213,7 @@ const HARNESS_QUEUED = /^<(task-notification|agent-message)[\s>]/;
 // Claude Code logs its input queue as it changes. Replaying the log gives
 // what is still queued. A dequeue takes a typed prompt ahead of harness
 // items, and a remove names the item it drops.
-function queuedPrompts(lines: string[]): number {
+function queuedPrompts(lines: string[]): string[] {
   let queue: string[] = [];
   for (const line of lines) {
     if (!line.includes('"queue-operation"')) continue;
@@ -234,7 +235,7 @@ function queuedPrompts(lines: string[]): number {
       if (at >= 0) queue.splice(at, 1);
     }
   }
-  return queue.filter((c) => !HARNESS_QUEUED.test(c)).length;
+  return queue.filter((c) => !HARNESS_QUEUED.test(c));
 }
 
 // Messages are written once complete, so the last one says whether the model
@@ -310,7 +311,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     pendingTool: null,
     question: null,
     context: null,
-    queued: 0,
+    queued: [],
   };
   // Settled by the last response, or by a compaction after it, which leaves
   // the window's size unknown until the next response.
@@ -637,7 +638,8 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: summary?.lastPrompt ?? null,
         lastReply: summary?.lastReply ?? null,
         context: summary?.context ?? null,
-        queued: summary?.queued ?? 0,
+        terminalQueue: summary?.queued ?? [],
+        boardQueue: [],
         workspaceRef: ws?.ref ?? null,
         intent: null,
         forkedFrom: null,
@@ -681,7 +683,8 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastPrompt: s.lastPrompt,
         lastReply: s.lastReply,
         context: s.context,
-        queued: 0,
+        terminalQueue: [],
+        boardQueue: [],
         workspaceRef: null,
         intent: null,
         forkedFrom: null,
@@ -699,6 +702,15 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
 
   const cards = [...liveCards, ...doneCards];
   for (const card of cards) card.pinned = pinned.has(card.sessionId);
+  try {
+    for (const row of queuedFor(cards.map((c) => c.sessionId))) {
+      cards
+        .find((c) => c.sessionId === row.session_id)
+        ?.boardQueue.push({ id: row.id, text: row.text, queuedAt: row.queued_at });
+    }
+  } catch (err) {
+    warnings.push(`Queue store unavailable: ${(err as Error).message}`);
+  }
   try {
     const intents = new Map(
       dispatchesFor(cards.map((c) => c.sessionId)).map((d) => [
