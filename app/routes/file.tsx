@@ -96,8 +96,16 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
   const [params, setParams] = useSearchParams();
   const renderable =
     file.type === "file" && (file.kind === "markdown" || file.kind === "html");
-  const view: FileView =
-    renderable && params.get("view") !== "raw" ? "rendered" : "raw";
+  // A link to `a.ts:12` opens a.ts at line 12: the loader found the file
+  // without the line, so the line is what the request has and it lacks.
+  const cited = /:(\d+)(?::\d+)?$/.exec(params.get("path") ?? "");
+  const line =
+    file.type === "file" && cited && !file.path.endsWith(cited[0])
+      ? Number(cited[1])
+      : undefined;
+  // A line is in the file's text, so a cited one opens it raw.
+  const asked = params.get("view") ?? (line ? "raw" : "rendered");
+  const view: FileView = renderable && asked !== "raw" ? "rendered" : "raw";
   const [lineNumbers, setLineNumbers] = useLocalStorage(
     "seamux:line-numbers",
     false,
@@ -226,6 +234,7 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
             text={file.text}
             path={file.path}
             lineNumbers={lineNumbers}
+            line={line}
             className="p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground"
           />
         ) : (

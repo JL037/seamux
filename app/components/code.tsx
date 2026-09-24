@@ -1,5 +1,6 @@
 import type { Root as HastRoot } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
+import { useEffect, useRef } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
 import {
@@ -14,24 +15,32 @@ function toJsx(root: HastRoot) {
   return toJsxRuntime(root, { Fragment, jsx, jsxs });
 }
 
-// A whole file as text, highlighted by what its name says it is, and with
-// each line numbered when `lineNumbers` is set.
+// A whole file as text, highlighted by what its name says it is. With
+// `lineNumbers`, each line is numbered; with `line`, that line is marked
+// and scrolled into view.
 export function Code({
   text,
   path,
   lineNumbers = false,
+  line,
   className,
 }: {
   text: string;
   path: string;
   lineNumbers?: boolean;
+  line?: number;
   className?: string;
 }) {
   const language = text.length <= HIGHLIGHT_LIMIT ? languageFor(path) : null;
+  const target = useRef<HTMLSpanElement>(null);
+  // Once per file and line, not on every reload while the file changes.
+  useEffect(() => {
+    target.current?.scrollIntoView({ block: "center" });
+  }, [path, line]);
   const root: HastRoot = language
     ? highlightFile(language, text)
     : { type: "root", children: [{ type: "text", value: text }] };
-  if (!lineNumbers) {
+  if (!lineNumbers && line === undefined) {
     return (
       <pre className={cn("hljs", className)}>
         <code>{language ? toJsx(root) : text}</code>
@@ -43,17 +52,33 @@ export function Code({
   // copying still gives the file's text.
   return (
     <pre className={cn("hljs", className)}>
-      <code className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4">
-        {splitLines(root).map((line, i) => (
-          <Fragment key={i}>
-            <span className="text-right text-muted-foreground/60 select-none">
-              {i + 1}
-            </span>
+      <code
+        className={cn(
+          "grid",
+          lineNumbers
+            ? "grid-cols-[auto_minmax(0,1fr)] gap-x-4"
+            : "grid-cols-[minmax(0,1fr)]",
+        )}
+      >
+        {splitLines(root).map((content, i) => (
+          <span
+            key={i}
+            ref={i + 1 === line ? target : undefined}
+            className={cn(
+              "col-span-full grid grid-cols-subgrid",
+              i + 1 === line && "rounded-sm bg-amber-400/25 dark:bg-amber-300/20",
+            )}
+          >
+            {lineNumbers && (
+              <span className="text-right text-muted-foreground/60 select-none">
+                {i + 1}
+              </span>
+            )}
             <span>
-              {toJsx({ type: "root", children: line })}
+              {toJsx({ type: "root", children: content })}
               {"\n"}
             </span>
-          </Fragment>
+          </span>
         ))}
       </code>
     </pre>
