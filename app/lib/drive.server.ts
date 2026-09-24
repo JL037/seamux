@@ -551,6 +551,28 @@ export async function resume(sessionId: string, cwd: string, title: string) {
   }
 }
 
+// An open chat renames itself with `/rename`, which also retitles its tab.
+// cmux's workspace title is its own, so it is set too, but only when the
+// chat is the workspace's one tab: otherwise the title covers other chats.
+// The rename has happened by then, so a failure there is not reported.
+export async function renameLive(sessionId: string, name: string) {
+  const surface = await surfaceFor(sessionId);
+  await rpc("terminal.paste", { ...target(surface), text: `/rename ${name}` });
+  await rpc("surface.send_key", { ...target(surface), key: "enter" });
+  try {
+    const { surfaces } = await rpc<{ surfaces: { id: string }[] }>(
+      "surface.list",
+      { workspace_id: surface.workspaceId },
+    );
+    if (surfaces.length === 1 && surfaces[0].id === surface.surfaceId) {
+      await rpc("workspace.rename", {
+        workspace_id: surface.workspaceId,
+        title: name,
+      });
+    }
+  } catch {}
+}
+
 // A closed chat's name lives in its transcript, as the lines `/rename`
 // writes; Claude Code reads the last of them when the chat is resumed.
 // Appending adds to the transcript and changes nothing already in it. Not

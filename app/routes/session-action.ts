@@ -14,6 +14,7 @@ import {
   fork,
   interrupt,
   renameClosed,
+  renameLive,
   resume,
   sendMessage,
 } from "~/lib/drive.server";
@@ -217,7 +218,7 @@ async function perform(sessionId: string, intent: string, form: FormData) {
       );
       if (!card) throw new Error("No longer on the board");
       if (card.waiting) throw new Error("Answer what it is waiting on first");
-      await sendMessage(sessionId, `/rename ${name}`);
+      await renameLive(sessionId, name);
     }
   } else if (intent === "pin-move") {
     const before = String(form.get("before") ?? "");
