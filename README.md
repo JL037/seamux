@@ -143,6 +143,8 @@ Four columns: **IDLE**, **WAITING**, **WORKING**, **DONE**. Simpler than the uni
 
 DONE is hidden by default; a **Show done** toggle in the header, remembered per browser, brings it back.
 
+The board follows the OS's light or dark theme until a sun or moon button beside the cog picks one, which is remembered per browser.
+
 **PINNED sits left of the four**, for sessions that are meant to run for a long time by design. It appears only while something is pinned. A pin is Jakob's call, since nothing about a session says it is long-running, so it is one of the few things the store records. A pinned card stays in PINNED whatever its state, shown as a coloured dot beside its name, with the same controls it would have in its state's column. Closing a pinned chat keeps it in PINNED with its resume button for as long as its transcript exists, rather than letting it age off after 30 minutes. Unpinning puts it back in its state's column. Jakob, 2026-09-23: *"some sessions are meant to be long running by design."*
 
 **WAITING means something is stopped until Jakob answers.** A blocked background session is; a failed one is over, so its parent stays where its own state puts it, with the failure shown as a red marker. This reverses an earlier call that failed meant waiting. Jakob, 2026-09-23: *"A failed background job is still idle then. It's not blocked waiting on me... right?"*

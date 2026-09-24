@@ -31,6 +31,7 @@ import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { Markdown } from "~/components/markdown";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
+import { ThemeToggle } from "~/components/theme-toggle";
 import { WaitingPanel } from "~/components/waiting-panel";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -683,6 +684,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 </span>
               </span>
               <ConfigDialog config={config} />
+              <ThemeToggle />
             </span>
             <span className="flex min-w-0 items-center gap-3">
               <Button

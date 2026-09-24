@@ -8,6 +8,7 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { THEME_KEY } from "~/components/theme-toggle";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -23,10 +24,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content="#0B1220" />
         <Meta />
         <Links />
-        {/* Follow the OS theme; shadcn tokens key off the .dark class. */}
+        {/* Use the theme chosen with the header toggle, else follow the OS;
+            shadcn tokens key off the .dark class. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(()=>{const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>document.documentElement.classList.toggle("dark",m.matches);s();m.addEventListener("change",s)})()`,
+            __html: `(()=>{const k=${JSON.stringify(THEME_KEY)};const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>{let t=null;try{t=JSON.parse(localStorage.getItem(k))}catch{}document.documentElement.classList.toggle("dark",t==="dark"||(t!=="light"&&m.matches))};s();m.addEventListener("change",s)})()`,
           }}
         />
       </head>
