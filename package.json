@@ -2,9 +2,12 @@
   "name": "seamux",
   "private": true,
   "type": "module",
+  "bin": {
+    "seamux": "bin/seamux"
+  },
   "scripts": {
     "setup": "npm install && npm run hooks:install && npm run skills:install",
-    "serve": "node --no-warnings scripts/supervise.ts",
+    "seamux": "bin/seamux",
     "dev": "react-router dev",
     "land": "node --no-warnings scripts/land.ts",
     "board": "npm run build && HOST=127.0.0.1 PORT=4173 NODE_NO_WARNINGS=1 react-router-serve ./build/server/index.js",

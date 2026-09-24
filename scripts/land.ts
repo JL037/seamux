@@ -215,7 +215,7 @@ async function main() {
     step("Server modules changed: restarting the board");
   }
   if (depsChanged || serverChanged) {
-    // `npm run serve` picks this up within a second.
+    // `npm run seamux` picks this up within a second.
     const before = boardPid(REPO);
     requestRestart(REPO);
     await restarted(before);
@@ -227,7 +227,7 @@ async function main() {
     `\n${ok ? "✓" : "✗"} Landed ${before.slice(0, 7)}..${after.slice(0, 7)} on main.` +
       (ok
         ? ""
-        : ` The board is not answering at ${BOARD}; see the terminal running \`npm run serve\`.`) +
+        : ` The board is not answering at ${BOARD}; see the terminal running \`npm run seamux\`.`) +
       `\nTo undo: git revert ${before.slice(0, 7)}..${after.slice(0, 7)}`,
   );
   if (!ok) process.exit(1);

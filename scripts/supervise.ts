@@ -1,6 +1,6 @@
 // Keeps the board running. Run it in its own terminal (a cmux workspace):
 //
-//   npm run serve
+//   npm run seamux    (or `seamux` with no command)
 //
 // It starts the dev server and keeps it up:
 // - restarts it when it exits, backing off to 30s while it keeps failing;

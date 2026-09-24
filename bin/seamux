@@ -1,3 +1,9 @@
 #!/bin/sh
-# seamux protocol CLI. See scripts/seamux.ts.
-exec node --no-warnings "$(cd "$(dirname "$0")/.." && pwd)/scripts/seamux.ts" "$@"
+# seamux's command line. With no command it runs the board (scripts/supervise.ts);
+# anything else goes to the protocol CLI (scripts/seamux.ts).
+# npm links this file into node_modules/.bin, so resolve the link to find the repo.
+repo="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+if [ $# -eq 0 ]; then
+  exec node --no-warnings "$repo/scripts/supervise.ts"
+fi
+exec node --no-warnings "$repo/scripts/seamux.ts" "$@"

@@ -1,5 +1,6 @@
 // seamux protocol CLI, for sessions to call through bin/seamux.
 //
+//   seamux                              run the board (scripts/supervise.ts)
 //   seamux fanout <manifest.json | ->   declare a set of workers, then spawn each
 //                                       as its own top-level session
 //   seamux wait <dispatch-id>           barrier: block until every worker has
@@ -42,7 +43,7 @@ function usage(): never {
     readFileSync(new URL(import.meta.url), "utf8")
       .split("\n")
       .filter((l) => l.startsWith("//"))
-      .slice(0, 12)
+      .slice(0, 13)
       .map((l) => l.slice(3))
       .join("\n") + "\n",
   );

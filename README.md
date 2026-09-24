@@ -14,10 +14,12 @@ You need:
 
 ```bash
 npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
-npm run serve    # run the board on http://127.0.0.1:5173 and keep it running
+npm run seamux   # run the board on http://127.0.0.1:5173 and keep it running
 ```
 
-Run `npm run serve` in its own cmux workspace. It supervises the dev server: it restarts it if it exits or stops answering, and refuses to run twice.
+The same command is `bin/seamux`, also exposed as the package's `seamux` bin: run `npm link` once and `seamux` starts the board from anywhere. With a command, such as `seamux list`, it's the fan-out CLI described below.
+
+Run `npm run seamux` in its own cmux workspace. It supervises the dev server: it restarts it if it exits or stops answering, and refuses to run twice.
 
 `setup` writes to two places outside the repo. Both are safe to run again and both can be undone:
 
@@ -42,19 +44,19 @@ Most settings live in the board. Click the cog beside the seamux name.
 
 `{{siblings}}` is a sentence naming the other live sessions under the same repo. Without it, a session can't know that another session is using the same repo.
 
-**`.seamux.json`**, at the root of the checkout and gitignored, is how that checkout runs the board. `npm run serve` writes it, and `npm run land` reads it to find the board:
+**`.seamux.json`**, at the root of the checkout and gitignored, is how that checkout runs the board. `npm run seamux` writes it, and `npm run land` reads it to find the board:
 
 ```json
 { "port": 5173 }
 ```
 
-Edit the port there, or start `npm run serve` once with `SEAMUX_PORT` set, and it's kept for later runs.
+Edit the port there, or start `npm run seamux` once with `SEAMUX_PORT` set, and it's kept for later runs.
 
 Environment variables, all optional:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SEAMUX_PORT` | from `.seamux.json` | Port for `npm run serve`, saved to `.seamux.json` |
+| `SEAMUX_PORT` | from `.seamux.json` | Port for `npm run seamux`, saved to `.seamux.json` |
 | `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
 | `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |
 | `SEAMUX_POLL` | unset | `1` makes hot reload poll for file changes. It already polls on WSL's `/mnt/` drives |
