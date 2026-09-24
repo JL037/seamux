@@ -14,5 +14,25 @@ export function assertFromBoard(request: Request) {
   }
 }
 
+// Reads of files on disk. Another website can't read the response, but it
+// could embed a script or probe which paths exist, so refuse any request a
+// page on another site made.
+export function assertLocalRead(request: Request) {
+  assertLocalHost(request);
+  const site = request.headers.get("sec-fetch-site");
+  if (site === "cross-site" || site === "same-site") {
+    throw data("Forbidden", { status: 403 });
+  }
+}
+
+// No DNS rebinding: a site that points its own name at 127.0.0.1 would
+// otherwise be same-origin with the board.
+export function assertLocalHost(request: Request) {
+  const host = request.headers.get("host") ?? "";
+  if (!LOCAL_HOSTS.has(host.replace(/:\d+$/, ""))) {
+    throw data("Forbidden", { status: 403 });
+  }
+}
+
 export const SESSION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

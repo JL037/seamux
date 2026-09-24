@@ -143,7 +143,7 @@ export function ChatModal({
                       : "prose prose-sm self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
                   )}
                 >
-                  {m.role === "user" ? m.text : <Markdown>{m.text}</Markdown>}
+                  {m.role === "user" ? m.text : <Markdown base={card.cwd}>{m.text}</Markdown>}
                 </div>
               ))}
             </div>

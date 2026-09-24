@@ -482,7 +482,7 @@ function Faded({
 
 // The end of the card's last reply, as markdown: what was done, or what it
 // asks. The chat shows it in full.
-function ReplyExcerpt({ text }: { text: string }) {
+function ReplyExcerpt({ text, cwd }: { text: string; cwd: string }) {
   return (
     <Faded
       from="end"
@@ -493,7 +493,7 @@ function ReplyExcerpt({ text }: { text: string }) {
         "prose-table:my-1 [&>:first-child]:mt-0 [&>:last-child]:mb-0",
       )}
     >
-      <Markdown>{text}</Markdown>
+      <Markdown base={cwd}>{text}</Markdown>
     </Faded>
   );
 }
@@ -570,7 +570,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             {card.lastPrompt}
           </Faded>
         )}
-        {card.lastReply && <ReplyExcerpt text={card.lastReply} />}
+        {card.lastReply && <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />}
         {card.closing && (
           <p
             className={cn(
