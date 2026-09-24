@@ -100,13 +100,20 @@ async function cmuxWorkspaces(): Promise<Workspace[]> {
 
   const entries = await Promise.all(
     workspaces.map(async (w) => {
-      const status = await readJson<{
-        signals: { any_agent_needs_input: boolean };
-      }>("cmux", [
-        "rpc",
-        "workspace.status.get",
-        JSON.stringify({ workspace_id: w.id }),
-      ]);
+      let status: { signals: { any_agent_needs_input: boolean } };
+      try {
+        status = await readJson("cmux", [
+          "rpc",
+          "workspace.status.get",
+          JSON.stringify({ workspace_id: w.id }),
+        ]);
+      } catch (err) {
+        // Closed between the list and this call, as closing a chat does.
+        if (err instanceof Error && err.message.includes("not_found")) {
+          return null;
+        }
+        throw err;
+      }
       return {
         id: w.id,
         ref: w.ref,
@@ -115,7 +122,7 @@ async function cmuxWorkspaces(): Promise<Workspace[]> {
       };
     }),
   );
-  return entries;
+  return entries.filter((w): w is Workspace => w !== null);
 }
 
 async function backgroundDetail(
