@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { useRevalidator } from "react-router";
@@ -168,14 +169,32 @@ function ChatInput({ card }: { card: BoardCard }) {
   const [open, setOpen] = useState(false);
   const draft = drafts[card.sessionId] ?? "";
   const onDraftChange = (d: string) => setDraft(card.sessionId, d);
-  const clear = useCallback(() => {
+  // A draft is cleared, from state and storage, as it is sent, so a reload
+  // mid-send can't bring it back; a failure puts it back.
+  const sent = useRef("");
+  const takeDraft = () => {
+    sent.current = draft;
     setDraft(card.sessionId, "");
-    releaseFocus(`reply:${card.sessionId}`);
-  }, [card.sessionId, setDraft]);
-  const { submit, pending, error } = useSessionAction(card.sessionId, clear);
-  const forker = useSessionAction(card.sessionId, clear);
+    return draft;
+  };
+  const released = useCallback(
+    () => releaseFocus(`reply:${card.sessionId}`),
+    [card.sessionId],
+  );
+  const current = useRef(draft);
+  current.current = draft;
+  const restore = useCallback(
+    () => setDraft(card.sessionId, current.current || sent.current),
+    [card.sessionId, setDraft],
+  );
+  const { submit, pending, error } = useSessionAction(
+    card.sessionId,
+    released,
+    restore,
+  );
+  const forker = useSessionAction(card.sessionId, released, restore);
   const canSend = card.drivable && !pending && draft.trim().length > 0;
-  const send = () => canSend && submit("send", { text: draft });
+  const send = () => canSend && submit("send", { text: takeDraft() });
 
   return (
     <div className="flex flex-col gap-1">
@@ -219,7 +238,9 @@ function ChatInput({ card }: { card: BoardCard }) {
         canSend={canSend}
         pending={pending}
         error={error ?? forker.error}
-        onFork={() => draft.trim() && forker.submit("fork", { text: draft })}
+        onFork={() =>
+          draft.trim() && forker.submit("fork", { text: takeDraft() })
+        }
         forking={forker.pending}
       />
     </div>

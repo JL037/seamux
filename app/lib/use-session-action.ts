@@ -6,8 +6,13 @@ import type { ActionResult } from "~/routes/session-action";
 type Intent = "send" | "interrupt" | "resume" | "fork" | "close";
 
 // Posts one of the board's write verbs for a session. `onSuccess` runs once
-// per successful submission, e.g. to clear a sent draft.
-export function useSessionAction(sessionId: string, onSuccess?: () => void) {
+// per successful submission, `onFailure` once per failed one, e.g. to put
+// back a draft cleared when it was sent.
+export function useSessionAction(
+  sessionId: string,
+  onSuccess?: () => void,
+  onFailure?: () => void,
+) {
   const fetcher = useFetcher<ActionResult>();
   const handled = useRef<ActionResult | undefined>(undefined);
 
@@ -16,7 +21,8 @@ export function useSessionAction(sessionId: string, onSuccess?: () => void) {
     if (handled.current === fetcher.data) return;
     handled.current = fetcher.data;
     if (fetcher.data.ok) onSuccess?.();
-  }, [fetcher.state, fetcher.data, onSuccess]);
+    else onFailure?.();
+  }, [fetcher.state, fetcher.data, onSuccess, onFailure]);
 
   return {
     submit: (intent: Intent, fields: Record<string, string> = {}) =>

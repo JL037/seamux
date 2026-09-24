@@ -37,6 +37,9 @@ export function DispatchBar() {
   const [worktree, setWorktree] = useSessionStorage(WORKTREE_KEY, false);
   const [started, setStarted] = useState<string | null>(null);
   const handled = useRef<DispatchResult | undefined>(undefined);
+  // The prompt is cleared, from state and storage, as it is sent, so a
+  // reload mid-dispatch can't bring it back; a failure puts it back.
+  const sent = useRef("");
 
   // An unsent directory from before a reload wins over the last one used.
   useEffect(() => {
@@ -52,12 +55,13 @@ export function DispatchBar() {
     if (pending || !result || handled.current === result) return;
     handled.current = result;
     if (result.ok) {
-      setStarted(prompt.trim().split("\n")[0].slice(0, 80));
-      setPrompt("");
+      setStarted(sent.current.trim().split("\n")[0].slice(0, 80));
       releaseFocus("dispatch:prompt");
       writeLastDir(cwd);
+    } else {
+      setPrompt((p) => p || sent.current);
     }
-  }, [pending, result, prompt, cwd, setPrompt]);
+  }, [pending, result, cwd, setPrompt]);
 
   const loadDirs = () => {
     if (dirs.state === "idle" && !dirs.data) dirs.load("/directories");
@@ -67,6 +71,8 @@ export function DispatchBar() {
   const submit = () => {
     if (!canDispatch) return;
     setStarted(null);
+    sent.current = prompt;
+    setPrompt("");
     dispatcher.submit(
       { prompt, cwd: cwd.trim(), ...(worktree ? { worktree: "on" } : {}) },
       { method: "post", action: "/dispatch" },
