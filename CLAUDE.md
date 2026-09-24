@@ -1,6 +1,6 @@
 # seamux
 
-A board over every Claude Code session on this Mac, and the tools to drive and dispatch them. `README.md` is the brief and the source of truth for the design; keep it current when behaviour changes. Prose is checked with Taskless.
+A board over every Claude Code session on this Mac, and the tools to drive and dispatch them. `README.md` covers setup, configuration and how it works; keep it current when behaviour changes. Prose is checked with Taskless.
 
 ## Rules
 
@@ -8,7 +8,7 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 - **Localhost only.** The server binds `127.0.0.1`, and every action goes through `assertFromBoard` in `app/lib/guard.server.ts`.
 - **Derive, don't store.** Session state comes from `claude agents --json`, cmux, and the transcripts on every poll. The store (`app/lib/store.server.ts`) holds only what nothing else records: subagent lifecycle, dispatch intent, pins, queued messages, and settings.
 - **Always pass a surface to cmux.** cmux RPCs default to the caller's own surface, which is whatever terminal seamux runs in.
-- **Verify tool behaviour by running it.** Several documented cmux and Claude Code behaviours turned out wrong; the brief's "Findings while building" lists them.
+- **Verify tool behaviour by running it.** Several documented cmux and Claude Code behaviours turned out wrong; `docs/findings.md` lists them, and new ones go there.
 
 ## Layout
 
