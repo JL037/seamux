@@ -154,3 +154,6 @@ vite.config.ts.timestamp-*
 
 # Claude Code worktrees (claude -w)
 /.claude/worktrees/
+
+# How this checkout runs the board, written by npm run serve
+/.seamux.json

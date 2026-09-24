@@ -42,11 +42,19 @@ Most settings live in the board. Click the cog beside the seamux name.
 
 `{{siblings}}` is a sentence naming the other live sessions under the same repo. Without it, a session can't know that another session is using the same repo.
 
+**`.seamux.json`**, at the root of the checkout and gitignored, is how that checkout runs the board. `npm run serve` writes it, and `npm run land` reads it to find the board:
+
+```json
+{ "port": 5173 }
+```
+
+Edit the port there, or start `npm run serve` once with `SEAMUX_PORT` set, and it's kept for later runs.
+
 Environment variables, all optional:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SEAMUX_PORT` | `5173` | Port for `npm run serve`. `npm run land` still checks 5173 |
+| `SEAMUX_PORT` | from `.seamux.json` | Port for `npm run serve`, saved to `.seamux.json` |
 | `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
 | `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |
 | `SEAMUX_POLL` | unset | `1` makes hot reload poll for file changes. It already polls on WSL's `/mnt/` drives |

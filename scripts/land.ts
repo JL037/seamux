@@ -28,9 +28,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { boardPid, requestRestart } from "./supervise.ts";
+import { boardPid, boardUrl, requestRestart } from "./supervise.ts";
 
-const BOARD = "http://127.0.0.1:5173/";
 const LOCK_WAIT_MS = 20 * 60 * 1000;
 
 function run(cwd: string, cmd: string, ...args: string[]): string {
@@ -55,6 +54,7 @@ const REPO = git(process.cwd(), "worktree", "list", "--porcelain")
   .split("\n")[0]
   .replace(/^worktree /, "");
 const LOCK = join(REPO, "data/land.lock");
+const BOARD = boardUrl(REPO);
 
 function alive(pid: number): boolean {
   try {

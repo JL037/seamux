@@ -10,6 +10,9 @@
 // - on start, stops a dev server orphaned by a supervisor that was killed;
 // - refuses to run twice.
 //
+// The port comes from SEAMUX_PORT, else .seamux.json, else 5173, and is
+// written back to .seamux.json so `npm run land` checks the right board.
+//
 // Portable to Linux and WSL: Node APIs, POSIX process groups, and polling
 // rather than file events, which WSL does not deliver for /mnt drives.
 
@@ -30,8 +33,7 @@ export const RESTART_FILE = join(DATA, "board.restart");
 const SUPERVISOR_PID = join(DATA, "serve.pid");
 const CHILD_PID = join(DATA, "board.pid");
 
-const PORT = process.env.SEAMUX_PORT ?? "5173";
-const URL = `http://127.0.0.1:${PORT}/`;
+const DEFAULT_PORT = 5173;
 const HEALTHY_MS = 60_000; // up this long resets the backoff
 const MAX_BACKOFF_MS = 30_000;
 const STARTUP_GRACE_MS = 30_000; // no health checks while it boots
@@ -49,6 +51,33 @@ export function requestRestart(repo = REPO) {
     join(repo, "data", "board.restart"),
     `${new Date().toISOString()}\n`,
   );
+}
+
+// How the board in `repo` runs, kept in its gitignored .seamux.json.
+export interface RunConfig {
+  port: number;
+}
+
+export function readRunConfig(repo = REPO): RunConfig {
+  let port = DEFAULT_PORT;
+  try {
+    const saved = JSON.parse(
+      readFileSync(join(repo, ".seamux.json"), "utf8"),
+    ) as Partial<RunConfig>;
+    if (Number.isInteger(saved.port)) port = saved.port!;
+  } catch {}
+  return { port };
+}
+
+function writeRunConfig(config: RunConfig) {
+  writeFileSync(
+    join(REPO, ".seamux.json"),
+    `${JSON.stringify(config, null, 2)}\n`,
+  );
+}
+
+export function boardUrl(repo = REPO): string {
+  return `http://127.0.0.1:${readRunConfig(repo).port}/`;
 }
 
 // The pid of the dev server the supervisor serving `repo` last started.
@@ -106,9 +135,9 @@ async function stopGroup(pid: number) {
   if (alive(pid)) signalGroup(pid, "SIGKILL");
 }
 
-async function probe(): Promise<boolean> {
+async function probe(url: string): Promise<boolean> {
   try {
-    const res = await fetch(URL, {
+    const res = await fetch(url, {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     return res.ok;
@@ -126,6 +155,14 @@ async function supervise() {
     process.exit(1);
   }
   writeFileSync(SUPERVISOR_PID, `${process.pid}\n`);
+
+  const port = Number(process.env.SEAMUX_PORT ?? readRunConfig().port);
+  if (!Number.isInteger(port) || port <= 0) {
+    log(`not a port: ${process.env.SEAMUX_PORT}`);
+    process.exit(1);
+  }
+  writeRunConfig({ port });
+  const url = boardUrl();
 
   // A supervisor killed with SIGKILL leaves its dev server holding the port.
   const orphan = readPid(CHILD_PID);
@@ -148,14 +185,14 @@ async function supervise() {
     if (stopping || child) return;
     startedAt = Date.now();
     failures = 0;
-    const c = spawn("npx", ["react-router", "dev", "--port", PORT], {
+    const c = spawn("npx", ["react-router", "dev", "--port", String(port)], {
       cwd: REPO,
       stdio: "inherit",
       detached: true, // its own process group, so restarts stop its children too
     });
     child = c;
     if (c.pid) writeFileSync(CHILD_PID, `${c.pid}\n`);
-    log(`started dev server, pid ${c.pid}, ${URL}`);
+    log(`started dev server, pid ${c.pid}, ${url}`);
     c.on("error", (err) => log(`could not start dev server: ${err.message}`));
     c.on("exit", (code, signal) => {
       if (child === c) child = null;
@@ -220,7 +257,7 @@ async function supervise() {
 
   setInterval(async () => {
     if (!child || stopping || Date.now() - startedAt < STARTUP_GRACE_MS) return;
-    if (await probe()) {
+    if (await probe(url)) {
       failures = 0;
       return;
     }
