@@ -417,7 +417,13 @@ async function acceptTrust(surface: Surface) {
     await pause(1000);
     const { stdout: screen } = await run(
       "cmux",
-      ["read-screen", "--surface", surface.surfaceId],
+      [
+        "read-screen",
+        "--workspace",
+        surface.workspaceId,
+        "--surface",
+        surface.surfaceId,
+      ],
       { timeout: 10_000 },
     );
     if (screen.includes(TRUST_PROMPT)) {
