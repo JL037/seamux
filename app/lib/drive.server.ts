@@ -14,6 +14,7 @@ import {
   ASKED_IN_REPLY,
   type Answer,
   type Card,
+  type Dialog,
   type Question,
 } from "./board.ts";
 import { renderMacro } from "./config.ts";
@@ -146,6 +147,91 @@ export async function answerApproval(sessionId: string, allow: boolean) {
   } else {
     await rpc("surface.send_key", { ...target(surface), key: "escape" });
   }
+}
+
+async function readScreen(surface: Surface): Promise<string> {
+  const { stdout } = await run(
+    "cmux",
+    [
+      "read-screen",
+      "--workspace",
+      surface.workspaceId,
+      "--surface",
+      surface.surfaceId,
+    ],
+    { timeout: 10_000 },
+  );
+  return stdout;
+}
+
+const OPTION = /^(?:❯\s*)?([1-9])\.\s+(.+)$/;
+// A line made of one box-drawing character: the rule a dialog opens under.
+const RULE = /^([▔─━])\1{7,}$/;
+
+// The numbered dialog open at the bottom of the screen, or null. It must
+// end on Claude Code's "Esc to cancel" footer, so a numbered list in a
+// reply is never mistaken for one.
+function parseDialog(screen: string): Dialog | null {
+  const lines = screen.split("\n").map((l) => l.trim());
+  while (lines.length && !lines.at(-1)) lines.pop();
+  if (!/Esc to cancel/.test(lines.at(-1) ?? "")) return null;
+
+  // The options, read upwards from the footer down to option 1; lines
+  // between them are their descriptions.
+  let at = lines.length - 2;
+  while (at >= 0 && !OPTION.test(lines[at])) at--;
+  const last = Number(OPTION.exec(lines[at] ?? "")?.[1] ?? 0);
+  const options: string[] = [];
+  for (; at >= 0 && options.length < last; at--) {
+    const m = OPTION.exec(lines[at]);
+    if (!m) continue;
+    if (Number(m[1]) !== last - options.length) return null;
+    options.unshift(m[2].trim());
+  }
+  if (options.length < 2 || options.length !== last) return null;
+
+  // The dialog's own text, between its rule and option 1.
+  const text: string[] = [];
+  for (at--; at >= 0 && !RULE.test(lines[at]); at--) {
+    if (lines[at]) text.unshift(lines[at]);
+  }
+  if (text.length === 0) return null;
+  const [title, ...detail] = text;
+  return {
+    title,
+    detail,
+    options,
+    key: [...text, ...options].join("\n"),
+  };
+}
+
+export async function readDialog(surface: Surface): Promise<Dialog | null> {
+  return parseDialog(await readScreen(surface));
+}
+
+// Pick an option in the dialog read as `key`. Measured against Claude Code
+// 2.1.281 on /exit's "Background work is running": a digit picks and
+// confirms in one go. The screen is read again first, so a digit never
+// lands in the prompt box once the dialog has gone.
+export async function answerDialog(
+  sessionId: string,
+  key: string,
+  option: number,
+) {
+  const surface = await surfaceFor(sessionId);
+  const dialog = await readDialog(surface);
+  if (!dialog || dialog.key !== key)
+    throw new Error("That dialog is no longer open");
+  if (
+    !Number.isInteger(option) ||
+    option < 0 ||
+    option >= dialog.options.length
+  )
+    throw new Error("No such option");
+  await rpc("surface.send_text", {
+    ...target(surface),
+    text: String(option + 1),
+  });
 }
 
 // Close a chat the way Jakob would: /exit, then close the tab it ran in.
@@ -427,17 +513,7 @@ async function acceptTrust(surface: Surface) {
   const deadline = Date.now() + TRUST_WAIT_MS;
   while (Date.now() < deadline) {
     await pause(1000);
-    const { stdout: screen } = await run(
-      "cmux",
-      [
-        "read-screen",
-        "--workspace",
-        surface.workspaceId,
-        "--surface",
-        surface.surfaceId,
-      ],
-      { timeout: 10_000 },
-    );
+    const screen = await readScreen(surface);
     if (screen.includes(TRUST_PROMPT)) {
       await rpc("surface.send_key", { ...target(surface), key: "down" });
       await pause(KEY_GAP_MS);

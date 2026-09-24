@@ -62,6 +62,18 @@ export interface Waiting {
   ask: { toolUseId: string; questions: Question[] } | null;
   // An open permission prompt, which the board can approve or deny.
   approval: { toolUseId: string } | null;
+  // Any other numbered dialog, such as /exit's "Background work is
+  // running", read off the terminal since no tool call is behind it.
+  dialog: Dialog | null;
+}
+
+// A numbered dialog as the terminal shows it. `key` is its text, so an
+// answer only goes to the dialog it was meant for.
+export interface Dialog {
+  title: string;
+  detail: string[];
+  options: string[];
+  key: string;
 }
 
 // Tokens in the chat's context against the size of its window.

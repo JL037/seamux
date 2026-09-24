@@ -17,6 +17,7 @@ type Intent =
   | "answer"
   | "approve"
   | "deny"
+  | "choose"
   | "queue"
   | "queue-edit"
   | "queue-send"

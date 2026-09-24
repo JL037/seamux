@@ -27,7 +27,12 @@ import {
   type Subagent,
   type Waiting,
 } from "./board";
-import { closingState, listSurfaces, type Surface } from "./drive.server";
+import {
+  closingState,
+  listSurfaces,
+  readDialog,
+  type Surface,
+} from "./drive.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
 import {
   dispatchesFor,
@@ -524,6 +529,7 @@ function waitingOn(
       detail: summary.question,
       ask: null,
       approval: null,
+      dialog: null,
     };
   }
   if (row.status !== "waiting") return null;
@@ -539,6 +545,7 @@ function waitingOn(
       tool && !questions && row.waitingFor === "permission prompt"
         ? { toolUseId: tool.id }
         : null,
+    dialog: null,
   };
 }
 
@@ -633,6 +640,11 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       );
       const busy = turnRunning(row, summary?.turnActive ?? null);
       const waiting = waitingOn(row, summary);
+      // A dialog with nothing in the transcript behind it can only be read
+      // off the screen.
+      if (waiting && surface && !waiting.ask && !waiting.approval) {
+        waiting.dialog = await readDialog(surface).catch(() => null);
+      }
       return {
         sessionId: row.sessionId,
         name: row.name,
@@ -713,7 +725,11 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     for (const row of queuedFor(cards.map((c) => c.sessionId))) {
       cards
         .find((c) => c.sessionId === row.session_id)
-        ?.boardQueue.push({ id: row.id, text: row.text, queuedAt: row.queued_at });
+        ?.boardQueue.push({
+          id: row.id,
+          text: row.text,
+          queuedAt: row.queued_at,
+        });
     }
   } catch (err) {
     warnings.push(`Queue store unavailable: ${(err as Error).message}`);

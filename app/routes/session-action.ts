@@ -5,6 +5,7 @@ import { closable, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
   answerApproval,
+  answerDialog,
   answerQuestion,
   askToDelete,
   attach,
@@ -40,6 +41,7 @@ const INTENTS = new Set([
   "answer",
   "approve",
   "deny",
+  "choose",
   "queue",
   "queue-edit",
   "queue-send",
@@ -153,6 +155,14 @@ async function perform(sessionId: string, intent: string, form: FormData) {
       throw new Error("That approval is no longer open");
     }
     await answerApproval(sessionId, intent === "approve");
+  } else if (intent === "choose") {
+    // answerDialog reads the screen again, so only the dialog still open
+    // gets the key.
+    await answerDialog(
+      sessionId,
+      String(form.get("dialog") ?? ""),
+      Number(form.get("option")),
+    );
   } else if (intent === "interrupt") {
     cancelClose(sessionId);
     await interrupt(sessionId);

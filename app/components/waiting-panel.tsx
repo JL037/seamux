@@ -163,6 +163,37 @@ function ApprovalButtons({
   );
 }
 
+// Any other numbered dialog, answered with the option's digit. No option is
+// singled out: which one is safe depends on the dialog.
+function DialogButtons({
+  card,
+  dialog,
+}: {
+  card: Card;
+  dialog: NonNullable<Waiting["dialog"]>;
+}) {
+  const { submit, pending, error } = useSessionAction(card.sessionId);
+  const disabled = !card.drivable || pending;
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {error && <p className="text-destructive">{error}</p>}
+      {dialog.options.map((label, i) => (
+        <Button
+          key={i}
+          size="xs"
+          variant="outline"
+          disabled={disabled}
+          onClick={() =>
+            submit("choose", { dialog: dialog.key, option: String(i) })
+          }
+        >
+          {label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 // What a WAITING card is blocked on: its question to answer, the question
 // its reply ended on, or the tool call waiting for approval.
 export function WaitingPanel({ card }: { card: Card }) {
@@ -189,7 +220,9 @@ export function WaitingPanel({ card }: { card: Card }) {
         <ShieldQuestion className="mt-px size-3.5 shrink-0 text-amber-500" />
         <span className="min-w-0">
           <span className="font-medium">
-            {approval ? "Needs approval" : `Waiting: ${w.reason ?? "input"}`}
+            {approval
+              ? "Needs approval"
+              : (w.dialog?.title ?? `Waiting: ${w.reason ?? "input"}`)}
             {w.tool && ` · ${w.tool}`}
           </span>
           {w.detail && (
@@ -197,8 +230,16 @@ export function WaitingPanel({ card }: { card: Card }) {
               {w.detail}
             </span>
           )}
+          {w.dialog?.detail.map((line, i) => (
+            <span key={i} className="block break-words text-muted-foreground">
+              {line}
+            </span>
+          ))}
         </span>
       </div>
+      {w.dialog && (
+        <DialogButtons key={w.dialog.key} card={card} dialog={w.dialog} />
+      )}
       {w.approval && (
         <ApprovalButtons
           key={w.approval.toolUseId}
