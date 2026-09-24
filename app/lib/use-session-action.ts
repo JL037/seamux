@@ -14,6 +14,8 @@ type Intent =
   | "pin"
   | "unpin"
   | "answer"
+  | "approve"
+  | "deny"
   | "queue"
   | "queue-edit"
   | "queue-send"

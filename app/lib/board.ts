@@ -60,6 +60,8 @@ export interface Waiting {
   detail: string | null;
   // An open AskUserQuestion, which the board can answer.
   ask: { toolUseId: string; questions: Question[] } | null;
+  // An open permission prompt, which the board can approve or deny.
+  approval: { toolUseId: string } | null;
 }
 
 // Tokens in the chat's context against the size of its window.

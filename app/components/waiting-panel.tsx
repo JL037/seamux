@@ -132,8 +132,39 @@ function QuestionForm({
   );
 }
 
+// An open permission prompt, answered from the card. Approve is the dialog's
+// "Yes"; Deny refuses the call and ends the turn, so Jakob can reply.
+function ApprovalButtons({
+  card,
+  approval,
+}: {
+  card: Card;
+  approval: NonNullable<Waiting["approval"]>;
+}) {
+  const { submit, pending, error } = useSessionAction(card.sessionId);
+  const disabled = !card.drivable || pending;
+  const answer = (intent: "approve" | "deny") =>
+    submit(intent, { toolUseId: approval.toolUseId });
+  return (
+    <div className="flex items-center justify-end gap-2">
+      {error && <p className="text-destructive">{error}</p>}
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => answer("deny")}
+      >
+        Deny
+      </Button>
+      <Button size="xs" disabled={disabled} onClick={() => answer("approve")}>
+        {pending ? "Answering…" : "Approve"}
+      </Button>
+    </div>
+  );
+}
+
 // What a WAITING card is blocked on: its question to answer, the question
-// its reply ended on, or the tool call waiting for approval in the terminal.
+// its reply ended on, or the tool call waiting for approval.
 export function WaitingPanel({ card }: { card: Card }) {
   const w = card.waiting;
   if (!w) return null;
@@ -153,19 +184,28 @@ export function WaitingPanel({ card }: { card: Card }) {
   }
   const approval = w.reason === "permission prompt";
   return (
-    <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2 py-1">
-      <ShieldQuestion className="mt-px size-3.5 shrink-0 text-amber-500" />
-      <span className="min-w-0">
-        <span className="font-medium">
-          {approval ? "Needs approval" : `Waiting: ${w.reason ?? "input"}`}
-          {w.tool && ` · ${w.tool}`}
-        </span>
-        {w.detail && (
-          <span className="block break-words font-mono text-muted-foreground">
-            {w.detail}
+    <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2 py-1">
+      <div className="flex items-start gap-1.5">
+        <ShieldQuestion className="mt-px size-3.5 shrink-0 text-amber-500" />
+        <span className="min-w-0">
+          <span className="font-medium">
+            {approval ? "Needs approval" : `Waiting: ${w.reason ?? "input"}`}
+            {w.tool && ` · ${w.tool}`}
           </span>
-        )}
-      </span>
+          {w.detail && (
+            <span className="block break-words font-mono text-muted-foreground">
+              {w.detail}
+            </span>
+          )}
+        </span>
+      </div>
+      {w.approval && (
+        <ApprovalButtons
+          key={w.approval.toolUseId}
+          card={card}
+          approval={w.approval}
+        />
+      )}
     </div>
   );
 }

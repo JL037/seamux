@@ -523,6 +523,7 @@ function waitingOn(
       tool: null,
       detail: summary.question,
       ask: null,
+      approval: null,
     };
   }
   if (row.status !== "waiting") return null;
@@ -534,6 +535,10 @@ function waitingOn(
     tool: tool?.name ?? null,
     detail: tool && !questions ? toolDetail(tool.input) : null,
     ask: tool && questions ? { toolUseId: tool.id, questions } : null,
+    approval:
+      tool && !questions && row.waitingFor === "permission prompt"
+        ? { toolUseId: tool.id }
+        : null,
   };
 }
 

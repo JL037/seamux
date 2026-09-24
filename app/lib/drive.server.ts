@@ -136,6 +136,18 @@ export async function answerQuestion(
     await digit(1);
 }
 
+// Answer an open permission prompt. Measured against Claude Code 2.1.281:
+// 1 is always "Yes", while "No" moves with the options offered, so a denial
+// is Esc, which refuses the call and ends the turn for Jakob to reply to.
+export async function answerApproval(sessionId: string, allow: boolean) {
+  const surface = await surfaceFor(sessionId);
+  if (allow) {
+    await rpc("surface.send_text", { ...target(surface), text: "1" });
+  } else {
+    await rpc("surface.send_key", { ...target(surface), key: "escape" });
+  }
+}
+
 // Close a chat the way Jakob would: /exit, then close the tab it ran in.
 // The conversation is kept, and the card moves to DONE, where it can be
 // resumed.

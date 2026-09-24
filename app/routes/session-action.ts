@@ -4,6 +4,7 @@ import type { Route } from "./+types/session-action";
 import { closable, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
+  answerApproval,
   answerQuestion,
   askToDelete,
   attach,
@@ -138,6 +139,16 @@ async function perform(sessionId: string, intent: string, form: FormData) {
       ask.questions,
     );
     await answerQuestion(sessionId, ask.questions, answers);
+  } else if (intent === "approve" || intent === "deny") {
+    // Only the prompt still open, for the same reason as an answer.
+    const card = (await loadBoard()).cards.find(
+      (c) => c.sessionId === sessionId,
+    );
+    const approval = card?.waiting?.approval;
+    if (!approval || approval.toolUseId !== form.get("toolUseId")) {
+      throw new Error("That approval is no longer open");
+    }
+    await answerApproval(sessionId, intent === "approve");
   } else if (intent === "interrupt") {
     cancelClose(sessionId);
     await interrupt(sessionId);
