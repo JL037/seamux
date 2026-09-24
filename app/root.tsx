@@ -24,13 +24,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content="#0B1220" />
         <Meta />
         <Links />
-        {/* Carry this browser's keys over from before the rename, when they
-            were "seemux:", ahead of anything that reads them. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(()=>{try{for(const st of[localStorage,sessionStorage])for(const k of Object.keys(st))if(k.startsWith("seemux:")){const n="seamux:"+k.slice(7);if(st.getItem(n)===null)st.setItem(n,st.getItem(k));st.removeItem(k)}}catch{}})()`,
-          }}
-        />
         {/* Use the theme chosen with the header toggle, else follow the OS;
             shadcn tokens key off the .dark class. */}
         <script
