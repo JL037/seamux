@@ -57,19 +57,19 @@ export function ChatModal({
 }) {
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
   const url = `/sessions/${card.sessionId}/messages`;
-  const endRef = useRef<HTMLDivElement>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  // The dialog mounts its content a render or two after it opens, so the
+  // scroller is state: effects that need it rerun once it exists.
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const restored = useRef(false);
 
   // Remember where the conversation was scrolled to, so a reload lands back
   // there rather than at the end. Reading the end is remembered as such, so
   // messages that arrive meanwhile still show.
   useEffect(() => {
-    if (!open) return;
+    if (!open || !scroller) return;
+    const el = scroller;
     const key = scrollKey(card.sessionId);
     const save = () => {
-      const el = scrollerRef.current;
-      if (!el) return;
       const atEnd =
         el.scrollHeight - el.scrollTop - el.clientHeight < AT_END_PX;
       try {
@@ -79,7 +79,7 @@ export function ChatModal({
     };
     window.addEventListener("pagehide", save);
     return () => window.removeEventListener("pagehide", save);
-  }, [open, card.sessionId]);
+  }, [open, scroller, card.sessionId]);
 
   useEffect(() => {
     if (!open) return;
@@ -95,7 +95,7 @@ export function ChatModal({
   const messages = fetcher.data?.messages;
   const count = messages?.length ?? 0;
   useEffect(() => {
-    if (!open) return;
+    if (!open || !scroller) return;
     if (messages && !restored.current) {
       restored.current = true;
       const key = scrollKey(card.sessionId);
@@ -104,16 +104,16 @@ export function ChatModal({
         top = sessionStorage.getItem(key);
         sessionStorage.removeItem(key);
       } catch {}
-      if (top !== null && scrollerRef.current) {
-        scrollerRef.current.scrollTop = Number(top);
+      if (top !== null) {
+        scroller.scrollTop = Number(top);
         return;
       }
     }
-    endRef.current?.scrollIntoView({ block: "end" });
+    scroller.scrollTop = scroller.scrollHeight;
     // Opening the chat, or a change in how many messages there are, moves the
     // view to the end; nothing else should.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, count]);
+  }, [open, scroller, count]);
 
   // Sending returns to the board; a failed send shows on the card, with the
   // draft put back.
@@ -136,7 +136,7 @@ export function ChatModal({
 
         <div className="-mx-4 flex min-h-0 flex-1 border-y">
           <div
-            ref={scrollerRef}
+            ref={setScroller}
             className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
           >
             {!messages && fetcher.state !== "idle" && (
@@ -160,7 +160,6 @@ export function ChatModal({
                 </div>
               ))}
             </div>
-            <div ref={endRef} />
           </div>
           {card.subagents.length > 0 && (
             <aside className="hidden w-72 shrink-0 overflow-y-auto border-l px-4 py-3 md:block">
