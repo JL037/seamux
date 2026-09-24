@@ -11,7 +11,9 @@
 //    fast-forwards. A conflict stops here, with main untouched.
 // 2. Typechecks the rebased branch in its worktree.
 // 3. Fast-forwards main. The board picks the change up by hot reload.
-// 4. If dependencies changed, reinstalls them and restarts the board.
+// 4. If dependencies changed, reinstalls them and restarts the board. It
+//    restarts it too when server modules changed, since hot reload keeps
+//    their in-memory state, such as the queue's timer, from before.
 // 5. Checks the board still answers.
 //
 // It never deletes the branch or its worktree.
@@ -199,21 +201,20 @@ async function main() {
     return;
   }
 
+  const changed = git(REPO, "diff", "--name-only", before, after).split("\n");
   // The lockfile changes whenever dependencies do; package.json alone
   // also changes for scripts, which need no reinstall.
-  const depsChanged =
-    git(
-      REPO,
-      "diff",
-      "--name-only",
-      before,
-      after,
-      "--",
-      "package-lock.json",
-    ) !== "";
+  const depsChanged = changed.includes("package-lock.json");
+  // A hot-reloaded server module starts over beside the old one's timers
+  // and maps, which then disagree until the board restarts.
+  const serverChanged = changed.some((f) => f.endsWith(".server.ts"));
   if (depsChanged) {
     step("Dependencies changed: reinstalling and restarting the board");
     run(REPO, "npm", "ci", "--no-audit", "--no-fund");
+  } else if (serverChanged) {
+    step("Server modules changed: restarting the board");
+  }
+  if (depsChanged || serverChanged) {
     // `npm run serve` picks this up within a second.
     const before = boardPid(REPO);
     requestRestart(REPO);
