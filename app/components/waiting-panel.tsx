@@ -175,21 +175,21 @@ function DialogButtons({
   const { submit, pending, error } = useSessionAction(card.sessionId);
   const disabled = !card.drivable || pending;
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {error && <p className="text-destructive">{error}</p>}
+    <div className="flex flex-col gap-1.5">
       {dialog.options.map((label, i) => (
-        <Button
+        <button
+          type="button"
           key={i}
-          size="xs"
-          variant="outline"
           disabled={disabled}
           onClick={() =>
             submit("choose", { dialog: dialog.key, option: String(i) })
           }
+          className="cursor-pointer rounded-md border bg-background px-2 py-1 text-left hover:bg-muted disabled:cursor-default disabled:opacity-50"
         >
           {label}
-        </Button>
+        </button>
       ))}
+      {error && <p className="text-destructive">{error}</p>}
     </div>
   );
 }
