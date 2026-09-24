@@ -47,12 +47,16 @@ export function replyExcerpt(text: string): string {
 }
 
 // The last paragraph of a reply that ends on a question, so the chat is
-// waiting on Jakob although no dialog is open. Trailing markdown such as
-// bold or a closing quote does not hide the question mark.
+// waiting on Jakob although no dialog is open. The question need not be
+// its last sentence: "Want me to go ahead? Or tell me to stop." still asks.
+// Trailing markdown such as bold or a closing quote does not hide the
+// question mark, and one inside a URL or code does not count.
 export function endingQuestionIn(text: string | null): string | null {
   const trimmed = text?.trim();
-  if (!trimmed || !/\?[*_`"')\]]*$/.test(trimmed)) return null;
+  if (!trimmed) return null;
   const last = trimmed.split(/\n\s*\n/).at(-1) ?? trimmed;
+  const prose = last.replace(/`[^`]*`/g, "");
+  if (!/\?[*_`"')\]]*(?:\s|$)/.test(prose)) return null;
   return excerpt(last.replace(/\*\*|__|`/g, ""));
 }
 
