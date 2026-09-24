@@ -150,6 +150,8 @@ DONE is hidden by default; a **Show done** toggle in the header, remembered per 
 
 **DONE is entered by a human closing the chat**, which is the distinction that separates it from IDLE. A session that finishes its turn and has nothing left to do is **IDLE**: alive, holding its worktree, ready for more work. It becomes **DONE** when Jakob closes it. Jakob, 2026-09-23: *"when I close a chat, it's done."*
 
+**Closing a chat closes its cmux tab.** The board sends `/exit`, waits for Claude to leave the tab, then closes that tab, or its workspace when it was the only tab. A workspace seemux launched would close itself, but a chat Jakob started by hand in his own tab would otherwise leave its shell open. The conversation stays on disk, so the chat can still be resumed. If Claude has not exited within ten seconds, the board leaves the tab open.
+
 From there it decays on two timers, and both are display rules:
 
 | Age | Shown | Session itself |
@@ -290,6 +292,7 @@ Each of these corrected something the research had marked verified or documented
 - **`workspace.create` ignores `command`.** The field is `initial_command`, run through `zsh -lc`.
 - **That login shell does not read `~/.zshrc`**, so neither `claude` nor `node` is on its `PATH`. seemux launches through cmux's own `cmux-claude-wrapper`, which also registers the session with cmux, with `~/.local/bin` and the server's Node directory prepended. Launching `claude` directly starts a session cmux never learns about, which the board then cannot drive.
 - **cmux RPCs default to the caller's own surface.** A call without a `surface_id` acts on whatever terminal seemux itself runs in. seemux always resolves the surface server-side and passes it explicitly.
+- **A workspace closes itself when its `initial_command` exits**, but a chat started by hand leaves its shell prompt behind after `/exit`. **`surface.close` refuses a workspace's last tab** (`Cannot close the last surface`), so for the last tab seemux calls `workspace.close` instead.
 - **A resumed chat is invisible for a few seconds.** Until the new workspace starts Claude, nothing reports the session as live, so a second resume in that window started a second process on the same conversation. The server now claims a session before its first check and holds the claim for 60 seconds.
 - **Idle and waiting are separate `status` values.** `claude agents` reports `status: waiting` while a dialog is open, with `waitingFor` set to `input needed` for AskUserQuestion or `permission prompt` for an approval. The research listed only `idle` and `busy`, so the board used to depend on cmux for WAITING and missed sessions outside it.
 - **AskUserQuestion answers by digit.** On a single-select question a digit picks and moves on, and it submits outright when it is the only question. On a multi-select question, digits toggle and Tab moves on. The digit after the last option is "Type something", and a paste there submits the text. With several questions, or any multi-select one, a review screen comes last and `1` submits it. Measured against Claude Code 2.1.281.

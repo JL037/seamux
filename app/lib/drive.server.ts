@@ -128,10 +128,43 @@ export async function answerQuestion(
     await digit(1);
 }
 
-// Close a chat the way Jakob would: /exit. The conversation is kept, and
-// the card moves to DONE, where it can be resumed.
+// Close a chat the way Jakob would: /exit, then close the tab it ran in.
+// The conversation is kept, and the card moves to DONE, where it can be
+// resumed.
+//
+// A workspace seemux launched closes itself when Claude exits, but a chat
+// Jakob started by hand leaves its shell behind, so the tab is closed once
+// Claude is gone. cmux refuses to close a workspace's last tab, so then the
+// workspace goes instead. A Claude that has not exited keeps its tab.
+const EXIT_WAIT_MS = 10_000;
+
 export async function closeChat(sessionId: string) {
-  await sendMessage(sessionId, "/exit");
+  const surface = await surfaceFor(sessionId);
+  await rpc("terminal.paste", { ...target(surface), text: "/exit" });
+  await rpc("surface.send_key", { ...target(surface), key: "enter" });
+
+  const deadline = Date.now() + EXIT_WAIT_MS;
+  while ((await listSurfaces()).has(sessionId)) {
+    if (Date.now() > deadline)
+      throw new Error("Claude did not exit, so its tab was left open");
+    await pause(500);
+  }
+
+  const { workspaces } = await rpc<{ workspaces: { id: string }[] }>(
+    "workspace.list",
+    {},
+  );
+  if (!workspaces.some((w) => w.id === surface.workspaceId)) return;
+  const { surfaces } = await rpc<{ surfaces: { id: string }[] }>(
+    "surface.list",
+    { workspace_id: surface.workspaceId },
+  );
+  if (!surfaces.some((s) => s.id === surface.surfaceId)) return;
+  if (surfaces.length > 1) {
+    await rpc("surface.close", target(surface));
+  } else {
+    await rpc("workspace.close", { workspace_id: surface.workspaceId });
+  }
 }
 
 // Every session seemux starts runs in its own cmux workspace.
