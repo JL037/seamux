@@ -110,6 +110,14 @@ export function ChatModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count]);
 
+  // Sending returns to the board; a failed send shows on the card, with the
+  // draft put back.
+  const send = () => {
+    if (!canSend) return;
+    onSend();
+    onOpenChange(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-4 sm:max-w-5xl">
@@ -169,11 +177,7 @@ export function ChatModal({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
-                  // ⌘↵ sends and returns to the board; a failed send
-                  // shows on the card, with the draft put back.
-                  if (!canSend) return;
-                  onSend();
-                  onOpenChange(false);
+                  send();
                 }
               }}
               placeholder={
@@ -195,7 +199,7 @@ export function ChatModal({
               <GitFork />
               {forking ? "Forking…" : "Fork"}
             </Button>
-            <Button disabled={!canSend} onClick={onSend} title="Send (⌘↵)">
+            <Button disabled={!canSend} onClick={send} title="Send (⌘↵)">
               <SendHorizontal />
               {pending ? "Sending…" : "Send"}
             </Button>

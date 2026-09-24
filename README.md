@@ -274,7 +274,7 @@ Every write checks that the request's Host is local and its Origin matches it. A
 
 All five are built, each as one commit on seamux's `phase-1-board` branch.
 
-**Phase 1, read-only board**, being `claude agents --json` plus cmux enrichment served locally. Built as planned, plus a popout modal per card with the full conversation. ⌘↵ in the modal sends the message and closes it, back to the board; the Send button leaves it open.
+**Phase 1, read-only board**, being `claude agents --json` plus cmux enrichment served locally. Built as planned, plus a popout modal per card with the full conversation. Sending from the modal, with ⌘↵ or the Send button, closes it, back to the board.
 
 **Phase 2, subagent visibility**, via `SubagentStart` and `SubagentStop` hooks writing to the store. Built. A card whose subagents are running sits in WORKING even when the parent is idle, which is the calm-card problem from the 272-firm sweep, fixed.
 
