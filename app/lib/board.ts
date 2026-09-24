@@ -46,10 +46,14 @@ export interface Question {
 // is only offered on single-select questions.
 export type Answer = { picks: number[] } | { text: string };
 
+// The reason on a chat whose turn ended on a question in its reply. Claude
+// Code calls that session idle, since no dialog is open.
+export const ASKED_IN_REPLY = "asked in its reply";
+
 // What a WAITING card is blocked on.
 export interface Waiting {
   // Claude Code's own words, from `claude agents`: "input needed" for a
-  // question, "permission prompt" for an approval.
+  // question, "permission prompt" for an approval. Or ASKED_IN_REPLY.
   reason: string | null;
   // The tool call the dialog belongs to, from the transcript.
   tool: string | null;
@@ -130,3 +134,9 @@ export const DISPATCH_VISIBLE_MS = 24 * 60 * 60 * 1000;
 
 // DONE cards stay visible for this long after the chat closes.
 export const DONE_VISIBLE_MS = 30 * 60 * 1000;
+
+// Whether /exit is safe: the turn is over and no dialog is open, so it
+// would land in an empty prompt box.
+export function closable(card: Card): boolean {
+  return card.column === "idle" || card.waiting?.reason === ASKED_IN_REPLY;
+}

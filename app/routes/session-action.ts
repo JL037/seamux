@@ -1,7 +1,7 @@
 import { data } from "react-router";
 
 import type { Route } from "./+types/session-action";
-import type { Answer, Question } from "~/lib/board";
+import { closable, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
   answerQuestion,
@@ -69,11 +69,11 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     if (text.length > MAX_MESSAGE) throw new Error("Message too long");
     await sendMessage(sessionId, text);
   } else if (intent === "close") {
-    // Only an idle chat: closing a working one would cut its turn off.
+    // Only a chat at rest: closing a working one would cut its turn off.
     const card = (await loadBoard()).cards.find(
       (c) => c.sessionId === sessionId,
     );
-    if (card?.column !== "idle") {
+    if (!card || !closable(card)) {
       throw new Error("Only idle chats can be closed");
     }
     await closeChat(sessionId);

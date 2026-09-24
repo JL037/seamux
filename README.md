@@ -136,7 +136,7 @@ Four columns: **IDLE**, **WAITING**, **WORKING**, **DONE**. Simpler than the uni
 | Column | Means | Derived from |
 | --- | --- | --- |
 | IDLE | Alive, holding its worktree, nothing to do | `claude agents` `status: idle` with no block |
-| WAITING | Blocked on a human | `claude agents` `status: waiting` or a child's `state: blocked` / `state: failed`, with cmux `any_agent_needs_input` as a backup |
+| WAITING | Blocked on a human | `claude agents` `status: waiting`, a turn that ended on a question, or a background child's `state: blocked` |
 | WORKING | Running | `status: busy` when the transcript agrees a turn is in progress, or any of its subagents still running |
 | DONE | Closed by Jakob | `claude stop`, or the chat closing |
 
@@ -144,9 +144,11 @@ DONE is hidden by default; a **Show done** toggle in the header, remembered per 
 
 **PINNED sits left of the four**, for sessions that are meant to run for a long time by design. It appears only while something is pinned. A pin is Jakob's call, since nothing about a session says it is long-running, so it is one of the few things the store records. A pinned card stays in PINNED whatever its state, shown as a coloured dot beside its name, with the same controls it would have in its state's column. Closing a pinned chat keeps it in PINNED with its resume button for as long as its transcript exists, rather than letting it age off after 30 minutes. Unpinning puts it back in its state's column. Jakob, 2026-09-23: *"some sessions are meant to be long running by design."*
 
-**A failed session needs Jakob**, so it lands in WAITING rather than DONE. Jakob, 2026-09-23: *"A failed session is probably blocked/waiting."*
+**WAITING means something is stopped until Jakob answers.** A blocked background session is; a failed one is over, so its parent stays where its own state puts it, with the failure shown as a red marker. This reverses an earlier call that failed meant waiting. Jakob, 2026-09-23: *"A failed background job is still idle then. It's not blocked waiting on me... right?"*
 
-**Background sessions are not cards.** A background session belongs to the chat that spawned it, and Jakob never drives one directly, so the board shows only that it exists, as a marker on its parent's card. Every piece of dispatched work is a new top-level session, which is what gets a card. Jakob, 2026-09-23: *"backgound sessions have a parent. Those are just part of the main chat (mainly that they exist)... Every piece of dispatched \"Work\" is a new top level agent."*
+**A chat whose turn ended on a question is WAITING too**, although Claude Code reports it `idle`, since no dialog is open. The board reads it from the transcript: the last message ended the turn, and its text ends with a question mark. The card shows the question, the reply box answers it, and the chat can still be closed. Jakob, 2026-09-23: *"You asked a question, but you're back in 'idle'"*
+
+**Background sessions are not cards.** A background session belongs to the chat that spawned it, and Jakob never drives one directly, so the board shows only that it exists, as a marker on its parent's card. Every piece of dispatched work is a new top-level session, which is what gets a card. `claude agents` records no parent, so a background session is attached to the live chats in its directory that started before it, since a chat cannot have spawned something older than itself. Jakob, 2026-09-23: *"backgound sessions have a parent. Those are just part of the main chat (mainly that they exist)... Every piece of dispatched \"Work\" is a new top level agent."*
 
 **DONE is entered by a human closing the chat**, which is the distinction that separates it from IDLE. A session that finishes its turn and has nothing left to do is **IDLE**: alive, holding its worktree, ready for more work. It becomes **DONE** when Jakob closes it. Jakob, 2026-09-23: *"when I close a chat, it's done."*
 
@@ -295,6 +297,7 @@ Each of these corrected something the research had marked verified or documented
 - **A workspace closes itself when its `initial_command` exits**, but a chat started by hand leaves its shell prompt behind after `/exit`. **`surface.close` refuses a workspace's last tab** (`Cannot close the last surface`), so for the last tab seemux calls `workspace.close` instead.
 - **A resumed chat is invisible for a few seconds.** Until the new workspace starts Claude, nothing reports the session as live, so a second resume in that window started a second process on the same conversation. The server now claims a session before its first check and holds the claim for 60 seconds.
 - **Idle and waiting are separate `status` values.** `claude agents` reports `status: waiting` while a dialog is open, with `waitingFor` set to `input needed` for AskUserQuestion or `permission prompt` for an approval. The research listed only `idle` and `busy`, so the board used to depend on cmux for WAITING and missed sessions outside it.
+- **cmux's `any_agent_needs_input` goes stale.** It stayed `true` on a session that `claude agents` reported `busy` and whose screen showed a running command, with no dialog open. The board no longer reads it.
 - **AskUserQuestion answers by digit.** On a single-select question a digit picks and moves on, and it submits outright when it is the only question. On a multi-select question, digits toggle and Tab moves on. The digit after the last option is "Type something", and a paste there submits the text. With several questions, or any multi-select one, a review screen comes last and `1` submits it. Measured against Claude Code 2.1.281.
 - **A new folder stops on a trust dialog that nothing reports.** Before Claude Code starts, it asks whether the folder is trusted: no `claude agents` row, no transcript, cmux sees no input needed. Its default is "No, exit". Choosing a folder to dispatch into is that decision, so every launch watches the new surface for the dialog and answers yes.
 - **The global hook is required.** A hook fires in the session that starts the subagent, so a hook in seemux's own project settings would only ever see seemux's own subagents.

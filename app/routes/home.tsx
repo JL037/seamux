@@ -42,6 +42,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import {
+  closable,
   COLUMN_LABELS,
   COLUMNS,
   type Board,
@@ -291,7 +292,7 @@ function CardControl({ card }: { card: BoardCard }) {
       </span>
     );
   }
-  if (card.column === "idle") {
+  if (closable(card)) {
     return (
       <Button
         size="icon-xs"

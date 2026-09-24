@@ -2,7 +2,13 @@ import { useState } from "react";
 import { Check, CircleHelp, ShieldQuestion } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import type { Answer, Card, Question, Waiting } from "~/lib/board";
+import {
+  ASKED_IN_REPLY,
+  type Answer,
+  type Card,
+  type Question,
+  type Waiting,
+} from "~/lib/board";
 import { useSessionAction } from "~/lib/use-session-action";
 import { cn } from "~/lib/utils";
 
@@ -126,13 +132,25 @@ function QuestionForm({
   );
 }
 
-// What a WAITING card is blocked on: its question to answer, or the tool
-// call waiting for approval in the terminal.
+// What a WAITING card is blocked on: its question to answer, the question
+// its reply ended on, or the tool call waiting for approval in the terminal.
 export function WaitingPanel({ card }: { card: Card }) {
   const w = card.waiting;
   if (!w) return null;
   if (w.ask)
     return <QuestionForm key={w.ask.toolUseId} card={card} ask={w.ask} />;
+  // Answered with the reply box, like any message.
+  if (w.reason === ASKED_IN_REPLY) {
+    return (
+      <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2 py-1">
+        <CircleHelp className="mt-px size-3.5 shrink-0 text-amber-500" />
+        <span className="min-w-0 break-words">
+          <span className="font-medium">Asked: </span>
+          {w.detail}
+        </span>
+      </div>
+    );
+  }
   const approval = w.reason === "permission prompt";
   return (
     <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2 py-1">

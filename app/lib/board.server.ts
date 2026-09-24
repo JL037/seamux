@@ -1,7 +1,7 @@
 // Derives the board from the running tools. Nothing here writes anywhere:
-// session state comes from `claude agents --json`, backed by cmux's waiting
-// signal, and card content from the transcripts on disk. If this ever
-// disagrees with the tools, the tools win.
+// session state comes from `claude agents --json`, and card content from
+// the transcripts on disk. If this ever disagrees with the tools, the tools
+// win.
 
 import { execFile } from "node:child_process";
 import { open, readdir, readFile, stat } from "node:fs/promises";
@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
+  ASKED_IN_REPLY,
   DISPATCH_VISIBLE_MS,
   DONE_VISIBLE_MS,
   SUBAGENT_STALE_MS,
@@ -69,6 +70,8 @@ interface TranscriptSummary {
   turnActive: boolean | null;
   // The tool call the last message is waiting on, if any.
   pendingTool: { id: string; name: string; input: any } | null;
+  // The question the last message ended the turn on, if it did.
+  question: string | null;
 }
 
 async function readJson<T>(cmd: string, args: string[]): Promise<T> {
@@ -87,42 +90,20 @@ interface Workspace {
   id: string;
   ref: string;
   cwd: string;
-  needsInput: boolean;
 }
 
-// Every cmux workspace and whether an agent in it needs input. cmux only sees
-// sessions in surfaces it hosts, so this can add WAITING but never owns the
-// columns.
+// Every cmux workspace, for the card's workspace ref. Its needs-input
+// signal is not read: it stays set after the dialog is answered, and
+// `claude agents` reports waiting itself.
 async function cmuxWorkspaces(): Promise<Workspace[]> {
   const { workspaces } = await readJson<{
     workspaces: { id: string; ref: string; current_directory: string }[];
   }>("cmux", ["rpc", "workspace.list", "{}"]);
-
-  const entries = await Promise.all(
-    workspaces.map(async (w) => {
-      let status: { signals: { any_agent_needs_input: boolean } };
-      try {
-        status = await readJson("cmux", [
-          "rpc",
-          "workspace.status.get",
-          JSON.stringify({ workspace_id: w.id }),
-        ]);
-      } catch (err) {
-        // Closed between the list and this call, as closing a chat does.
-        if (err instanceof Error && err.message.includes("not_found")) {
-          return null;
-        }
-        throw err;
-      }
-      return {
-        id: w.id,
-        ref: w.ref,
-        cwd: w.current_directory,
-        needsInput: status.signals.any_agent_needs_input,
-      };
-    }),
-  );
-  return entries.filter((w): w is Workspace => w !== null);
+  return workspaces.map((w) => ({
+    id: w.id,
+    ref: w.ref,
+    cwd: w.current_directory,
+  }));
 }
 
 async function backgroundDetail(
@@ -230,6 +211,18 @@ function pendingTool(o: any): TranscriptSummary["pendingTool"] {
     : null;
 }
 
+// The last paragraph of a reply that ended the turn on a question, so the
+// chat is waiting on Jakob although no dialog is open. Trailing markdown
+// such as bold or a closing quote does not hide the question mark.
+function endingQuestion(o: any): string | null {
+  if (o.type !== "assistant" || o.message?.stop_reason !== "end_turn")
+    return null;
+  const text = textOf(o.message?.content)?.trim();
+  if (!text || !/\?[*_`"')\]]*$/.test(text)) return null;
+  const last = text.split(/\n\s*\n/).at(-1) ?? text;
+  return excerpt(last.replace(/\*\*|__|`/g, ""));
+}
+
 async function summarize(path: string): Promise<TranscriptSummary> {
   const summary: TranscriptSummary = {
     name: null,
@@ -239,6 +232,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     lastReply: null,
     turnActive: null,
     pendingTool: null,
+    question: null,
   };
   const lines = await readTail(path);
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -261,6 +255,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     ) {
       summary.turnActive = turnActive(o);
       summary.pendingTool = pendingTool(o);
+      summary.question = endingQuestion(o);
     }
     if (o.isSidechain || o.isMeta || o.isCompactSummary) continue;
 
@@ -429,9 +424,18 @@ function toolDetail(input: any): string | null {
 
 function waitingOn(
   row: AgentRow,
-  tool: TranscriptSummary["pendingTool"],
+  summary: TranscriptSummary | null,
 ): Waiting | null {
+  if (row.status === "idle" && summary?.question) {
+    return {
+      reason: ASKED_IN_REPLY,
+      tool: null,
+      detail: summary.question,
+      ask: null,
+    };
+  }
   if (row.status !== "waiting") return null;
+  const tool = summary?.pendingTool ?? null;
   const questions =
     tool?.name === "AskUserQuestion" ? questionsOf(tool.input) : null;
   return {
@@ -453,10 +457,9 @@ function liveColumn(
   background: BackgroundSession[],
   subagents: Subagent[],
 ): Column {
-  // A failed or blocked child needs Jakob just as much as a blocked parent.
-  const childNeedsHuman = background.some(
-    (b) => b.state === "blocked" || b.state === "failed",
-  );
+  // A blocked child needs Jakob just as much as a blocked parent. A failed
+  // one is over: it shows on the card but asks nothing of Jakob.
+  const childNeedsHuman = background.some((b) => b.state === "blocked");
   if (needsInput || childNeedsHuman) return "waiting";
   // A parent at rest while its subagents run is still working.
   if (busy || subagents.some((s) => s.running && !s.stale)) return "working";
@@ -469,9 +472,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const [agents, workspaces, transcripts] = await Promise.all([
     listAgents(),
     cmuxWorkspaces().catch((err) => {
-      warnings.push(
-        `cmux unavailable, WAITING may be incomplete: ${err.message}`,
-      );
+      warnings.push(`cmux unavailable, workspace refs missing: ${err.message}`);
       return [] as Workspace[];
     }),
     indexTranscripts(),
@@ -490,17 +491,16 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const backgroundRows = agents.filter((a) => !isChat(a));
   const background = await Promise.all(backgroundRows.map(toBackground));
 
-  // Background sessions carry no parent id, so attach them to the live chat
-  // in the same directory. Ones with no live chat there are orphans.
-  const liveCwds = new Set(interactive.map((a) => a.cwd));
-  const childrenByCwd = new Map<string, BackgroundSession[]>();
+  // Background sessions carry no parent id, so attach them to the live
+  // chats in the same directory that started before them: a chat cannot
+  // have spawned a session older than itself. The rest are orphans.
+  const parentOf = (parent: AgentRow, child: AgentRow) =>
+    parent.cwd === child.cwd && parent.startedAt <= child.startedAt;
+  const childrenOf = (parent: AgentRow) =>
+    background.filter((_, i) => parentOf(parent, backgroundRows[i]));
   const orphans: Board["orphans"] = [];
   backgroundRows.forEach((row, i) => {
-    if (liveCwds.has(row.cwd)) {
-      const list = childrenByCwd.get(row.cwd) ?? [];
-      list.push(background[i]);
-      childrenByCwd.set(row.cwd, list);
-    } else {
+    if (!interactive.some((p) => parentOf(p, row))) {
       orphans.push({ ...background[i], cwd: row.cwd });
     }
   });
@@ -525,25 +525,19 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       const ws = surface
         ? workspaces.find((w) => w.id === surface.workspaceId)
         : workspaces.find((w) => w.cwd === row.cwd);
-      const children = childrenByCwd.get(row.cwd) ?? [];
+      const children = childrenOf(row);
       const subagents = await Promise.all(
         subagentRows
           .filter((s) => s.session_id === row.sessionId)
           .map((s) => toSubagent(s, transcript?.path, now)),
       );
       const busy = turnRunning(row, summary?.turnActive ?? null);
-      const waiting = waitingOn(row, summary?.pendingTool ?? null);
+      const waiting = waitingOn(row, summary);
       return {
         sessionId: row.sessionId,
         name: row.name,
         cwd: row.cwd,
-        column: liveColumn(
-          busy,
-          // cmux as a backup, for a dialog Claude Code does not report.
-          waiting != null || (ws?.needsInput ?? false),
-          children,
-          subagents,
-        ),
+        column: liveColumn(busy, waiting != null, children, subagents),
         branch: summary?.branch ?? null,
         lastActivityAt: transcript?.mtimeMs ?? null,
         lastPrompt: summary?.lastPrompt ?? null,
