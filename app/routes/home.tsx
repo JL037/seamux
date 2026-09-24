@@ -88,13 +88,16 @@ function shortPath(cwd: string): string {
   return cwd.replace(/^\/Users\/[^/]+/, "~");
 }
 
-// A colour for the full project path, the same on every poll and every
-// reload, so cards from one directory can be spotted at a glance. FNV-1a
-// picks the hue; fixed lightness and chroma keep every hue equally legible.
+// A colour for the project a path belongs to, the same on every poll and
+// every reload, so cards from one repo can be spotted at a glance. A
+// worktree (`.claude/worktrees/<name>` or `worktrees/<name>`) takes its
+// repo's colour. FNV-1a picks the hue; fixed lightness and chroma keep every
+// hue equally legible.
 function pathColor(cwd: string): string {
+  const project = cwd.replace(/\/(?:\.claude\/)?worktrees\/[^/]+(?:\/.*)?$/, "");
   let h = 0x811c9dc5;
-  for (let i = 0; i < cwd.length; i++) {
-    h ^= cwd.charCodeAt(i);
+  for (let i = 0; i < project.length; i++) {
+    h ^= project.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
   return `oklch(0.7 0.15 ${(h >>> 0) % 360})`;
