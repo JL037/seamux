@@ -34,7 +34,7 @@ The store at `data/seamux.db` holds only what those don't record: subagent lifec
 | --- | --- |
 | PINNED | Sessions you've pinned as long-running. It keeps your order, which you change by dragging a card's name, and only appears while something is pinned |
 | IDLE | Alive, nothing to do |
-| WAITING | Stopped until you answer: a permission prompt, a question, any other dialog, or a turn that ended on a question |
+| WAITING | Stopped until you answer: a permission prompt, a question, any other dialog, or a turn that ended on a question, or that a background session reports left it blocked on you |
 | WORKING | A turn is running, or one of its subagents is |
 | DONE | Closed by you. Hidden until you click **Show done**. A card stays for 30 minutes with a resume button, then drops off the board |
 

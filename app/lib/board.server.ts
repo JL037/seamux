@@ -232,6 +232,9 @@ function turnActive(o: any): boolean {
     return true;
   const text = (textOf(content) ?? "").trimStart();
   if (text.startsWith("[Request interrupted")) return false;
+  // A skill or prompt command: its expansion follows as a meta message, and
+  // the model answers it. Local commands such as /model start <command-name>.
+  if (text.startsWith("<command-message>")) return true;
   // A task notification wakes the model; other harness turns do not.
   if (text.startsWith("<task-notification")) return true;
   return !SYNTHETIC_PROMPT.test(text);
@@ -309,10 +312,13 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     if (o.type === "agent-name" && !summary.name) summary.name = o.agentName;
     if (o.cwd && !summary.cwd) summary.cwd = o.cwd;
     if (o.gitBranch && !summary.branch) summary.branch = o.gitBranch;
+    // Meta messages ride along with the message before them, such as a
+    // prompt command's expansion, so that one settles the turn.
     if (
       summary.turnActive == null &&
       (o.type === "user" || o.type === "assistant") &&
-      !o.isSidechain
+      !o.isSidechain &&
+      !o.isMeta
     ) {
       summary.turnActive = turnActive(o);
       summary.pendingTool = pendingTool(o);
@@ -529,12 +535,16 @@ function toolDetail(input: any): string | null {
 function waitingOn(
   row: AgentRow,
   summary: TranscriptSummary | null,
+  needs: string | null,
 ): Waiting | null {
-  if (row.status === "idle" && summary?.question) {
+  // A background session says itself when its reply left it blocked on
+  // Jakob, whether or not the reply ends on a question mark.
+  const blocked = row.state === "blocked";
+  if (row.status === "idle" && (summary?.question || blocked)) {
     return {
       reason: ASKED_IN_REPLY,
       tool: null,
-      detail: summary.question,
+      detail: (blocked ? needs : null) ?? summary?.question ?? null,
       ask: null,
       approval: null,
       dialog: null,
@@ -657,7 +667,11 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
           .map((s) => toSubagent(s, transcript?.path, now)),
       );
       const busy = turnRunning(row, summary?.turnActive ?? null);
-      const waiting = waitingOn(row, summary);
+      const needs =
+        row.state === "blocked"
+          ? (await backgroundDetail(row.id ?? row.sessionId.slice(0, 8))).needs
+          : null;
+      const waiting = waitingOn(row, summary, needs);
       // A dialog with nothing in the transcript behind it can only be read
       // off the screen.
       if (waiting && surface && !waiting.ask && !waiting.approval) {
