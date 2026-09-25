@@ -2,19 +2,38 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { MiddlewareFunction } from "react-router";
 
 import { basicAuthHeader, readCredentials } from "~/lib/credentials";
+import {
+  ACCESS_HEADER,
+  checkTunnelRequest,
+  isTunnelHost,
+} from "~/lib/remote.server";
 
 // The board runs from its checkout, so that is where its .env is.
-export function isSecured(): boolean {
-  return readCredentials(process.cwd()) !== null;
+// A request through the tunnel has passed Cloudflare Access, so it counts.
+export function isSecured(request: Request): boolean {
+  return (
+    readCredentials(process.cwd()) !== null ||
+    isTunnelHost(process.cwd(), request.headers.get("host"))
+  );
 }
 
-// HTTP Basic in front of every route: documents, data requests and actions.
-// Without credentials configured it lets everything through, and the board
-// turns red and names itself "seamux (unsecured)" instead.
-export const requireBasicAuth: MiddlewareFunction<Response> = (
+// In front of every route: documents, data requests and actions.
+//
+// Through the tunnel, Cloudflare Access is the login: the request must carry
+// a valid Access token, and HTTP Basic isn't asked for. Otherwise HTTP Basic,
+// when credentials are configured. Without them it lets everything through,
+// and the board turns red and names itself "seamux (unsecured)" instead.
+export const requireAuth: MiddlewareFunction<Response> = async (
   { request },
   next,
 ) => {
+  const tunnel = await checkTunnelRequest(
+    process.cwd(),
+    request.headers.get("host"),
+    request.headers.get(ACCESS_HEADER),
+  );
+  if (tunnel === "allowed") return next();
+  if (tunnel === "denied") return new Response("Forbidden", { status: 403 });
   const credentials = readCredentials(process.cwd());
   if (!credentials) return next();
   const given = request.headers.get("authorization") ?? "";

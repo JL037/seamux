@@ -1,17 +1,32 @@
 import { data } from "react-router";
 
+import { isTunnelHost } from "~/lib/remote.server";
+
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
+
+// Whether the request was made on this Mac, not through the tunnel.
+export function isLocalRequest(request: Request): boolean {
+  const host = request.headers.get("host") ?? "";
+  return LOCAL_HOSTS.has(host.replace(/:\d+$/, ""));
+}
+
+// The tunnel's hostname, which the auth middleware has already checked for
+// a valid Cloudflare Access token.
+function isTunnelRequest(request: Request): boolean {
+  return isTunnelHost(process.cwd(), request.headers.get("host"));
+}
 
 // The board's actions spawn sessions and type into them. A browser lets any
 // website POST a form to 127.0.0.1, so only accept requests the board itself
-// made: the Host must be local (no DNS rebinding) and the Origin must match.
+// made: the Host must be local or the tunnel's (no DNS rebinding) and the
+// Origin must match it.
 export function assertFromBoard(request: Request) {
   const host = request.headers.get("host") ?? "";
   const origin = request.headers.get("origin");
-  const hostname = host.replace(/:\d+$/, "");
-  if (!LOCAL_HOSTS.has(hostname) || origin !== `http://${host}`) {
-    throw data("Forbidden", { status: 403 });
-  }
+  const fromBoard = isLocalRequest(request)
+    ? origin === `http://${host}`
+    : isTunnelRequest(request) && origin === `https://${host}`;
+  if (!fromBoard) throw data("Forbidden", { status: 403 });
 }
 
 // Reads of files on disk. Another website can't read the response, but it
@@ -28,8 +43,7 @@ export function assertLocalRead(request: Request) {
 // No DNS rebinding: a site that points its own name at 127.0.0.1 would
 // otherwise be same-origin with the board.
 export function assertLocalHost(request: Request) {
-  const host = request.headers.get("host") ?? "";
-  if (!LOCAL_HOSTS.has(host.replace(/:\d+$/, ""))) {
+  if (!isLocalRequest(request) && !isTunnelRequest(request)) {
     throw data("Forbidden", { status: 403 });
   }
 }

@@ -10,17 +10,17 @@ import {
 
 import type { Route } from "./+types/root";
 import { THEME_KEY } from "~/components/theme-toggle";
-import { isSecured, requireBasicAuth } from "~/lib/auth.server";
+import { isSecured, requireAuth } from "~/lib/auth.server";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
   { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
 ];
 
-export const middleware: Route.MiddlewareFunction[] = [requireBasicAuth];
+export const middleware: Route.MiddlewareFunction[] = [requireAuth];
 
-export function loader() {
-  return { secured: isSecured() };
+export function loader({ request }: Route.LoaderArgs) {
+  return { secured: isSecured(request) };
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {

@@ -10,6 +10,10 @@
 // - on start, stops a dev server orphaned by a supervisor that was killed;
 // - refuses to run twice.
 //
+// It also runs the Cloudflare tunnel while the board's Remote switch is on
+// (app/lib/remote.server.ts), restarting it with the same backoff when it exits,
+// and stops it when the switch goes off or its settings go missing.
+//
 // The port comes from SEAMUX_PORT, else .seamux.json, else 54321, and is
 // written back to .seamux.json so `npm run land` checks the right board.
 //
@@ -18,7 +22,9 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import {
+  closeSync,
   mkdirSync,
+  openSync,
   readFileSync,
   rmSync,
   statSync,
@@ -28,12 +34,20 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { basicAuthHeader, readCredentials } from "../app/lib/credentials.ts";
+import {
+  readRemoteSettings,
+  remoteWanted,
+  tunnelLogFile,
+  tunnelPidFile,
+  updateRunFile,
+} from "../app/lib/remote.server.ts";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DATA = join(REPO, "data");
 export const RESTART_FILE = join(DATA, "board.restart");
 const SUPERVISOR_PID = join(DATA, "serve.pid");
 const CHILD_PID = join(DATA, "board.pid");
+const TUNNEL_PID = tunnelPidFile(REPO);
 
 const DEFAULT_PORT = 54321;
 const HEALTHY_MS = 60_000; // up this long resets the backoff
@@ -71,11 +85,9 @@ export function readRunConfig(repo = REPO): RunConfig {
   return { port };
 }
 
+// Keeps the file's other fields, such as the Remote switch.
 function writeRunConfig(config: RunConfig) {
-  writeFileSync(
-    join(REPO, ".seamux.json"),
-    `${JSON.stringify(config, null, 2)}\n`,
-  );
+  updateRunFile(REPO, { ...config });
 }
 
 export function boardUrl(repo = REPO): string {
@@ -175,12 +187,19 @@ async function supervise() {
   writeRunConfig({ port });
   const url = boardUrl();
 
-  // A supervisor killed with SIGKILL leaves its dev server holding the port.
+  // A supervisor killed with SIGKILL leaves its dev server holding the port,
+  // and its tunnel running.
   const orphan = readPid(CHILD_PID);
   if (orphan && alive(orphan)) {
     log(`stopping orphaned dev server, pid ${orphan}`);
     await stopGroup(orphan);
   }
+  const orphanTunnel = readPid(TUNNEL_PID);
+  if (orphanTunnel && alive(orphanTunnel)) {
+    log(`stopping orphaned tunnel, pid ${orphanTunnel}`);
+    await stopGroup(orphanTunnel);
+  }
+  rmSync(TUNNEL_PID, { force: true });
 
   let child: ChildProcess | null = null;
   let stopping = false;
@@ -236,11 +255,78 @@ async function supervise() {
     start();
   };
 
+  // The tunnel: run while the Remote switch is on and its settings are all
+  // set. The token goes in cloudflared's environment, not its arguments, so
+  // `ps` doesn't show it.
+  let tunnel: ChildProcess | null = null;
+  let tunnelBackoff = 1000;
+  let tunnelStartedAt = 0;
+  let tunnelRetryAt = 0;
+
+  const startTunnel = (token: string) => {
+    tunnelStartedAt = Date.now();
+    const out = openSync(tunnelLogFile(REPO), "a");
+    const t = spawn("cloudflared", ["tunnel", "--no-autoupdate", "run"], {
+      cwd: REPO,
+      env: { ...process.env, TUNNEL_TOKEN: token },
+      stdio: ["ignore", out, out],
+      detached: true,
+    });
+    closeSync(out);
+    tunnel = t;
+    if (t.pid) writeFileSync(TUNNEL_PID, `${t.pid}\n`);
+    log(`started tunnel, pid ${t.pid}; its log is data/tunnel.log`);
+    t.on("error", (err) => log(`could not start cloudflared: ${err.message}`));
+    t.on("exit", (code, signal) => {
+      if (tunnel === t) tunnel = null;
+      rmSync(TUNNEL_PID, { force: true });
+      if (stopping) return;
+      if (Date.now() - tunnelStartedAt > HEALTHY_MS) tunnelBackoff = 1000;
+      tunnelRetryAt = Date.now() + tunnelBackoff;
+      log(
+        `tunnel exited (${signal ?? `code ${code}`}); retrying in ${tunnelBackoff / 1000}s if still on`,
+      );
+      tunnelBackoff = Math.min(tunnelBackoff * 2, MAX_BACKOFF_MS);
+    });
+  };
+
+  const stopTunnel = async (reason: string) => {
+    const t = tunnel;
+    if (!t?.pid) return;
+    log(`stopping tunnel: ${reason}`);
+    t.removeAllListeners("exit");
+    tunnel = null;
+    await stopGroup(t.pid);
+    rmSync(TUNNEL_PID, { force: true });
+    tunnelBackoff = 1000;
+    tunnelRetryAt = 0;
+  };
+
+  let reconcilingTunnel = false;
+  const reconcileTunnel = async () => {
+    if (reconcilingTunnel || stopping) return;
+    reconcilingTunnel = true;
+    try {
+      const { settings, missing } = readRemoteSettings(REPO);
+      const wanted = remoteWanted(REPO);
+      if (tunnel && !wanted) await stopTunnel("switched off");
+      else if (tunnel && !settings) {
+        await stopTunnel(`${missing.join(", ")} unset`);
+      } else if (!tunnel && wanted && settings && Date.now() >= tunnelRetryAt) {
+        startTunnel(settings.token);
+      }
+    } finally {
+      reconcilingTunnel = false;
+    }
+  };
+
   const shutdown = async (signal: string) => {
     if (stopping) return;
     stopping = true;
     log(`${signal}: stopping`);
     if (pendingStart) clearTimeout(pendingStart);
+    if (tunnel?.pid) await stopGroup(tunnel.pid);
+    rmSync(TUNNEL_PID, { force: true });
     if (child?.pid) await stopGroup(child.pid);
     rmSync(CHILD_PID, { force: true });
     if (readPid(SUPERVISOR_PID) === process.pid)
@@ -264,6 +350,7 @@ async function supervise() {
       restartStamp = stamp;
       void restart("requested");
     }
+    void reconcileTunnel();
   }, 1000);
 
   setInterval(async () => {

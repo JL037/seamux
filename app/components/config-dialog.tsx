@@ -23,12 +23,14 @@ import {
   type Engine,
   type MacroName,
 } from "~/lib/config";
+import type { RemoteStatus } from "~/lib/remote.server";
 import { cn } from "~/lib/utils";
 import type { ConfigResult } from "~/routes/config";
 
 const TABS = [
   { key: "general", label: "General" },
   { key: "macros", label: "Macros" },
+  { key: "remote", label: "Remote" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
@@ -52,10 +54,12 @@ function useConfigAction() {
 export function ConfigDialog({
   config,
   engines,
+  remote,
 }: {
   config: Config;
   // Which agents this Mac can launch.
   engines: Record<Engine, boolean>;
+  remote: RemoteStatus;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("general");
@@ -100,8 +104,10 @@ export function ConfigDialog({
           <div className="-mx-4 overflow-y-auto px-4 pb-1">
             {tab === "general" ? (
               <GeneralTab config={config} engines={engines} />
-            ) : (
+            ) : tab === "macros" ? (
               <MacrosTab config={config} />
+            ) : (
+              <RemoteTab remote={remote} />
             )}
           </div>
         </DialogContent>
@@ -375,3 +381,109 @@ function MacroEditor({
     </section>
   );
 }
+
+function RemoteTab({ remote }: { remote: RemoteStatus }) {
+  const action = useConfigAction();
+  const configured = remote.missing.length === 0;
+  const url = remote.domain ? `https://${remote.domain}` : null;
+  // Off from anywhere, on only from this Mac.
+  const canToggle = remote.wanted || (configured && !remote.viaTunnel);
+  let state: string;
+  if (!remote.wanted) state = "Off.";
+  else if (remote.pid) state = `On: cloudflared is running, pid ${remote.pid}.`;
+  else if (!remote.supervised) {
+    state =
+      "On, but no supervisor is running to start cloudflared. Start the board with npm run seamux.";
+  } else state = "Starting cloudflared…";
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="text-muted-foreground">
+        Opens the board at your Cloudflare tunnel's hostname, behind Cloudflare
+        Access. Through the tunnel the board asks for no password of its own: it
+        checks every request's Access token instead, and refuses any request
+        without a valid one, so it stays shut even if the Access application is
+        removed.
+      </p>
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">Remote access</h3>
+        <label
+          className={cn(
+            "flex items-start gap-2",
+            canToggle ? "cursor-pointer" : "cursor-not-allowed",
+          )}
+        >
+          <Switch
+            className="mt-0.5"
+            checked={remote.wanted}
+            disabled={!canToggle || action.pending}
+            onCheckedChange={(checked) =>
+              action.submit("remote", { on: String(checked) })
+            }
+          />
+          <span>
+            {url ? (
+              <>
+                Serve the board at{" "}
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-xs underline"
+                >
+                  {url}
+                </a>
+              </>
+            ) : (
+              "Serve the board through the tunnel"
+            )}
+            <span className="block text-muted-foreground">
+              {state} It can only be turned on from this Mac, and turns off from
+              anywhere.
+              {remote.viaTunnel &&
+                " You're viewing this through the tunnel, so turning it off disconnects this page."}
+            </span>
+          </span>
+        </label>
+        {action.error && <p className="text-destructive">{action.error}</p>}
+      </section>
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">Settings</h3>
+        <p className="text-muted-foreground">
+          Read from the checkout's <code>.env</code> or the environment.
+          cloudflared writes its log to <code>data/tunnel.log</code>.
+        </p>
+        <ul className="flex flex-col divide-y rounded-lg border text-xs">
+          {REMOTE_VARIABLES.map((v) => {
+            const unset = remote.missing.includes(v.name);
+            return (
+              <li key={v.name} className="flex items-baseline gap-2 px-2 py-1">
+                <code className="shrink-0">{v.name}</code>
+                <span className="min-w-0 flex-1 text-muted-foreground">
+                  {v.meaning}
+                </span>
+                <span className={cn("shrink-0", unset && "text-destructive")}>
+                  {unset ? "unset" : "set"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        {remote.tunnel && (
+          <p className="text-xs text-muted-foreground">
+            Tunnel <code>{remote.tunnel}</code>
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+const REMOTE_VARIABLES = [
+  { name: "SEAMUX_CF_TOKEN", meaning: "the tunnel's token, from Zero Trust" },
+  { name: "SEAMUX_CF_DOMAIN", meaning: "its public hostname" },
+  {
+    name: "SEAMUX_CF_TEAM",
+    meaning: "your Zero Trust team, e.g. myteam.cloudflareaccess.com",
+  },
+  { name: "SEAMUX_CF_AUD", meaning: "the Access application's AUD tag" },
+];

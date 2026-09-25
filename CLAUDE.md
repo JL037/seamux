@@ -5,14 +5,14 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 ## Rules
 
 - **seamux never destroys.** The tool has no `claude rm`, no `git worktree remove`, nothing that deletes a session, worktree or transcript. When something should be removed, the session that owns it does it: seamux sends it a prompt asking.
-- **Localhost only.** The server binds `127.0.0.1`, and every action goes through `assertFromBoard` in `app/lib/guard.server.ts`.
+- **Localhost only, except the tunnel.** The server binds `127.0.0.1`, and every action goes through `assertFromBoard` in `app/lib/guard.server.ts`. The one other way in is the Cloudflare tunnel, and every request through it must carry a Cloudflare Access token that `app/lib/remote.server.ts` verifies, in both the auth middleware and Vite's own middleware. Never let a tunnel request through on anything weaker.
 - **Derive, don't store.** Session state comes from `claude agents --json`, cmux, and the transcripts on every poll. The store (`app/lib/store.server.ts`) holds only what nothing else records: subagent lifecycle, dispatch intent, pins, queued messages, and settings.
 - **Always pass a surface to cmux.** cmux RPCs default to the caller's own surface, which is whatever terminal seamux runs in.
 - **Verify tool behaviour by running it.** Several documented cmux and Claude Code behaviours turned out wrong; `docs/findings.md` lists them, and new ones go there.
 
 ## Layout
 
-- `app/lib/board.server.ts`: derives the board. `codex.server.ts`: reads Codex sessions, which have no `claude agents` of their own. `drive.server.ts`: every write verb, through cmux. `queue.server.ts`: sends queued messages once their chat is idle. `protocol.server.ts`: fan-out manifests and markers. `config.ts` / `config.server.ts`: settings and the system macros' defaults.
+- `app/lib/board.server.ts`: derives the board. `codex.server.ts`: reads Codex sessions, which have no `claude agents` of their own. `drive.server.ts`: every write verb, through cmux. `queue.server.ts`: sends queued messages once their chat is idle. `protocol.server.ts`: fan-out manifests and markers. `config.ts` / `config.server.ts`: settings and the system macros' defaults. `remote.server.ts`: the tunnel's settings and switch, and the Access token check.
 - `hooks/subagent-event.ts` and `scripts/seamux.ts` run under plain Node with type stripping, and so does everything they import: relative imports with `.ts` extensions, `import type`, no enums.
 - `skills/seamux-dispatch/SKILL.md` is a template; `npm run skills:install` renders it into `~/.claude/skills`.
 

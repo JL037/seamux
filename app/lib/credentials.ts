@@ -17,13 +17,24 @@ export interface Credentials {
   pass: string;
 }
 
-export function readCredentials(dir: string): Credentials | null {
+// Each named variable from the environment, else from `dir`'s .env.
+export function readEnv<K extends string>(
+  dir: string,
+  names: readonly K[],
+): Record<K, string | undefined> {
   let file: Record<string, string | undefined> = {};
   try {
     file = parseEnv(readFileSync(join(dir, ".env"), "utf8"));
   } catch {}
-  const user = process.env.SEAMUX_USER ?? file.SEAMUX_USER;
-  const pass = process.env.SEAMUX_PASS ?? file.SEAMUX_PASS;
+  return Object.fromEntries(
+    names.map((name) => [name, process.env[name] || file[name] || undefined]),
+  ) as Record<K, string | undefined>;
+}
+
+export function readCredentials(dir: string): Credentials | null {
+  const env = readEnv(dir, ["SEAMUX_USER", "SEAMUX_PASS"]);
+  const user = env.SEAMUX_USER;
+  const pass = env.SEAMUX_PASS;
   return user && pass ? { user, pass } : null;
 }
 

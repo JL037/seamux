@@ -11,6 +11,7 @@ import { useFetcher, useRevalidator } from "react-router";
 import {
   GitBranch,
   CircleCheck,
+  Globe,
   Layers,
   LoaderCircle,
   Maximize2,
@@ -76,6 +77,7 @@ import { ENGINE_LABELS } from "~/lib/config";
 import { configOrDefaults } from "~/lib/config.server";
 import { installedEngines } from "~/lib/drive.server";
 import { startQueue } from "~/lib/queue.server";
+import { remoteStatus } from "~/lib/remote.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useSessionAction } from "~/lib/use-session-action";
 import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
@@ -91,12 +93,13 @@ export function meta({ matches }: Route.MetaArgs) {
   return [{ title: productNameFromMatches(matches) }];
 }
 
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
   startQueue();
   return {
     board: await loadBoard(),
     config: configOrDefaults(),
     engines: installedEngines(),
+    remote: remoteStatus(process.cwd(), request.headers.get("host")),
   };
 }
 
@@ -992,7 +995,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   usePoll(POLL_MS);
   useFocusRestore();
   const board: Board = loaderData.board;
-  const { config, engines } = loaderData;
+  const { config, engines, remote } = loaderData;
   const now = board.generatedAt;
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
@@ -1034,10 +1037,26 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   {name}
                 </span>
               </span>
-              <ConfigDialog config={config} engines={engines} />
+              <ConfigDialog
+                config={config}
+                engines={engines}
+                remote={remote}
+              />
               <ThemeToggle />
             </span>
             <span className="flex min-w-0 items-center gap-3">
+              {remote.pid && remote.domain && (
+                <a
+                  href={`https://${remote.domain}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex shrink-0 items-center gap-1 text-xs text-foreground"
+                  title={`Remote access is on: the tunnel serves this board at ${remote.domain}`}
+                >
+                  <Globe className="size-3.5" />
+                  Remote
+                </a>
+              )}
               <Button
                 size="xs"
                 variant="ghost"

@@ -10,7 +10,8 @@ import {
   setWorktreeByDefault,
 } from "~/lib/config.server";
 import { checkDirectory } from "~/lib/drive.server";
-import { assertFromBoard } from "~/lib/guard.server";
+import { assertFromBoard, isLocalRequest } from "~/lib/guard.server";
+import { readRemoteSettings, setRemoteWanted } from "~/lib/remote.server";
 
 const INTENTS = new Set([
   "add-directory",
@@ -19,6 +20,7 @@ const INTENTS = new Set([
   "default-engine",
   "save-macro",
   "reset-macro",
+  "remote",
 ]);
 
 export interface ConfigResult {
@@ -26,7 +28,7 @@ export interface ConfigResult {
   error: string | null;
 }
 
-async function perform(intent: string, form: FormData) {
+async function perform(intent: string, form: FormData, request: Request) {
   const field = (name: string) => String(form.get(name) ?? "");
   if (intent === "add-directory") {
     addDirectory(await checkDirectory(field("path").trim()));
@@ -40,7 +42,24 @@ async function perform(intent: string, form: FormData) {
     const name = field("name");
     if (!isMacroName(name)) throw new Error("Unknown macro");
     setMacro(name, intent === "save-macro" ? field("text") : null);
+  } else if (intent === "remote") {
+    setRemote(field("on") === "true", request);
   }
+}
+
+// Remote access turns on only from this Mac, so a lost phone can't reopen
+// it once it's off. It turns off from anywhere.
+function setRemote(on: boolean, request: Request) {
+  if (on) {
+    if (!isLocalRequest(request)) {
+      throw new Error("Remote access can only be turned on from this Mac");
+    }
+    const { missing } = readRemoteSettings(process.cwd());
+    if (missing.length > 0) {
+      throw new Error(`Set ${missing.join(", ")} first`);
+    }
+  }
+  setRemoteWanted(process.cwd(), on);
 }
 
 export async function action({
@@ -51,7 +70,7 @@ export async function action({
   const intent = String(form.get("intent") ?? "");
   if (!INTENTS.has(intent)) throw data("Unknown intent", { status: 400 });
   try {
-    await perform(intent, form);
+    await perform(intent, form, request);
     return { ok: true, error: null };
   } catch (err) {
     return { ok: false, error: (err as Error).message };

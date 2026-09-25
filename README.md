@@ -57,12 +57,23 @@ Edit the port there, or start `npm run seamux` once with `SEAMUX_PORT` set, and 
 
 **Password.** Put `SEAMUX_USER` and `SEAMUX_PASS` in a `.env` at the root of the checkout (gitignored), or in the environment, and the board asks for them with HTTP Basic auth before serving anything. It reads them on every request, so a change takes effect without a restart. With either one unset the board still runs, but its background turns red and it calls itself "seamux (unsecured)".
 
+**Remote access.** The config dialog's Remote tab switches on a Cloudflare named tunnel, so you can reach the board from your phone. Set it up once:
+
+1. `brew install cloudflared`.
+2. In Cloudflare's Zero Trust dashboard, under Networks → Tunnels, create a tunnel, and give it a public hostname on a domain Cloudflare serves, pointing at `http://localhost:54321` (the board's port). Put the tunnel's token in `SEAMUX_CF_TOKEN` and the hostname in `SEAMUX_CF_DOMAIN`.
+3. Under Access → Applications, add a self-hosted application for that hostname, with a policy that lets in only you. Put its AUD tag in `SEAMUX_CF_AUD`, and your team's domain (`<team>.cloudflareaccess.com`) in `SEAMUX_CF_TEAM`.
+4. Restart `npm run seamux`, since Vite reads the hostname once at startup.
+
+The switch can only be turned on from the Mac, and only once all four are set; it turns off from anywhere. While it's on, the supervisor runs `cloudflared`, restarts it if it exits, and writes its log to `data/tunnel.log`; the header shows "Remote". A request through the tunnel must carry a valid Cloudflare Access token for that team and application, including Vite's own files, and is then let in without the HTTP Basic password. Without a valid token it gets a 403, so if the Access application is ever removed, the board stays shut. The switch is kept in `.seamux.json` as `"remote": true`, so it survives restarts.
+
 Environment variables, all optional:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SEAMUX_PORT` | from `.seamux.json` | Port for `npm run seamux`, saved to `.seamux.json` |
 | `SEAMUX_USER`, `SEAMUX_PASS` | unset | HTTP Basic credentials for the board, also read from `.env`. Unset leaves the board unsecured |
+| `SEAMUX_CF_TOKEN`, `SEAMUX_CF_DOMAIN`, `SEAMUX_CF_TEAM`, `SEAMUX_CF_AUD` | unset | Remote access: the tunnel's token and hostname, and the Cloudflare Access team and AUD tag. Also read from `.env`. All four are needed |
+| `SEAMUX_CF_TUNNEL` | unset | The tunnel's id, shown in the Remote tab |
 | `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
 | `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |
 | `SEAMUX_POLL` | unset | `1` makes hot reload poll for file changes. It already polls on WSL's `/mnt/` drives |
@@ -128,7 +139,7 @@ A worker counts as finished only when it writes its `done` marker, not when its 
 ### Rules it keeps
 
 - **It never destroys.** seamux has no command that deletes a session, a worktree or a transcript. When something should go, seamux sends a prompt asking the session that owns it to remove it.
-- **Localhost only.** The server binds `127.0.0.1`, and every write checks that the request came from the board itself, so no other website can type into your sessions.
+- **Localhost, or the tunnel behind Cloudflare Access.** The server binds `127.0.0.1`, and every write checks that the request came from the board itself, so no other website can type into your sessions. The one other way in is the Cloudflare tunnel, and only with a valid Access token.
 
 ## Working on seamux
 

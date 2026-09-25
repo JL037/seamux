@@ -23,6 +23,15 @@ Several documented or assumed behaviours of Claude Code and cmux turned out wron
 - **The global hook is required.** A hook fires in the session that starts the subagent, so a hook in seamux's own project settings would only ever see seamux's own subagents.
 - **`/rename` works mid-turn, and a closed chat can be renamed through its transcript.** Typed while a turn runs, `/rename` applies at once without interrupting the turn, and `claude agents` reports the new name right away. It writes a `custom-title` and an `agent-name` line to the transcript; appending those two lines to a closed chat's transcript renames it, and `claude --resume` starts it under that name. `/rename` retitles the cmux tab, since Claude Code sets the terminal title, but not the workspace; `workspace.rename` does that, and `workspace.list` reports the new title about a second later. Measured on Claude Code 2.1.281.
 
+## Cloudflare Tunnel
+
+Measured against cloudflared 2026.9.3, with a tunnel managed from the dashboard.
+
+- **The origin sees the public hostname as `Host`.** Vite's host check refused `seamux.technein.com` until it was in `allowedHosts`, so the guard matches the tunnel's hostname, not `localhost`.
+- **The ingress comes from the dashboard, not the token.** `cloudflared tunnel run` with only `TUNNEL_TOKEN` set logs the dashboard's config on connect (`Updated to new configuration config=...`), including the local service each hostname points at. The token goes in the environment, so it stays out of `ps`.
+- **A bad token exits with code 255 at once** ("Provided Tunnel token is not valid"), so the supervisor backs off rather than spinning.
+- **A tunnel with no Access application is wide open.** Without one, a request reached the Mac with no login at all. Access is set up separately from the tunnel, which is why the board checks the Access token itself.
+
 ## Codex
 
 Measured against codex-cli 0.156.1 under cmux 0.64.23, launched through `cmux-codex-wrapper` with cmux's Codex hooks installed (`cmux hooks setup codex`).
