@@ -115,6 +115,22 @@ async function listAgents(): Promise<AgentRow[]> {
   return readJson<AgentRow[]>("claude", ["agents", "--json", "--all"]);
 }
 
+// The ids, names or session ids that a running `claude attach` names.
+// `claude agents` reports a background session the same whether or not a
+// terminal is attached, so the attach process is the only sign of one.
+async function attachedTo(): Promise<Set<string>> {
+  const { stdout } = await run("ps", ["-axo", "command="], {
+    maxBuffer: 8 * 1024 * 1024,
+    timeout: 5_000,
+  });
+  const ids = new Set<string>();
+  for (const line of stdout.split("\n")) {
+    const m = /(?:^|\/)claude attach (\S+)/.exec(line);
+    if (m) ids.add(m[1]);
+  }
+  return ids;
+}
+
 interface Workspace {
   id: string;
   ref: string;
@@ -591,9 +607,13 @@ function liveColumn(
 export async function loadBoard(now = Date.now()): Promise<Board> {
   const warnings: string[] = [];
 
-  const [agents, workspaces, transcripts, codexTranscripts, names] =
+  const [agents, attached, workspaces, transcripts, codexTranscripts, names] =
     await Promise.all([
       listAgents(),
+      attachedTo().catch((err) => {
+        warnings.push(`Attached sessions unknown: ${err.message}`);
+        return null;
+      }),
       cmuxWorkspaces().catch((err) => {
         warnings.push(
           `cmux unavailable, workspace refs missing: ${err.message}`,
@@ -616,9 +636,16 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       .map(([id, l]) => [id, l.surface]),
   );
 
-  // A background session attached to a terminal has a live `status`; it is a
-  // chat Jakob is in, so it gets a card like any interactive session.
-  const isChat = (a: AgentRow) => a.kind === "interactive" || a.status != null;
+  // A background session attached to a terminal is a chat Jakob is in, so
+  // it gets a card like any interactive session. Once the terminal closes it
+  // keeps running, with a live `status`, but it is a background job again.
+  // Without `ps`, a live `status` is the best guess.
+  const isAttached = (a: AgentRow) =>
+    attached
+      ? [a.id, a.name, a.sessionId].some((k) => k != null && attached.has(k))
+      : a.status != null;
+  const isChat = (a: AgentRow) =>
+    a.kind === "interactive" || (a.status != null && isAttached(a));
   const interactive = agents.filter(isChat);
   const backgroundRows = agents.filter((a) => !isChat(a));
   const background = await Promise.all(backgroundRows.map(toBackground));
@@ -728,9 +755,15 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   // DONE: a chat Jakob closed recently, or a pinned one closed at any time.
   // It is no longer live, is not a background job, and its transcript was
   // written within the window unless it is pinned.
+  // A chat moved to the background keeps its first transcript under the
+  // job's short id while the job runs on under a new session id; that
+  // transcript is the same conversation, not a closed chat.
   const known = new Set([...agents.map((a) => a.sessionId), ...live.keys()]);
+  const jobIds = new Set(agents.map((a) => a.id).filter((id) => id != null));
   const shown = (id: string, t: { mtimeMs: number }) =>
-    !known.has(id) && (pinned.has(id) || now - t.mtimeMs < DONE_VISIBLE_MS);
+    !known.has(id) &&
+    !jobIds.has(id.slice(0, 8)) &&
+    (pinned.has(id) || now - t.mtimeMs < DONE_VISIBLE_MS);
   const recent = [...transcripts.entries()].filter(([id, t]) => shown(id, t));
   const recentCodex = (
     await Promise.all(
