@@ -9,6 +9,7 @@ import {
   setMacro,
   setWorktreeByDefault,
 } from "~/lib/config.server";
+import { forgetCommands } from "~/lib/commands.server";
 import { checkDirectory } from "~/lib/drive.server";
 import { assertFromBoard, isLocalRequest } from "~/lib/guard.server";
 import { readCredentials } from "~/lib/credentials";
@@ -28,6 +29,7 @@ const INTENTS = new Set([
   "remote",
   "tunnel",
   "mdns",
+  "clear-commands",
 ]);
 
 export interface ConfigResult {
@@ -51,6 +53,8 @@ async function perform(intent: string, form: FormData, request: Request) {
     setMacro(name, intent === "save-macro" ? field("text") : null);
   } else if (intent === "remote" || intent === "tunnel" || intent === "mdns") {
     setRemote(intent, field("on") === "true", request);
+  } else if (intent === "clear-commands") {
+    forgetCommands();
   }
 }
 

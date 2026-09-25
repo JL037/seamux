@@ -31,6 +31,7 @@ const TABS = [
   { key: "general", label: "General" },
   { key: "macros", label: "Macros" },
   { key: "remote", label: "Remote" },
+  { key: "debug", label: "Debug" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
@@ -106,8 +107,10 @@ export function ConfigDialog({
               <GeneralTab config={config} engines={engines} />
             ) : tab === "macros" ? (
               <MacrosTab config={config} />
-            ) : (
+            ) : tab === "remote" ? (
               <RemoteTab remote={remote} />
+            ) : (
+              <DebugTab />
             )}
           </div>
         </DialogContent>
@@ -287,6 +290,36 @@ function WorktreeSetting({ on }: { on: boolean }) {
       </label>
       {action.error && <p className="text-destructive">{action.error}</p>}
     </section>
+  );
+}
+
+function DebugTab() {
+  const action = useConfigAction();
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">Autocomplete</h3>
+        <p className="text-muted-foreground">
+          Slash commands are listed once per folder and kept for ten minutes,
+          or until <code>/reload-skills</code> is sent from the board. Clear
+          them to list every folder's commands again the next time you type{" "}
+          <code>/</code>.
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={action.pending}
+            onClick={() => action.submit("clear-commands")}
+          >
+            <RotateCcw />
+            Clear autocomplete cache
+          </Button>
+          {action.ok && <span className="text-muted-foreground">Cleared</span>}
+        </div>
+        {action.error && <p className="text-destructive">{action.error}</p>}
+      </section>
+    </div>
   );
 }
 
