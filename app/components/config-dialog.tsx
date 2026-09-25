@@ -76,7 +76,7 @@ export function ConfigDialog({
         <Settings />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)] sm:max-w-2xl">
+        <DialogContent className="h-[min(40rem,calc(100dvh-2rem))] grid-rows-[auto_auto_minmax(0,1fr)] sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Configure seamux</DialogTitle>
             <DialogDescription>
