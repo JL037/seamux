@@ -552,10 +552,12 @@ async function finishClose(
 // Every session seamux starts runs in its own cmux workspace.
 //
 // cmux runs the command in a login shell that does not read ~/.zshrc, so
-// neither `claude` nor `codex` is on its PATH. Launch through cmux's own
-// wrapper for the agent, which registers the session with cmux (so the
-// board can find its surface), and put the agents' install directories on
-// PATH for the wrapper to find them.
+// the session would miss the PATH and environment a terminal opened by hand
+// gets (npx, pnpm, brew's tools). The command re-runs itself in an
+// interactive zsh, which reads it. Launch through cmux's own wrapper for
+// the agent, which registers the session with cmux (so the board can find
+// its surface), and put the agents' install directories first on PATH, in
+// case ~/.zshrc does not.
 const CMUX_BIN = "/Applications/cmux.app/Contents/Resources/bin";
 const CLAUDE_BIN_DIR = join(homedir(), ".local/bin");
 // Node, for bin/seamux and the subagent hook inside the new session: the
@@ -621,11 +623,13 @@ async function launch(
     {
       cwd,
       title,
-      initial_command: [
-        `PATH=${BIN_DIRS.map(shq).join(":")}:"$PATH"`,
-        shq(spec.wrapper),
-        ...args.map(shq),
-      ].join(" "),
+      initial_command: `exec zsh -ic ${shq(
+        [
+          `PATH=${BIN_DIRS.map(shq).join(":")}:"$PATH"`,
+          shq(spec.wrapper),
+          ...args.map(shq),
+        ].join(" "),
+      )}`,
       focus,
     },
   );
