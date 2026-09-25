@@ -60,9 +60,12 @@ Edit the port there, or start `npm run seamux` once with `SEAMUX_PORT` set, and 
 **Remote access.** The config dialog's Remote tab switches on a Cloudflare named tunnel, so you can reach the board from your phone. Set it up once:
 
 1. `brew install cloudflared`.
-2. In Cloudflare's Zero Trust dashboard, under Networks → Tunnels, create a tunnel, and give it a public hostname on a domain Cloudflare serves, pointing at `http://localhost:54321` (the board's port). Put the tunnel's token in `SEAMUX_CF_TOKEN` and the hostname in `SEAMUX_CF_DOMAIN`.
-3. Under Access → Applications, add a self-hosted application for that hostname, with a policy that lets in only you. Put its AUD tag in `SEAMUX_CF_AUD`, and your team's domain (`<team>.cloudflareaccess.com`) in `SEAMUX_CF_TEAM`.
-4. Restart `npm run seamux`, since Vite reads the hostname once at startup.
+2. **Tunnel.** In the Cloudflare dashboard, open Zero Trust → Networks → Tunnels and mesh (`https://dash.cloudflare.com/<account>/one/networks/connectors`) and create a tunnel. Give it a public hostname on a domain Cloudflare serves, such as `seamux.example.com`, pointing at `http://localhost:54321` (the board's port). Put the tunnel's token in `SEAMUX_CF_TOKEN` and the hostname in `SEAMUX_CF_DOMAIN`.
+3. **Access application.** Open Access Controls → Applications (`https://dash.cloudflare.com/<account>/one/access-controls/apps`) and add a self-hosted application with a policy that allows only you. A self-hosted application defaults to a private IP: switch its destination to a public hostname and fill in both the subdomain and the domain. Left without the subdomain, it protects only the bare domain, and the board answers every request with a 403. Put the application's AUD tag, from its Additional settings tab, in `SEAMUX_CF_AUD`.
+4. **Team.** Your team name is on the right of Zero Trust's Get started page (`https://dash.cloudflare.com/<account>/one/overview/get-started`). Put it in `SEAMUX_CF_TEAM`, as the name or as `<team>.cloudflareaccess.com`.
+5. Restart `npm run seamux`, since Vite reads the hostname once at startup.
+
+To check Access covers the hostname, run `curl -sI https://seamux.example.com`. It should redirect (302) to `<team>.cloudflareaccess.com`. A plain 403 `Forbidden` means requests reach the board without an Access token, so fix the application's hostname.
 
 The switch can only be turned on from the Mac, and only once all four are set; it turns off from anywhere. While it's on, the supervisor runs `cloudflared`, restarts it if it exits, and writes its log to `data/tunnel.log`; the header shows "Remote". A request through the tunnel must carry a valid Cloudflare Access token for that team and application, including Vite's own files, and is then let in without the HTTP Basic password. Without a valid token it gets a 403, so if the Access application is ever removed, the board stays shut. The switch is kept in `.seamux.json` as `"remote": true`, so it survives restarts.
 
