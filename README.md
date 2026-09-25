@@ -40,6 +40,8 @@ The store at `data/seamux.db` holds only what those don't record: subagent lifec
 
 Each column lists its oldest card first, so the work that's been waiting longest is at the top.
 
+On a narrow screen, such as a phone, the columns become a carousel with one column per screen. Swipe between them, or tap a column's tab in the strip above. The strip shows each column's count, with Waiting's in amber while anything waits. DONE is always there, as the last column. The board opens on the column you last viewed in that tab, or otherwise on WAITING if anything waits, else on WORKING.
+
 While anything waits, the tab's title counts it: `(2) seamux`. **Desktop notifications**, a switch in the config dialog's General tab, fire when a chat starts waiting while the board isn't the focused window. Browsers only allow them on a secure origin, so they work on `localhost` and through the tunnel, but not on the plain-HTTP `.local` address.
 
 Background sessions (`claude --bg`) belong to the chat that started them. They show as a marker on that chat's card, not as cards of their own. Any that no open chat accounts for are listed below the board, where you can resume one, or ask for it to be deleted.

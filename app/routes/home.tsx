@@ -985,19 +985,34 @@ const XL_GRID_COLS: Record<number, string> = {
   5: "xl:grid-cols-5",
 };
 
+function columnLabel(column: BoardColumnKey): string {
+  return column === "pinned" ? "Pinned" : COLUMN_LABELS[column];
+}
+
 function BoardColumn({
   column,
   cards,
   now,
+  className,
 }: {
   column: BoardColumnKey;
   cards: BoardCard[];
   now: number;
+  className?: string;
 }) {
-  const label = column === "pinned" ? "Pinned" : COLUMN_LABELS[column];
+  const label = columnLabel(column);
   return (
-    <section className="flex min-w-0 flex-col gap-3">
-      <h2 className="flex items-center gap-2 border-b pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <section
+      data-column={column}
+      className={cn(
+        "flex min-w-0 flex-col gap-3",
+        // One slide of the carousel below md: a little narrower than the
+        // screen, so the next column's edge shows there is more.
+        "max-md:h-full max-md:w-[92%] max-md:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-4",
+        className,
+      )}
+    >
+      <h2 className="flex items-center gap-2 border-b pb-2 max-md:hidden text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <span
           className={cn(
             "size-2 rounded-full",
@@ -1031,6 +1046,145 @@ function BoardColumn({
   );
 }
 
+// Below md the columns are a carousel, and this strip of tabs sits above it:
+// each tab names a column and its count, follows the swipe, and scrolls to
+// its column when tapped. Waiting's count turns amber, to be seen from any
+// column.
+function ColumnTabs({
+  columns,
+  counts,
+  active,
+  onPick,
+}: {
+  columns: BoardColumnKey[];
+  counts: Record<BoardColumnKey, number>;
+  active: BoardColumnKey | null;
+  onPick: (column: BoardColumnKey) => void;
+}) {
+  const strip = useRef<HTMLDivElement>(null);
+  // Keep the active tab in view as the columns are swiped.
+  useEffect(() => {
+    const root = strip.current;
+    const tab = root?.querySelector<HTMLElement>(`[data-tab="${active}"]`);
+    if (!root || !tab) return;
+    const left = tab.offsetLeft;
+    const right = left + tab.offsetWidth;
+    if (left < root.scrollLeft || right > root.scrollLeft + root.clientWidth) {
+      root.scrollTo({ left: left - 16, behavior: "smooth" });
+    }
+  }, [active]);
+  return (
+    <div
+      ref={strip}
+      role="tablist"
+      className="sticky top-0 z-10 -mx-4 flex h-12 items-center gap-1.5 overflow-x-auto bg-background px-4 [scrollbar-width:none] md:hidden"
+    >
+      {columns.map((column) => {
+        const count = counts[column];
+        const alert = column === "waiting" && count > 0;
+        return (
+          <button
+            key={column}
+            type="button"
+            role="tab"
+            data-tab={column}
+            aria-selected={column === active}
+            onClick={() => onPick(column)}
+            className={cn(
+              "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs text-muted-foreground",
+              column === active && "border-foreground/30 bg-muted text-foreground",
+            )}
+          >
+            <span
+              className={cn(
+                "size-2 rounded-full",
+                column === "pinned" ? PINNED_ACCENT : COLUMN_ACCENT[column],
+              )}
+            />
+            {columnLabel(column)}
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-px text-[0.7rem] tabular-nums",
+                alert ? "bg-amber-500 font-medium text-white" : "bg-muted",
+              )}
+            >
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const MOBILE_COLUMN_KEY = "seamux:mobile-column";
+
+// The carousel's current column: the one most in view, remembered for the
+// tab. A fresh tab opens on Waiting when anything waits, else on Working.
+function useCarousel(columns: BoardColumnKey[], waiting: number) {
+  const carousel = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState<BoardColumnKey | null>(null);
+  const scrollTo = useCallback(
+    (column: BoardColumnKey, behavior: ScrollBehavior) => {
+      const root = carousel.current;
+      const el = root?.querySelector<HTMLElement>(
+        `[data-column="${column}"]`,
+      );
+      if (!root || !el) return;
+      const pad = parseFloat(getComputedStyle(root).scrollPaddingLeft) || 0;
+      root.scrollTo({ left: el.offsetLeft - pad, behavior });
+    },
+    [],
+  );
+
+  const key = columns.join();
+  useEffect(() => {
+    const root = carousel.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // From md the columns are a grid, all in view: nothing to follow.
+        if (root.scrollWidth <= root.clientWidth) return;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const column = (entry.target as HTMLElement).dataset
+            .column as BoardColumnKey;
+          setActive(column);
+          try {
+            sessionStorage.setItem(MOBILE_COLUMN_KEY, column);
+          } catch {}
+        }
+      },
+      { root, threshold: 0.6 },
+    );
+    root
+      .querySelectorAll("[data-column]")
+      .forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [key]);
+
+  // Once, on load.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(MOBILE_COLUMN_KEY);
+    } catch {}
+    const start =
+      columns.find((c) => c === stored) ??
+      (waiting > 0 ? "waiting" : "working");
+    scrollTo(start, "instant");
+  }, [columns, waiting, scrollTo]);
+
+  return {
+    carousel,
+    active,
+    pick: (column: BoardColumnKey) => scrollTo(column, "smooth"),
+  };
+}
+
 export default function Home({ loaderData }: Route.ComponentProps) {
   const name = useProductName();
   usePoll(POLL_MS);
@@ -1043,11 +1197,23 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const pinned = board.cards.filter((c) => c.pinned);
   // Done is hidden until asked for, and the choice outlives the tab.
   const [showDone, setShowDone] = useLocalStorage("seamux:show-done", false);
-  const doneCount = board.cards.filter(
-    (c) => !c.pinned && c.column === "done",
-  ).length;
   const columns = COLUMNS.filter((c) => showDone || c !== "done");
   const columnCount = columns.length + (pinned.length > 0 ? 1 : 0);
+  const byColumn = (column: Column) =>
+    board.cards.filter((c) => !c.pinned && c.column === column);
+  // Below md every column shows, Done included: each has a screen of its own.
+  const mobileColumns: BoardColumnKey[] = [
+    ...(pinned.length > 0 ? (["pinned"] as const) : []),
+    ...COLUMNS,
+  ];
+  const counts = {
+    pinned: pinned.length,
+    ...Object.fromEntries(COLUMNS.map((c) => [c, byColumn(c).length])),
+  } as Record<BoardColumnKey, number>;
+  const { carousel, active, pick } = useCarousel(
+    mobileColumns,
+    counts.waiting,
+  );
   const [drafts, setDrafts] = useSessionStorage<Record<string, string>>(
     "seamux:drafts",
     {},
@@ -1070,7 +1236,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <DraftsContext.Provider value={{ drafts, setDraft }}>
       <ProjectColorsContext.Provider value={{ colors, setColor }}>
-        <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 sm:p-6">
+        <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 md:p-6">
           <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="flex items-center gap-2.5">
@@ -1113,6 +1279,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <Button
                 size="xs"
                 variant="ghost"
+                className="max-md:hidden"
                 onClick={() => setShowDone(!showDone)}
                 title={
                   showDone
@@ -1121,7 +1288,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 }
               >
                 {showDone ? <EyeOff /> : <Eye />}
-                {showDone ? "Hide done" : `Show done (${doneCount})`}
+                {showDone ? "Hide done" : `Show done (${counts.done})`}
               </Button>
               {board.version && (
                 <span
@@ -1151,25 +1318,37 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </p>
           ))}
 
-          <div
-            className={cn(
-              "grid grid-cols-1 gap-4 sm:grid-cols-2",
-              XL_GRID_COLS[columnCount],
-            )}
-          >
-            {pinned.length > 0 && (
-              <BoardColumn column="pinned" cards={pinned} now={now} />
-            )}
-            {columns.map((column) => (
-              <BoardColumn
-                key={column}
-                column={column}
-                cards={board.cards.filter(
-                  (c) => !c.pinned && c.column === column,
-                )}
-                now={now}
-              />
-            ))}
+          {/* Below md, a carousel of columns under a sticky strip of tabs,
+              filling the screen once scrolled to, each column scrolling on
+              its own; from md, the grid. */}
+          <div className="flex flex-col">
+            <ColumnTabs
+              columns={mobileColumns}
+              counts={counts}
+              active={active}
+              onPick={pick}
+            />
+            <div
+              ref={carousel}
+              className={cn(
+                "relative max-md:-mx-4 max-md:flex max-md:h-[calc(100dvh-3rem)] max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:scroll-px-4 max-md:px-4 max-md:[scrollbar-width:none]",
+                "md:grid md:grid-cols-2 md:gap-4",
+                XL_GRID_COLS[columnCount],
+              )}
+            >
+              {pinned.length > 0 && (
+                <BoardColumn column="pinned" cards={pinned} now={now} />
+              )}
+              {COLUMNS.map((column) => (
+                <BoardColumn
+                  key={column}
+                  column={column}
+                  cards={byColumn(column)}
+                  now={now}
+                  className={cn(!columns.includes(column) && "md:hidden")}
+                />
+              ))}
+            </div>
           </div>
 
           {board.orphans.length > 0 && (
