@@ -12,6 +12,7 @@ import {
 } from "~/components/ui/dialog";
 import { ContextBar } from "~/components/context-bar";
 import { Markdown } from "~/components/markdown";
+import { useSlashMenu } from "~/components/slash-menu";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
 import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
@@ -116,6 +117,15 @@ export function ChatModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, scroller, count]);
 
+  const input = useRef<HTMLTextAreaElement>(null);
+  const slash = useSlashMenu({
+    sessionId: card.sessionId,
+    enabled: open && card.drivable && card.engine === "claude",
+    draft,
+    setDraft: onDraftChange,
+    anchor: input,
+  });
+
   // Sending returns to the board; a failed send shows on the card, with the
   // draft put back.
   const send = () => {
@@ -175,13 +185,16 @@ export function ChatModal({
         <QueuedList card={card} />
 
         <div className="flex items-end gap-2">
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            {slash.menu}
             <Textarea
+              ref={input}
               autoFocus
               data-focus-key={`chat:${card.sessionId}`}
               value={draft}
               onChange={(e) => onDraftChange(e.target.value)}
               onKeyDown={(e) => {
+                if (slash.onKeyDown(e)) return;
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
                   send();

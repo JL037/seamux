@@ -17,6 +17,7 @@ import {
   type Dialog,
   type Question,
 } from "./board.ts";
+import { forgetCommands } from "./commands.server.ts";
 import { parseCodexApproval, renameCodexSession } from "./codex.server.ts";
 import { ENGINES, renderMacro, usesVariable, type Engine } from "./config.ts";
 import { configOrDefaults } from "./config.server.ts";
@@ -136,6 +137,8 @@ export async function sendMessage(sessionId: string, text: string) {
   const surface = await surfaceFor(sessionId);
   await rpc("terminal.paste", { ...target(surface), text });
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
+  // New skills on disk: the inputs' slash commands must be listed again.
+  if (/^\/reload-skills\b/.test(text)) forgetCommands();
 }
 
 // Esc: stops the current turn, keeps the session and its history.

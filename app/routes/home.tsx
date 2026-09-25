@@ -30,6 +30,7 @@ import {
 import type { Route } from "./+types/home";
 import type { ActionResult } from "./session-action";
 import { ChatModal } from "~/components/chat-modal";
+import { useSlashMenu } from "~/components/slash-menu";
 import { ConfigDialog } from "~/components/config-dialog";
 import { ContextBar } from "~/components/context-bar";
 import { DispatchBar } from "~/components/dispatch-bar";
@@ -260,6 +261,16 @@ function ChatInput({
   // sending: a long message waiting to go is visible at a glance.
   const lines = draft.split("\n").length;
   const multiline = lines > 1;
+  const form = useRef<HTMLFormElement>(null);
+  const slash = useSlashMenu({
+    sessionId: card.sessionId,
+    // The modal has its own menu.
+    enabled: card.drivable && card.engine === "claude" && !multiline && !open,
+    draft,
+    setDraft: onDraftChange,
+    anchor: form,
+    portal: true,
+  });
   const expand = (
     <Button
       type="button"
@@ -277,6 +288,7 @@ function ChatInput({
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <form
+            ref={form}
             className="flex items-center gap-1 rounded-t-lg border bg-background p-1"
             onSubmit={(e) => {
               e.preventDefault();
@@ -288,6 +300,7 @@ function ChatInput({
               data-focus-key={`reply:${card.sessionId}`}
               value={multiline ? draft.split("\n")[0] : draft}
               onChange={(e) => onDraftChange(e.target.value)}
+              onKeyDown={slash.onKeyDown}
               onClick={multiline ? () => setOpen(true) : undefined}
               readOnly={multiline}
               placeholder={
@@ -326,6 +339,7 @@ function ChatInput({
               </Button>
             )}
           </form>
+          {slash.menu}
           <ContextBar context={card.context} />
         </div>
         {!multiline && expand}

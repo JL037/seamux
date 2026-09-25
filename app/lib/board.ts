@@ -165,6 +165,13 @@ export interface ChatMessage {
   at: string | null;
 }
 
+// A slash command a Claude Code chat accepts, for the inputs' autocomplete.
+export interface SlashCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+}
+
 // Finished subagents stay on their card for this long.
 export const SUBAGENT_VISIBLE_MS = 30 * 60 * 1000;
 // A running subagent whose transcript is quiet this long is marked stale.
