@@ -23,6 +23,7 @@ import {
   SendHorizontal,
   Square,
   Trash2,
+  Wifi,
   X,
 } from "lucide-react";
 
@@ -1052,6 +1053,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <ThemeToggle />
             </span>
             <span className="flex min-w-0 items-center gap-3">
+              {remote.enabled && remote.mdns.listening && (
+                <a
+                  href={remote.mdns.url}
+                  className="flex shrink-0 items-center gap-1 text-xs text-foreground"
+                  title={`mDNS is on: the board answers the network at ${remote.mdns.url}`}
+                >
+                  <Wifi className="size-3.5" />
+                  LAN
+                </a>
+              )}
               {remote.pid && remote.domain && (
                 <a
                   href={`https://${remote.domain}`}

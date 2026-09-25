@@ -1,12 +1,19 @@
-// Remote access: a Cloudflare named tunnel from SEAMUX_CF_DOMAIN to the board,
-// with Cloudflare Access in front of it.
+// Remote access, two ways in besides localhost, both behind the Remote tab's
+// "Enable remote connections" switch:
 //
-// The Remote tab's switch records whether the tunnel should run, in
-// .seamux.json; the supervisor (scripts/supervise.ts) starts and stops
-// cloudflared to match. A request through the tunnel must carry a valid
-// Access token for SEAMUX_CF_TEAM and SEAMUX_CF_AUD, checked here, and then
-// needs no HTTP Basic credentials. If the Access application is ever deleted
-// or loosened, the board still refuses.
+// - mDNS: the board listens on every interface and answers at this Mac's
+//   Bonjour name, <LocalHostName>.local. A request from the network must be
+//   addressed to that name and carry the HTTP Basic credentials, which must
+//   be set.
+// - A Cloudflare named tunnel from SEAMUX_CF_DOMAIN to the board, with
+//   Cloudflare Access in front of it. A request through the tunnel must carry
+//   a valid Access token for SEAMUX_CF_TEAM and SEAMUX_CF_AUD, checked here,
+//   and then needs no HTTP Basic credentials. If the Access application is
+//   ever deleted or loosened, the board still refuses.
+//
+// The switches live in .seamux.json. The supervisor (scripts/supervise.ts)
+// starts and stops cloudflared to match, and restarts the dev server when
+// mDNS changes, since vite.config.ts picks the address it listens on once.
 //
 // scripts/supervise.ts and vite.config.ts import this under plain Node, so it
 // uses node: builtins and relative imports only.
@@ -17,10 +24,17 @@ import {
   type JsonWebKey,
   type KeyObject,
 } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 
-import { readEnv } from "./credentials.ts";
+import {
+  basicAuthHeader,
+  readCredentials,
+  readEnv,
+  sameSecret,
+} from "./credentials.ts";
 
 // Every variable remote access needs. SEAMUX_CF_TUNNEL is only shown, since
 // the token already names the tunnel.
@@ -47,11 +61,29 @@ export interface RemoteSettings {
 
 // What the Remote tab shows. No secrets.
 export interface RemoteStatus {
-  // The variables still unset; the switch can't turn on until none are.
+  // "Enable remote connections": with it off, neither way in is open.
+  enabled: boolean;
+  mdns: {
+    // The switch.
+    wanted: boolean;
+    // e.g. http://osmium.local:54321
+    url: string;
+    // Whether the running dev server listens beyond loopback.
+    listening: boolean;
+    // Whether SEAMUX_USER and SEAMUX_PASS are set; it won't turn on without.
+    secured: boolean;
+    // Whether this request came over the network to that name.
+    viaLan: boolean;
+  };
+  // The tunnel's variables still unset; its switch can't turn on until none
+  // are.
   missing: string[];
+  // Whether any of them is set, which opens the tunnel's section.
+  cfSet: boolean;
   domain: string | null;
   tunnel: string | null;
-  // The switch.
+  // The tunnel's switch, and whether it applies: the tunnel runs when
+  // `enabled` and `wanted` are both on.
   wanted: boolean;
   // cloudflared's pid, while it runs.
   pid: number | null;
@@ -105,7 +137,7 @@ function teamHost(value: string): string {
   return host.includes(".") ? host : `${host}.cloudflareaccess.com`;
 }
 
-// --- The switch, kept in .seamux.json beside the port --------------------
+// --- The switches, kept in .seamux.json beside the port ------------------
 
 function readRunFile(dir: string): Record<string, unknown> {
   try {
@@ -124,12 +156,129 @@ export function updateRunFile(dir: string, fields: Record<string, unknown>) {
   );
 }
 
-export function remoteWanted(dir: string): boolean {
-  return readRunFile(dir).remote === true;
+export type RemoteSwitch = "remote" | "tunnel" | "mdns";
+
+// `remote` is the master switch. Before there was mDNS it was the tunnel's
+// own switch, so a file without `tunnel` takes it from `remote`.
+function readSwitches(dir: string): Record<RemoteSwitch, boolean> {
+  const saved = readRunFile(dir);
+  const remote = saved.remote === true;
+  return {
+    remote,
+    tunnel: typeof saved.tunnel === "boolean" ? saved.tunnel : remote,
+    mdns: saved.mdns === true,
+  };
 }
 
-export function setRemoteWanted(dir: string, on: boolean) {
-  updateRunFile(dir, { remote: on });
+export function remoteEnabled(dir: string): boolean {
+  return readSwitches(dir).remote;
+}
+
+// Whether cloudflared should run.
+export function tunnelWanted(dir: string): boolean {
+  const s = readSwitches(dir);
+  return s.remote && s.tunnel;
+}
+
+// Whether the board should listen on the network.
+export function lanWanted(dir: string): boolean {
+  const s = readSwitches(dir);
+  return s.remote && s.mdns;
+}
+
+// Writes every switch, so the tunnel's no longer follows the master's.
+export function setRemoteSwitch(dir: string, which: RemoteSwitch, on: boolean) {
+  updateRunFile(dir, { ...readSwitches(dir), [which]: on });
+}
+
+function runPort(dir: string): number {
+  const port = readRunFile(dir).port;
+  return typeof port === "number" && Number.isInteger(port) ? port : 54321;
+}
+
+// --- mDNS: this Mac's Bonjour name ----------------------------------------
+
+let lanName: string | null = null;
+
+// This Mac's .local name, which macOS answers for over mDNS on every network
+// it joins: its LocalHostName, as set in System Settings → General → Sharing.
+// Elsewhere, the hostname. Lowercase, as Host headers compare.
+export function lanHost(): string {
+  if (lanName) return lanName;
+  let name = "";
+  if (process.platform === "darwin") {
+    try {
+      name = execFileSync("scutil", ["--get", "LocalHostName"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {}
+  }
+  if (!name) name = hostname().replace(/\.local$/i, "");
+  lanName = `${name.toLowerCase()}.local`;
+  return lanName;
+}
+
+export function isLanHost(dir: string, host: string | null): boolean {
+  return host !== null && lanWanted(dir) && hostOf(host) === lanHost();
+}
+
+// Set by vite.config.ts in the dev server's own process, which is where the
+// board's loaders run too.
+export const LISTEN_ENV = "SEAMUX_LISTEN";
+
+export function isLoopback(address: string | undefined): boolean {
+  if (!address) return false;
+  return (
+    address === "::1" ||
+    /^127\./.test(address) ||
+    /^::ffff:127\./i.test(address)
+  );
+}
+
+export type LanVerdict =
+  | { verdict: "local" }
+  | { verdict: "allowed" }
+  | { verdict: "login" }
+  | { verdict: "denied"; reason: string };
+
+// For a request from another machine, which only the dev server's own
+// middleware can tell apart, by its socket: it must be addressed to this
+// Mac's .local name while mDNS is on, and carry the HTTP Basic credentials.
+// That also stops it claiming Host: 127.0.0.1 to pass as local, or the
+// tunnel's hostname. The reason finishes "seamux refused this request
+// because …".
+export function checkLanRequest(
+  dir: string,
+  peer: string | undefined,
+  host: string | null,
+  authorization: string | null,
+): LanVerdict {
+  if (isLoopback(peer)) return { verdict: "local" };
+  if (!lanWanted(dir)) {
+    return {
+      verdict: "denied",
+      reason: "it came from the network, and mDNS is off in the Remote tab",
+    };
+  }
+  if (host === null || hostOf(host) !== lanHost()) {
+    return {
+      verdict: "denied",
+      reason: `it came from the network addressed to ${host ?? "no host"}, and the board only answers the network at ${lanHost()}`,
+    };
+  }
+  const credentials = readCredentials(dir);
+  if (!credentials) {
+    return {
+      verdict: "denied",
+      reason:
+        "SEAMUX_USER and SEAMUX_PASS are unset, and the board doesn't answer the network without them",
+    };
+  }
+  if (sameSecret(authorization ?? "", basicAuthHeader(credentials))) {
+    return { verdict: "allowed" };
+  }
+  return { verdict: "login" };
 }
 
 // --- cloudflared's pid, written by the supervisor ------------------------
@@ -156,11 +305,21 @@ export function livePid(path: string): number | null {
 export function remoteStatus(dir: string, host: string | null): RemoteStatus {
   const { missing } = readRemoteSettings(dir);
   const env = readEnv(dir, ["SEAMUX_CF_DOMAIN", "SEAMUX_CF_TUNNEL"]);
+  const switches = readSwitches(dir);
   return {
+    enabled: switches.remote,
+    mdns: {
+      wanted: switches.mdns,
+      url: `http://${lanHost()}:${runPort(dir)}`,
+      listening: process.env[LISTEN_ENV] === "lan",
+      secured: readCredentials(dir) !== null,
+      viaLan: isLanHost(dir, host),
+    },
     missing,
+    cfSet: missing.length < REMOTE_ENV.length,
     domain: env.SEAMUX_CF_DOMAIN ? hostOf(env.SEAMUX_CF_DOMAIN) : null,
     tunnel: env.SEAMUX_CF_TUNNEL ?? null,
-    wanted: remoteWanted(dir),
+    wanted: switches.tunnel,
     pid: livePid(tunnelPidFile(dir)),
     supervised: livePid(join(dir, "data", "serve.pid")) !== null,
     viaTunnel: isTunnelHost(dir, host),
@@ -194,16 +353,15 @@ export async function checkTunnelRequest(
     ? await verifyAccessToken(token, settings)
     : { reason: "it carried no Cloudflare Access token" };
   if ("claims" in checked) return { verdict: "allowed" };
-  console.warn(`[seamux] refused a request through the tunnel: ${checked.reason}`);
+  console.warn(
+    `[seamux] refused a request through the tunnel: ${checked.reason}`,
+  );
   return { verdict: "denied", reason: checked.reason };
 }
 
-// The 403 for a refused tunnel request, and why.
-export function forbiddenPage(reason: string): string {
-  const escaped = reason.replace(
-    /[&<>"']/g,
-    (c) => `&#${c.charCodeAt(0)};`,
-  );
+// The 403 for a refused tunnel or network request, and why.
+export function forbiddenPage(reason: string, tunnel = true): string {
+  const escaped = reason.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   return `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -211,8 +369,7 @@ export function forbiddenPage(reason: string): string {
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}</style>
 <h1>Forbidden</h1>
 <p>seamux refused this request because ${escaped}.</p>
-<p>If Cloudflare Access let you in, check SEAMUX_CF_TEAM and SEAMUX_CF_AUD in the board's .env against the Access application.</p>
-`;
+${tunnel ? "<p>If Cloudflare Access let you in, check SEAMUX_CF_TEAM and SEAMUX_CF_AUD in the board's .env against the Access application.</p>\n" : ""}`;
 }
 
 // Leeway for the clock on either side.

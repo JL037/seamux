@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
-import { Plus, RotateCcw, Save, Settings, X } from "lucide-react";
+import { ChevronRight, Plus, RotateCcw, Save, Settings, X } from "lucide-react";
 
 import { DirectoryPicker } from "~/components/directory-picker";
 import { Button } from "~/components/ui/button";
@@ -126,8 +126,9 @@ function GeneralTab({
   return (
     <div className="flex flex-col gap-6">
       <EngineSetting current={config.defaultEngine} installed={engines} />
-      <DirectoriesSetting directories={config.directories} />
       <WorktreeSetting on={config.worktreeByDefault} />
+      {/* Last, since the list can grow long. */}
+      <DirectoriesSetting directories={config.directories} />
     </div>
   );
 }
@@ -382,12 +383,134 @@ function MacroEditor({
   );
 }
 
+// A switch with its label and a caption beneath, as a label so the whole row
+// toggles it.
+function SwitchRow({
+  checked,
+  disabled,
+  onCheckedChange,
+  label,
+  children,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  label: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-start gap-2",
+        disabled ? "cursor-not-allowed" : "cursor-pointer",
+      )}
+    >
+      <Switch
+        className="mt-0.5"
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+      />
+      <span>
+        {label}
+        <span className="block text-muted-foreground">{children}</span>
+      </span>
+    </label>
+  );
+}
+
+// Every switch here turns on only from this Mac, and off from anywhere.
 function RemoteTab({ remote }: { remote: RemoteStatus }) {
+  const action = useConfigAction();
+  const local = !remote.viaTunnel && !remote.mdns.viaLan;
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">Remote connections</h3>
+        <SwitchRow
+          checked={remote.enabled}
+          disabled={(!remote.enabled && !local) || action.pending}
+          onCheckedChange={(checked) =>
+            action.submit("remote", { on: String(checked) })
+          }
+          label="Enable remote connections"
+        >
+          Lets other devices reach the board, over your network with mDNS or
+          from anywhere through a Cloudflare tunnel. Off, it answers only this
+          Mac, at 127.0.0.1. It can only be turned on from this Mac, and turns
+          off from anywhere.
+          {!local &&
+            " You're viewing this remotely, so turning it off disconnects this page."}
+        </SwitchRow>
+        {action.error && <p className="text-destructive">{action.error}</p>}
+      </section>
+      {remote.enabled && (
+        <>
+          <MdnsSetting remote={remote} local={local} />
+          <TunnelSetting remote={remote} local={local} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function MdnsSetting({
+  remote,
+  local,
+}: {
+  remote: RemoteStatus;
+  local: boolean;
+}) {
+  const action = useConfigAction();
+  const { mdns } = remote;
+  const host = new URL(mdns.url).hostname;
+  let state: string;
+  if (!mdns.secured) {
+    state = "Set SEAMUX_USER and SEAMUX_PASS in the checkout's .env first.";
+  } else if (!mdns.wanted) state = "Off.";
+  else if (mdns.listening) state = "On: listening on the network.";
+  else if (remote.supervised)
+    state = "Restarting the board to listen on the network…";
+  else state = "On, but the board needs restarting to listen on the network.";
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-medium">mDNS</h3>
+      <SwitchRow
+        checked={mdns.wanted}
+        disabled={(!mdns.wanted && (!local || !mdns.secured)) || action.pending}
+        onCheckedChange={(checked) =>
+          action.submit("mdns", { on: String(checked) })
+        }
+        label="Enable mDNS"
+      >
+        This Mac is reachable at{" "}
+        <a href={mdns.url} className="font-mono text-xs underline">
+          {host}
+        </a>
+        . Turning this on lets the board accept more than the 127.0.0.1
+        loopback: it listens on every network this Mac joins, and restarts to do
+        so. Anyone on the network is asked for SEAMUX_USER and SEAMUX_PASS,
+        which plain HTTP sends unencrypted, so use it on networks you trust.{" "}
+        {state}
+        {mdns.viaLan &&
+          " You're viewing this over the network, so turning it off disconnects this page."}
+      </SwitchRow>
+      {action.error && <p className="text-destructive">{action.error}</p>}
+    </section>
+  );
+}
+
+function TunnelSetting({
+  remote,
+  local,
+}: {
+  remote: RemoteStatus;
+  local: boolean;
+}) {
   const action = useConfigAction();
   const configured = remote.missing.length === 0;
   const url = remote.domain ? `https://${remote.domain}` : null;
-  // Off from anywhere, on only from this Mac.
-  const canToggle = remote.wanted || (configured && !remote.viaTunnel);
+  const canToggle = remote.wanted || (configured && local);
   let state: string;
   if (!remote.wanted) state = "Off.";
   else if (remote.pid) state = `On: cloudflared is running, pid ${remote.pid}.`;
@@ -396,32 +519,31 @@ function RemoteTab({ remote }: { remote: RemoteStatus }) {
       "On, but no supervisor is running to start cloudflared. Start the board with npm run seamux.";
   } else state = "Starting cloudflared…";
   return (
-    <div className="flex flex-col gap-6">
-      <p className="text-muted-foreground">
-        Opens the board at your Cloudflare tunnel's hostname, behind Cloudflare
-        Access. Through the tunnel the board asks for no password of its own: it
-        checks every request's Access token instead, and refuses any request
-        without a valid one, so it stays shut even if the Access application is
-        removed.
-      </p>
-      <section className="flex flex-col gap-2">
-        <h3 className="font-medium">Remote access</h3>
-        <label
-          className={cn(
-            "flex items-start gap-2",
-            canToggle ? "cursor-pointer" : "cursor-not-allowed",
-          )}
-        >
-          <Switch
-            className="mt-0.5"
-            checked={remote.wanted}
-            disabled={!canToggle || action.pending}
-            onCheckedChange={(checked) =>
-              action.submit("remote", { on: String(checked) })
-            }
-          />
-          <span>
-            {url ? (
+    // Open to begin with once any of its variables is set.
+    <details open={remote.cfSet} className="group flex flex-col">
+      <summary className="flex cursor-pointer list-none items-center gap-1 font-medium [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+        Enable Cloudflare Tunnel
+        <span className="text-xs font-normal text-muted-foreground">
+          {remote.wanted ? "on" : "off"}
+        </span>
+      </summary>
+      <div className="mt-2 flex flex-col gap-4">
+        <p className="text-muted-foreground">
+          Opens the board at your Cloudflare tunnel's hostname, behind
+          Cloudflare Access. Through the tunnel the board asks for no password
+          of its own: it checks every request's Access token instead, and
+          refuses any request without a valid one, so it stays shut even if the
+          Access application is removed.
+        </p>
+        <SwitchRow
+          checked={remote.wanted}
+          disabled={!canToggle || action.pending}
+          onCheckedChange={(checked) =>
+            action.submit("tunnel", { on: String(checked) })
+          }
+          label={
+            url ? (
               <>
                 Serve the board at{" "}
                 <a
@@ -435,46 +557,46 @@ function RemoteTab({ remote }: { remote: RemoteStatus }) {
               </>
             ) : (
               "Serve the board through the tunnel"
-            )}
-            <span className="block text-muted-foreground">
-              {state} It can only be turned on from this Mac, and turns off from
-              anywhere.
-              {remote.viaTunnel &&
-                " You're viewing this through the tunnel, so turning it off disconnects this page."}
-            </span>
-          </span>
-        </label>
+            )
+          }
+        >
+          {state}
+          {remote.viaTunnel &&
+            " You're viewing this through the tunnel, so turning it off disconnects this page."}
+        </SwitchRow>
         {action.error && <p className="text-destructive">{action.error}</p>}
-      </section>
-      <section className="flex flex-col gap-2">
-        <h3 className="font-medium">Settings</h3>
-        <p className="text-muted-foreground">
-          Read from the checkout's <code>.env</code> or the environment.
-          cloudflared writes its log to <code>data/tunnel.log</code>.
-        </p>
-        <ul className="flex flex-col divide-y rounded-lg border text-xs">
-          {REMOTE_VARIABLES.map((v) => {
-            const unset = remote.missing.includes(v.name);
-            return (
-              <li key={v.name} className="flex items-baseline gap-2 px-2 py-1">
-                <code className="shrink-0">{v.name}</code>
-                <span className="min-w-0 flex-1 text-muted-foreground">
-                  {v.meaning}
-                </span>
-                <span className={cn("shrink-0", unset && "text-destructive")}>
-                  {unset ? "unset" : "set"}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-        {remote.tunnel && (
-          <p className="text-xs text-muted-foreground">
-            Tunnel <code>{remote.tunnel}</code>
+        <div className="flex flex-col gap-2">
+          <p className="text-muted-foreground">
+            Read from the checkout's <code>.env</code> or the environment.
+            cloudflared writes its log to <code>data/tunnel.log</code>.
           </p>
-        )}
-      </section>
-    </div>
+          <ul className="flex flex-col divide-y rounded-lg border text-xs">
+            {REMOTE_VARIABLES.map((v) => {
+              const unset = remote.missing.includes(v.name);
+              return (
+                <li
+                  key={v.name}
+                  className="flex items-baseline gap-2 px-2 py-1"
+                >
+                  <code className="shrink-0">{v.name}</code>
+                  <span className="min-w-0 flex-1 text-muted-foreground">
+                    {v.meaning}
+                  </span>
+                  <span className={cn("shrink-0", unset && "text-destructive")}>
+                    {unset ? "unset" : "set"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          {remote.tunnel && (
+            <p className="text-xs text-muted-foreground">
+              Tunnel <code>{remote.tunnel}</code>
+            </p>
+          )}
+        </div>
+      </div>
+    </details>
   );
 }
 

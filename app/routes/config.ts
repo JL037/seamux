@@ -11,7 +11,12 @@ import {
 } from "~/lib/config.server";
 import { checkDirectory } from "~/lib/drive.server";
 import { assertFromBoard, isLocalRequest } from "~/lib/guard.server";
-import { readRemoteSettings, setRemoteWanted } from "~/lib/remote.server";
+import { readCredentials } from "~/lib/credentials";
+import {
+  readRemoteSettings,
+  setRemoteSwitch,
+  type RemoteSwitch,
+} from "~/lib/remote.server";
 
 const INTENTS = new Set([
   "add-directory",
@@ -21,6 +26,8 @@ const INTENTS = new Set([
   "save-macro",
   "reset-macro",
   "remote",
+  "tunnel",
+  "mdns",
 ]);
 
 export interface ConfigResult {
@@ -42,24 +49,29 @@ async function perform(intent: string, form: FormData, request: Request) {
     const name = field("name");
     if (!isMacroName(name)) throw new Error("Unknown macro");
     setMacro(name, intent === "save-macro" ? field("text") : null);
-  } else if (intent === "remote") {
-    setRemote(field("on") === "true", request);
+  } else if (intent === "remote" || intent === "tunnel" || intent === "mdns") {
+    setRemote(intent, field("on") === "true", request);
   }
 }
 
 // Remote access turns on only from this Mac, so a lost phone can't reopen
 // it once it's off. It turns off from anywhere.
-function setRemote(on: boolean, request: Request) {
+function setRemote(which: RemoteSwitch, on: boolean, request: Request) {
   if (on) {
     if (!isLocalRequest(request)) {
       throw new Error("Remote access can only be turned on from this Mac");
     }
-    const { missing } = readRemoteSettings(process.cwd());
-    if (missing.length > 0) {
-      throw new Error(`Set ${missing.join(", ")} first`);
+    if (which === "tunnel") {
+      const { missing } = readRemoteSettings(process.cwd());
+      if (missing.length > 0) {
+        throw new Error(`Set ${missing.join(", ")} first`);
+      }
+    }
+    if (which === "mdns" && !readCredentials(process.cwd())) {
+      throw new Error("Set SEAMUX_USER and SEAMUX_PASS first");
     }
   }
-  setRemoteWanted(process.cwd(), on);
+  setRemoteSwitch(process.cwd(), which, on);
 }
 
 export async function action({

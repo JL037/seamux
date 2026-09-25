@@ -8,6 +8,7 @@
 // scripts/supervise.ts imports this under plain Node, so it uses node:
 // builtins only.
 
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseEnv } from "node:util";
@@ -40,4 +41,11 @@ export function readCredentials(dir: string): Credentials | null {
 
 export function basicAuthHeader({ user, pass }: Credentials): string {
   return `Basic ${Buffer.from(`${user}:${pass}`).toString("base64")}`;
+}
+
+// Compare digests, so neither the length nor the content of the expected
+// header leaks through timing.
+export function sameSecret(a: string, b: string): boolean {
+  const digest = (s: string) => createHash("sha256").update(s).digest();
+  return timingSafeEqual(digest(a), digest(b));
 }

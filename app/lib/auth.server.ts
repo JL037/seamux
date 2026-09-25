@@ -1,11 +1,15 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import type { MiddlewareFunction } from "react-router";
 
-import { basicAuthHeader, readCredentials } from "~/lib/credentials";
+import {
+  basicAuthHeader,
+  readCredentials,
+  sameSecret,
+} from "~/lib/credentials";
 import {
   ACCESS_HEADER,
   checkTunnelRequest,
   forbiddenPage,
+  isLanHost,
   isTunnelHost,
 } from "~/lib/remote.server";
 
@@ -23,7 +27,10 @@ export function isSecured(request: Request): boolean {
 // Through the tunnel, Cloudflare Access is the login: the request must carry
 // a valid Access token, and HTTP Basic isn't asked for. Otherwise HTTP Basic,
 // when credentials are configured. Without them it lets everything through,
-// and the board turns red and names itself "seamux (unsecured)" instead.
+// and the board turns red and names itself "seamux (unsecured)" instead,
+// except at the mDNS name, which never answers without them. (The dev
+// server's own middleware, in vite.config.ts, has already checked a request
+// from the network, since only it can see the socket.)
 export const requireAuth: MiddlewareFunction<Response> = async (
   { request },
   next,
@@ -41,7 +48,16 @@ export const requireAuth: MiddlewareFunction<Response> = async (
     });
   }
   const credentials = readCredentials(process.cwd());
-  if (!credentials) return next();
+  if (!credentials) {
+    if (!isLanHost(process.cwd(), request.headers.get("host"))) return next();
+    return new Response(
+      forbiddenPage(
+        "SEAMUX_USER and SEAMUX_PASS are unset, and the board doesn't answer the network without them",
+        false,
+      ),
+      { status: 403, headers: { "Content-Type": "text/html; charset=utf-8" } },
+    );
+  }
   const given = request.headers.get("authorization") ?? "";
   if (sameSecret(given, basicAuthHeader(credentials))) return next();
   return new Response("Authentication required", {
@@ -49,10 +65,3 @@ export const requireAuth: MiddlewareFunction<Response> = async (
     headers: { "WWW-Authenticate": 'Basic realm="seamux", charset="UTF-8"' },
   });
 };
-
-// Compare digests, so neither the length nor the content of the expected
-// header leaks through timing.
-function sameSecret(a: string, b: string): boolean {
-  const digest = (s: string) => createHash("sha256").update(s).digest();
-  return timingSafeEqual(digest(a), digest(b));
-}

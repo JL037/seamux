@@ -10,9 +10,11 @@
 // - on start, stops a dev server orphaned by a supervisor that was killed;
 // - refuses to run twice.
 //
-// It also runs the Cloudflare tunnel while the board's Remote switch is on
+// It also runs the Cloudflare tunnel while the board's Remote switches are on
 // (app/lib/remote.server.ts), restarting it with the same backoff when it exits,
-// and stops it when the switch goes off or its settings go missing.
+// and stops it when a switch goes off or its settings go missing. When mDNS
+// is switched on or off, it restarts the dev server, which picks the address
+// it listens on at startup.
 //
 // The port comes from SEAMUX_PORT, else .seamux.json, else 54321, and is
 // written back to .seamux.json so `npm run land` checks the right board.
@@ -35,9 +37,10 @@ import { fileURLToPath } from "node:url";
 
 import { basicAuthHeader, readCredentials } from "../app/lib/credentials.ts";
 import {
+  lanWanted,
   readRemoteSettings,
-  remoteWanted,
   tunnelLogFile,
+  tunnelWanted,
   tunnelPidFile,
   updateRunFile,
 } from "../app/lib/remote.server.ts";
@@ -209,11 +212,14 @@ async function supervise() {
   let restartStamp = mtime(RESTART_FILE);
   let pendingStart: NodeJS.Timeout | null = null;
   let restarting = false;
+  // Whether the running dev server was started listening on the network.
+  let listeningLan = false;
 
   const start = () => {
     pendingStart = null;
     if (stopping || child) return;
     startedAt = Date.now();
+    listeningLan = lanWanted(REPO);
     failures = 0;
     const c = spawn("npx", ["react-router", "dev", "--port", String(port)], {
       cwd: REPO,
@@ -308,7 +314,7 @@ async function supervise() {
     reconcilingTunnel = true;
     try {
       const { settings, missing } = readRemoteSettings(REPO);
-      const wanted = remoteWanted(REPO);
+      const wanted = tunnelWanted(REPO);
       if (tunnel && !wanted) await stopTunnel("switched off");
       else if (tunnel && !settings) {
         await stopTunnel(`${missing.join(", ")} unset`);
@@ -349,6 +355,8 @@ async function supervise() {
     if (stamp !== restartStamp) {
       restartStamp = stamp;
       void restart("requested");
+    } else if (child && lanWanted(REPO) !== listeningLan) {
+      void restart(listeningLan ? "mDNS switched off" : "mDNS switched on");
     }
     void reconcileTunnel();
   }, 1000);

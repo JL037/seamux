@@ -35,6 +35,15 @@ Measured against cloudflared 2026.9.3, with a tunnel managed from the dashboard.
 - **Access's sign-out page errors without a cookie.** `/cdn-cgi/access/logout`, on the application's hostname or the team domain, answers "No Access cookie found. Please login first." on an error page, so it's no help as a recovery link.
 - **A tunnel with no Access application is wide open.** Without one, a request reached the Mac with no login at all. Access is set up separately from the tunnel, which is why the board checks the Access token itself.
 
+## mDNS and the dev server
+
+Measured on macOS 26.5.1 with Vite 8.3.0 and React Router 7.18.4.
+
+- **React Router's dev server copies `.env` into `process.env`, and never takes a variable back out.** It calls `Object.assign(process.env, loadEnv(...))` at startup, and again when Vite restarts itself over a changed `.env`. A variable deleted from `.env` stays set until the process exits, and `readEnv` prefers `process.env`, so removing `SEAMUX_USER` or `SEAMUX_PASS` needs a restart to take effect. A changed value takes effect straight away.
+- **A Mac resolves its own `.local` name to `::1` first.** `curl http://osmium.local:<port>/` on the Mac itself connects over loopback, so it counts as local. Testing a request from the network needs `--resolve <name>.local:<port>:<LAN address>`.
+- **Vite's `host: true` listens on `*` over IPv6, dual-stack.** An IPv4 peer shows up as `::ffff:192.168.1.151`, and IPv4 loopback as `::ffff:127.0.0.1`, so the loopback check matches both forms.
+- **`scutil --get LocalHostName` is the name Bonjour answers for.** It's `Osmium` here, where `hostname` gives `Osmium.local`. macOS already answers for it on every network it joins, so seamux has nothing to advertise.
+
 ## Codex
 
 Measured against codex-cli 0.156.1 under cmux 0.64.23, launched through `cmux-codex-wrapper` with cmux's Codex hooks installed (`cmux hooks setup codex`).

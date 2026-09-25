@@ -6,84 +6,15 @@ A board over every Claude Code and Codex session on this Mac, and the tools to d
 
 ## Getting it running
 
-You need:
-
-- **macOS** with [cmux](https://cmux.dev). seamux drives sessions by typing into their cmux terminals, so a session outside cmux is shown but can't be driven.
-- **Claude Code**, with `claude` on your `PATH` (`~/.local/bin` is where the installer puts it).
-- **Codex**, optionally, installed with npm or pnpm (next to `node`) or Homebrew. Run `cmux hooks setup codex` once so cmux tracks its sessions.
-- **Node 24** or later, for `node:sqlite` and for running TypeScript directly.
+On macOS with [cmux](https://cmux.dev), Claude Code and Node 24 or later:
 
 ```bash
 npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
 npm run seamux   # run the board on http://127.0.0.1:54321 and keep it running
 ```
 
-The same command is `bin/seamux`, also exposed as the package's `seamux` bin: run `npm link` once and `seamux` starts the board from anywhere. With a command, such as `seamux list`, it's the fan-out CLI described below.
-
-Run `npm run seamux` in its own cmux workspace. It supervises the dev server: it restarts it if it exits or stops answering, and refuses to run twice.
-
-`setup` writes to two places outside the repo. Both are safe to run again and both can be undone:
-
-- **`~/.claude/settings.json`** gets `SubagentStart` and `SubagentStop` hooks that run `hooks/subagent-event.ts`, so the board can see subagents in every session. The file is backed up first. `npm run hooks:uninstall` removes only these entries.
-- **`~/.claude/skills/seamux-dispatch/`** gets the fan-out skill, rendered with this checkout's `bin/seamux` path. `npm run skills:uninstall` removes it.
-
-## Configuration
-
-Most settings live in the board. Click the cog beside the seamux name.
-
-**General**
-
-- **Default agent**: what the dispatch bar starts new sessions with, Claude Code or Codex. An agent that isn't installed is greyed out. The dispatch bar has a picker to change it for one dispatch. Fan-out workers always run Claude Code, since they rely on its hooks and the dispatch skill.
-- **Directories**: what the dispatch bar's directory picker offers. When this is empty, the picker lists directories with live sessions, past dispatches, and every git repo up to two levels under `~/code`. ↓ or the chevron opens the whole list, whatever is already in the field; typing narrows it.
-- **New worktree by default**: whether the dispatch bar's "new worktree" switch starts on.
-
-**Macros** are prompts seamux sends into a session for you. `{{name}}` variables are filled in when the prompt is sent.
-
-| Macro | Sent | Variables |
-| --- | --- | --- |
-| New session | Wrapped around the first prompt of every session seamux dispatches. Must contain `{{prompt}}`, and defaults to that followed by `{{how_to_worktree}}` | `prompt`, `cwd`, `how_to_worktree` |
-| How to worktree | Filled into the new session's `{{how_to_worktree}}` when the session starts in a new worktree in a repo with no worktree convention; empty otherwise. Defaults to steps that have the session check `worktrees/` is gitignored first, then install dependencies in the worktree. A New session macro without `{{how_to_worktree}}` gets it at the end | `worktree`, `branch`, `repo` |
-| Close session | When you close an idle chat, before it exits. Defaults to a cleanup prompt asking the session to remove its own worktree. Leave it empty to exit straight away | `cwd`, `repo`, `siblings` |
-
-`{{siblings}}` is a sentence naming the other live sessions under the same repo. Without it, a session can't know that another session is using the same repo.
-
-**`.seamux.json`**, at the root of the checkout and gitignored, is how that checkout runs the board. `npm run seamux` writes it, and `npm run land` reads it to find the board:
-
-```json
-{ "port": 54321 }
-```
-
-Edit the port there, or start `npm run seamux` once with `SEAMUX_PORT` set, and it's kept for later runs.
-
-**Password.** Put `SEAMUX_USER` and `SEAMUX_PASS` in a `.env` at the root of the checkout (gitignored), or in the environment, and the board asks for them with HTTP Basic auth before serving anything. It reads them on every request, so a change takes effect without a restart. With either one unset the board still runs, but its background turns red and it calls itself "seamux (unsecured)".
-
-**Remote access.** The config dialog's Remote tab switches on a Cloudflare named tunnel, so you can reach the board from your phone. Set it up once:
-
-1. `brew install cloudflared`.
-2. **Tunnel.** In the Cloudflare dashboard, open Zero Trust → Networks → Tunnels and mesh (`https://dash.cloudflare.com/<account>/one/networks/connectors`) and create a tunnel. Give it a public hostname on a domain Cloudflare serves, such as `seamux.example.com`, pointing at `http://localhost:54321` (the board's port). Put the tunnel's token in `SEAMUX_CF_TOKEN` and the hostname in `SEAMUX_CF_DOMAIN`.
-3. **Access application.** Open Access Controls → Applications (`https://dash.cloudflare.com/<account>/one/access-controls/apps`) and add a self-hosted application with a policy that allows only you. A self-hosted application defaults to a private IP: switch its destination to a public hostname and fill in both the subdomain and the domain. Left without the subdomain, it protects only the bare domain, and the board answers every request with a 403. Put the application's AUD tag, from its Additional settings tab, in `SEAMUX_CF_AUD`.
-4. **Team.** Your team name is on the right of Zero Trust's Get started page (`https://dash.cloudflare.com/<account>/one/overview/get-started`). Put it in `SEAMUX_CF_TEAM`, as the name or as `<team>.cloudflareaccess.com`.
-5. Restart `npm run seamux`, since Vite and React Router read the hostname once at startup.
-
-To check Access covers the hostname, run `curl -sI https://seamux.example.com`. It should redirect (302) to `<team>.cloudflareaccess.com`. A 403 `Forbidden` without that redirect means requests reach the board without an Access token, so fix the application's hostname.
-
-A refused request gets a Forbidden page that says why, and the board logs it.
-
-The switch can only be turned on from the Mac, and only once all four are set; it turns off from anywhere. While it's on, the supervisor runs `cloudflared`, restarts it if it exits, and writes its log to `data/tunnel.log`; the header shows "Remote". A request through the tunnel must carry a valid Cloudflare Access token for that team and application, including Vite's own files, and is then let in without the HTTP Basic password. Without a valid token it gets a 403, so if the Access application is ever removed, the board stays shut. The switch is kept in `.seamux.json` as `"remote": true`, so it survives restarts.
-
-Environment variables, all optional:
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `SEAMUX_PORT` | from `.seamux.json` | Port for `npm run seamux`, saved to `.seamux.json` |
-| `SEAMUX_USER`, `SEAMUX_PASS` | unset | HTTP Basic credentials for the board, also read from `.env`. Unset leaves the board unsecured |
-| `SEAMUX_CF_TOKEN`, `SEAMUX_CF_DOMAIN`, `SEAMUX_CF_TEAM`, `SEAMUX_CF_AUD` | unset | Remote access: the tunnel's token and hostname, and the Cloudflare Access team and AUD tag. Also read from `.env`. All four are needed |
-| `SEAMUX_CF_TUNNEL` | unset | The tunnel's id, shown in the Remote tab |
-| `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
-| `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |
-| `SEAMUX_POLL` | unset | `1` makes hot reload poll for file changes. It already polls on WSL's `/mnt/` drives |
-
-Some choices are kept in the browser rather than the store: light or dark theme, whether DONE is shown, and project colours.
+- **[Getting started](docs/getting-started.md)**: requirements, what `setup` changes outside the repo, setting a password, and every setting and environment variable.
+- **[Remote connections](docs/remote-connections.md)**: reaching the board from your phone or another computer, over your own network with mDNS, or from anywhere through a Cloudflare tunnel behind Cloudflare Access.
 
 ## How it works
 
@@ -144,7 +75,7 @@ A worker counts as finished only when it writes its `done` marker, not when its 
 ### Rules it keeps
 
 - **It never destroys.** seamux has no command that deletes a session, a worktree or a transcript. When something should go, seamux sends a prompt asking the session that owns it to remove it.
-- **Localhost, or the tunnel behind Cloudflare Access.** The server binds `127.0.0.1`, and every write checks that the request came from the board itself, so no other website can type into your sessions. The one other way in is the Cloudflare tunnel, and only with a valid Access token.
+- **Localhost, unless you open it.** The server binds `127.0.0.1`, and every write checks that the request came from the board itself, so no other website can type into your sessions. The only other ways in are the ones the Remote tab switches on: mDNS, only with the board's password, and the Cloudflare tunnel, only with a valid Access token.
 
 ## Working on seamux
 
