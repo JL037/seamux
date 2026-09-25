@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
 import { Check, GitFork, Pencil, SendHorizontal, X } from "lucide-react";
 
@@ -16,6 +16,7 @@ import { useSlashMenu } from "~/components/slash-menu";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
 import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
+import { useCoarsePointer } from "~/lib/use-pointer";
 import { useSessionAction } from "~/lib/use-session-action";
 import { cn } from "~/lib/utils";
 
@@ -42,6 +43,7 @@ export function ChatModal({
   error,
   onFork,
   forking,
+  title,
 }: {
   card: Card;
   open: boolean;
@@ -56,7 +58,11 @@ export function ChatModal({
   // null when the chat's agent can't fork: only Claude Code can.
   onFork: (() => void) | null;
   forking: boolean;
+  // The chat's name, renamable here, where a double-click can't reach on a
+  // phone.
+  title?: ReactNode;
 }) {
+  const coarse = useCoarsePointer();
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
   const url = `/sessions/${card.sessionId}/messages`;
   // The dialog mounts its content a render or two after it opens, so the
@@ -136,9 +142,16 @@ export function ChatModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-4 sm:max-w-5xl">
+      <DialogContent
+        // On a phone, open on the conversation rather than raising the
+        // keyboard over it.
+        initialFocus={coarse ? true : input}
+        className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-4 sm:max-w-5xl max-md:h-dvh! max-md:w-screen! max-md:max-w-none! max-md:rounded-none max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:ring-0"
+      >
         <DialogHeader>
-          <DialogTitle>{card.name}</DialogTitle>
+          <DialogTitle className="flex min-w-0 items-center gap-1 pr-8">
+            {title ?? card.name}
+          </DialogTitle>
           <DialogDescription className="font-mono text-xs">
             {card.cwd}
             {card.branch && ` · ${card.branch}`}
@@ -182,14 +195,25 @@ export function ChatModal({
           )}
         </div>
 
+        {/* The side panel has no room below md: a fold instead. */}
+        {card.subagents.length > 0 && (
+          <details className="max-h-56 shrink-0 overflow-y-auto md:hidden">
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Subagents ({card.subagents.length})
+            </summary>
+            <div className="pt-2">
+              <SubagentDetail subagents={card.subagents} now={Date.now()} />
+            </div>
+          </details>
+        )}
+
         <QueuedList card={card} />
 
-        <div className="flex items-end gap-2">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end">
           <div className="relative flex min-w-0 flex-1 flex-col">
             {slash.menu}
             <Textarea
               ref={input}
-              autoFocus
               data-focus-key={`chat:${card.sessionId}`}
               value={draft}
               onChange={(e) => onDraftChange(e.target.value)}
@@ -213,11 +237,11 @@ export function ChatModal({
                       ? "Next message (⌘↵ to queue it for when this turn ends), or a tangent to fork"
                       : "Next message (⌘↵ to send), or a tangent to fork"
               }
-              className="max-h-[40dvh] min-h-32 resize-y overflow-y-auto rounded-b-none"
+              className="max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none md:max-h-[40dvh] md:min-h-32"
             />
             <ContextBar context={card.context} className="border-input" />
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex justify-end gap-2 md:flex-col">
             {onFork && (
               <Button
                 variant="outline"

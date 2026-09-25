@@ -30,6 +30,13 @@ export function useWaitingNotifications(cards: Card[]) {
   const [enabled, setEnabled] = useLocalStorage("seamux:notify", false);
   const [permission, setPermission] = useState<Permission>("unsupported");
   useEffect(() => setPermission(currentPermission()), []);
+  // Phones only show notifications through a service worker: Chrome on
+  // Android refuses `new Notification`, and iOS has none outside a board
+  // added to the home screen. Only a secure context has one.
+  useEffect(() => {
+    if (!window.isSecureContext || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }, []);
   const active = enabled && permission === "granted";
 
   // null until the first board is seen, so opening the tab doesn't announce
@@ -40,20 +47,31 @@ export function useWaitingNotifications(cards: Card[]) {
     const before = seen.current;
     seen.current = new Set(waiting.map((c) => c.sessionId));
     if (!before || !active || document.hasFocus()) return;
-    for (const card of waiting) {
-      if (before.has(card.sessionId)) continue;
-      try {
-        const n = new Notification(card.name, {
+    const fresh = waiting.filter((c) => !before.has(c.sessionId));
+    if (fresh.length === 0) return;
+    void (async () => {
+      const worker = await navigator.serviceWorker
+        ?.getRegistration()
+        .catch(() => undefined);
+      for (const card of fresh) {
+        const options = {
           body: describe(card),
           tag: `seamux:${card.sessionId}`,
-          icon: "/favicon.svg",
-        });
-        n.onclick = () => {
-          window.focus();
-          n.close();
+          icon: "/icon-192.png",
         };
-      } catch {}
-    }
+        try {
+          if (worker) {
+            await worker.showNotification(card.name, options);
+            continue;
+          }
+          const n = new Notification(card.name, options);
+          n.onclick = () => {
+            window.focus();
+            n.close();
+          };
+        } catch {}
+      }
+    })();
   }, [cards, active]);
 
   const toggle = async () => {

@@ -32,7 +32,7 @@ The store at `data/seamux.db` holds only what those don't record: subagent lifec
 
 | Column | Means |
 | --- | --- |
-| PINNED | Sessions you've pinned as long-running. It keeps your order, which you change by dragging a card's name, and only appears while something is pinned |
+| PINNED | Sessions you've pinned as long-running. It keeps your order, which you change by dragging a card's name (with a mouse, not on a touch screen), and only appears while something is pinned |
 | IDLE | Alive, nothing to do |
 | WAITING | Stopped until you answer: a permission prompt, a question, any other dialog, or a turn that ended on a question, or that a background session reports left it blocked on you |
 | WORKING | A turn is running, or one of its subagents is |
@@ -40,11 +40,11 @@ The store at `data/seamux.db` holds only what those don't record: subagent lifec
 
 Each column lists its oldest card first, so the work that's been waiting longest is at the top.
 
-On a narrow screen, such as a phone, the columns become a carousel with one column per screen. Swipe between them, or tap a column's tab in the strip above. The strip shows each column's count, with Waiting's in amber while anything waits. DONE is always there, as the last column. The board opens on the column you last viewed in that tab, or otherwise on WAITING if anything waits, else on WORKING.
+On a narrow screen, such as a phone, the columns become a carousel with one column per screen. Swipe between them, or tap a column's tab in the strip above. The strip shows each column's count, with Waiting's in amber while anything waits. DONE is always there, as the last column. The board opens on the column you last viewed in that tab, or otherwise on WAITING if anything waits, else on WORKING. The dispatch bar moves behind the header's **New** button. The **⋯** menu holds the LAN and Remote links, the background sessions, and the version.
 
-While anything waits, the tab's title counts it: `(2) seamux`. **Desktop notifications**, a switch in the config dialog's General tab, fire when a chat starts waiting while the board isn't the focused window. Browsers only allow them on a secure origin, so they work on `localhost` and through the tunnel, but not on the plain-HTTP `.local` address.
+While anything waits, the tab's title counts it: `(2) seamux`. **Desktop notifications**, a switch in the config dialog's General tab, fire when a chat starts waiting while the board isn't the focused window. Browsers only allow them on a secure origin, so they work on `localhost` and through the tunnel, but not on the plain-HTTP `.local` address. On a phone they go through the board's service worker, since phones allow notifications no other way. On an iPhone they also need the board added to the Home Screen, from Safari's share menu. They arrive only while the board is running, since the board sends them itself and there is no push server.
 
-Background sessions (`claude --bg`) belong to the chat that started them. They show as a marker on that chat's card, not as cards of their own. Any that no open chat accounts for are listed below the board, where you can resume one, or ask for it to be deleted.
+Background sessions (`claude --bg`) belong to the chat that started them. They show as a marker on that chat's card, not as cards of their own. Any that no open chat accounts for are listed below the board, or under **⋯** on a phone, where you can resume one, or ask for it to be deleted.
 
 ### Cards
 
@@ -55,7 +55,7 @@ A card shows the last prompt and the end of the latest reply, with a reply box b
 - **A multiline draft** can't be edited in the card's one-line reply box without losing its line breaks, so the box shows its first line and line count across the full width. The box, the line count and its button all open the full view instead of sending.
 - **Dialogs** are answered from the card. An approval gets Approve and Deny, an AskUserQuestion gets its options (with each option's preview, and a note to go with the pick, when the question has previews), and any other numbered dialog gets one button per option. seamux presses the same keys you would.
 - **Stop** presses Esc in the session's terminal. **Fork** starts a new session with a copy of this chat's context. **Pin** moves a card into or out of PINNED.
-- **Rename** by double-clicking a card's name. A chat that is open in cmux is sent `/rename`, which takes effect even mid-turn and retitles its tab, but not while a dialog is open in it. Its cmux workspace is renamed too when the chat is the workspace's only tab. A closed chat gets the lines `/rename` would have written appended to its transcript, and keeps the name when resumed.
+- **Rename** by double-clicking a card's name, or with the pencil beside it in the full view. A chat that is open in cmux is sent `/rename`, which takes effect even mid-turn and retitles its tab, but not while a dialog is open in it. Its cmux workspace is renamed too when the chat is the workspace's only tab. A closed chat gets the lines `/rename` would have written appended to its transcript, and keeps the name when resumed.
 - **Close** sends the close-session macro, waits for that turn, then sends `/exit` and closes the cmux tab. If the turn ends on a question or leaves work behind, the chat stays open with a note. Closing it again exits without sending the macro. Once you prompt it again, the note goes, and closing starts over with the macro. The conversation is kept, so **resume** reopens it in a new cmux workspace.
 - The **context bar** under each input fills from green to red as the context window fills, so you can wrap up or fork a chat before Claude Code compacts it.
 - **Codex cards** are marked Codex. They reply, stop, approve and deny, rename, close and resume like the rest. They have no subagents, background sessions or Fork, and a Codex dialog other than a command approval has to be answered in its terminal. A Codex chat renamed while closed gets a line in `~/.codex/session_index.jsonl`, where Codex's own `/rename` writes.

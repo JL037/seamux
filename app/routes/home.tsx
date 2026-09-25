@@ -11,15 +11,18 @@ import { useFetcher, useRevalidator } from "react-router";
 import {
   GitBranch,
   CircleCheck,
+  Ellipsis,
   Globe,
   Layers,
   LoaderCircle,
   Maximize2,
+  Pencil,
   Eye,
   EyeOff,
   Pin,
   PinOff,
   Play,
+  Plus,
   SendHorizontal,
   Square,
   Trash2,
@@ -84,8 +87,9 @@ import { ENGINE_LABELS, type Engine } from "~/lib/config";
 import { configOrDefaults } from "~/lib/config.server";
 import { installedEngines } from "~/lib/drive.server";
 import { startQueue } from "~/lib/queue.server";
-import { remoteStatus } from "~/lib/remote.server";
+import { remoteStatus, type RemoteStatus } from "~/lib/remote.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
+import { useCoarsePointer } from "~/lib/use-pointer";
 import { useSessionAction } from "~/lib/use-session-action";
 import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
 import {
@@ -181,7 +185,8 @@ function PathSwatch({ cwd }: { cwd: string }) {
       <PopoverTrigger
         aria-label={`Colour for ${shortPath(project)}`}
         title={shortPath(project)}
-        className="size-2.5 shrink-0 cursor-pointer rounded-[2px] outline-offset-2"
+        // A 10px square is too small to tap; the hit area reaches past it.
+        className="relative size-2.5 shrink-0 cursor-pointer rounded-[2px] outline-offset-2 after:absolute after:-inset-2"
         style={{ backgroundColor: current }}
       />
       <PopoverContent align="start" className="w-auto gap-2">
@@ -373,6 +378,7 @@ function ChatInput({
             : null
         }
         forking={forker.pending}
+        title={<SessionName card={card} inModal />}
       />
     </div>
   );
@@ -380,6 +386,33 @@ function ChatInput({
 
 function ActionError({ error }: { error: string }) {
   return <p className="text-destructive">{error}</p>;
+}
+
+// Errors from a card's own controls: its pin, stop, close or resume, and
+// its rename. Their titles carry them too, but a title only shows on hover,
+// which a phone doesn't have, so the card lists them.
+const CardErrorsContext = createContext<
+  (source: string, error: string | null) => void
+>(() => {});
+
+function useReportError(source: string, error: string | null | undefined) {
+  const report = useContext(CardErrorsContext);
+  useEffect(() => report(source, error ?? null), [report, source, error]);
+  useEffect(() => () => report(source, null), [report, source]);
+}
+
+function useCardErrors() {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const report = useCallback(
+    (source: string, error: string | null) =>
+      setErrors((e) => {
+        if ((e[source] ?? null) === error) return e;
+        const { [source]: _, ...rest } = e;
+        return error ? { ...rest, [source]: error } : rest;
+      }),
+    [],
+  );
+  return { errors: [...new Set(Object.values(errors))], report };
 }
 
 // Why a WORKING card's stop is disabled, or null when it can be pressed.
@@ -396,6 +429,7 @@ function stopBlocked(card: BoardCard): string | null {
 // Stop on a WORKING card (Esc into the session), resume on a DONE one.
 function CardControl({ card }: { card: BoardCard }) {
   const { submit, pending, error } = useSessionAction(card.sessionId);
+  useReportError("control", error);
   if (card.column === "working") {
     const blocked = stopBlocked(card);
     // A disabled button takes no pointer events, so the span carries the
@@ -508,10 +542,19 @@ function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
   );
 }
 
-// The card's name, renamed in place by double-clicking it. A pinned card's
-// name is also its drag handle. The new name shows at once, and stays until
-// the board reports it or the rename fails.
-function SessionName({ card }: { card: BoardCard }) {
+// The card's name, renamed in place by double-clicking it, or in the chat's
+// full view with its pencil. A pinned card's name is also its drag handle,
+// where there is a mouse to drag with. The new name shows at once, and
+// stays until the board reports it or the rename fails.
+function SessionName({
+  card,
+  inModal = false,
+}: {
+  card: BoardCard;
+  inModal?: boolean;
+}) {
+  const coarse = useCoarsePointer();
+  const draggable = card.pinned && !inModal && !coarse;
   const [editing, setEditing] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const forget = useCallback(() => setSent(null), []);
@@ -520,6 +563,7 @@ function SessionName({ card }: { card: BoardCard }) {
     undefined,
     forget,
   );
+  useReportError(inModal ? "name:modal" : "name", error);
   useEffect(() => {
     if (sent === null) return;
     if (card.name === sent) return setSent(null);
@@ -562,31 +606,45 @@ function SessionName({ card }: { card: BoardCard }) {
       />
     );
   }
+  const edit = () => {
+    finished.current = false;
+    setEditing(true);
+  };
   const title =
     error ??
-    (card.pinned
+    (draggable
       ? "Drag to reorder Pinned, double-click to rename"
       : "Double-click to rename");
   return (
-    <span
-      draggable={card.pinned}
-      onDragStart={
-        card.pinned ? (e) => startPinDrag(e, card.sessionId) : undefined
-      }
-      onDoubleClick={() => {
-        finished.current = false;
-        setEditing(true);
-      }}
-      className={cn(
-        "truncate",
-        card.pinned && "cursor-grab active:cursor-grabbing",
-        pending && "opacity-60",
-        error && "text-destructive",
+    <>
+      <span
+        draggable={draggable}
+        onDragStart={
+          draggable ? (e) => startPinDrag(e, card.sessionId) : undefined
+        }
+        onDoubleClick={edit}
+        className={cn(
+          "truncate",
+          draggable && "cursor-grab active:cursor-grabbing",
+          pending && "opacity-60",
+          error && "text-destructive",
+        )}
+        title={title}
+      >
+        {name}
+      </span>
+      {inModal && (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          title="Rename"
+          aria-label="Rename"
+          onClick={edit}
+        >
+          <Pencil />
+        </Button>
       )}
-      title={title}
-    >
-      {name}
-    </span>
+    </>
   );
 }
 
@@ -595,6 +653,7 @@ function SessionName({ card }: { card: BoardCard }) {
 // unpinned.
 function PinToggle({ card }: { card: BoardCard }) {
   const { submit, pending, error } = useSessionAction(card.sessionId);
+  useReportError("pin", error);
   if (card.column === "done" && !card.pinned) return null;
   return (
     <Button
@@ -694,120 +753,126 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
     `seamux:chat-open:${card.sessionId}`,
     false,
   );
+  const { errors, report } = useCardErrors();
   return (
-    <Card
-      size="sm"
-      className={cn(
-        "relative shadow-sm transition-shadow before:absolute before:inset-x-0 before:top-0 before:h-0.5 after:pointer-events-none after:absolute after:top-0 after:right-0 after:size-5 after:rounded-tr-xl after:border-t-2 after:border-r-2 hover:shadow-md dark:shadow-black/20",
-        CARD_EDGE[card.column],
-        ENGINE_CORNER[card.engine],
-        card.column === "done" && "opacity-70",
-      )}
-    >
-      {/* A bounded column, so a long path truncates rather than widening the
-          header and pushing the title's buttons off the card. */}
-      <CardHeader className="grid-cols-[minmax(0,1fr)]">
-        <CardTitle className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-2">
-            {card.pinned && (
-              <span
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  COLUMN_ACCENT[card.column],
-                )}
-                title={COLUMN_LABELS[card.column]}
-              />
-            )}
-            <SessionName card={card} />
-          </span>
-          <span className="flex shrink-0 items-center gap-1">
-            <PinToggle card={card} />
-            <CardControl card={card} />
-          </span>
-        </CardTitle>
-        <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <PathSwatch cwd={card.cwd} />
-            <span className="truncate font-mono">{shortPath(card.cwd)}</span>
-          </span>
-          {card.branch && (
-            <span className="inline-flex items-center gap-1 font-mono">
-              <GitBranch className="size-3" />
-              {card.branch}
+    <CardErrorsContext.Provider value={report}>
+      <Card
+        size="sm"
+        className={cn(
+          "relative shadow-sm transition-shadow before:absolute before:inset-x-0 before:top-0 before:h-0.5 after:pointer-events-none after:absolute after:top-0 after:right-0 after:size-5 after:rounded-tr-xl after:border-t-2 after:border-r-2 hover:shadow-md dark:shadow-black/20",
+          CARD_EDGE[card.column],
+          ENGINE_CORNER[card.engine],
+          card.column === "done" && "opacity-70",
+        )}
+      >
+        {/* A bounded column, so a long path truncates rather than widening the
+            header and pushing the title's buttons off the card. */}
+        <CardHeader className="grid-cols-[minmax(0,1fr)]">
+          <CardTitle className="flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-2">
+              {card.pinned && (
+                <span
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    COLUMN_ACCENT[card.column],
+                  )}
+                  title={COLUMN_LABELS[card.column]}
+                />
+              )}
+              <SessionName card={card} />
             </span>
-          )}
-          <span>{ago(card.lastActivityAt, now)}</span>
-          {card.engine !== "claude" && (
-            <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
-              {ENGINE_LABELS[card.engine]}
-            </Badge>
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2 text-xs">
-        {card.worker && (
-          <p className="flex items-center gap-1.5 font-mono text-muted-foreground">
-            <WorkerStatus status={card.worker.reported} />
-            worker {card.worker.key} · {card.worker.dispatchId}
-          </p>
-        )}
-        {card.intent && (
-          <p className="line-clamp-2 rounded-md bg-muted px-2 py-1">
-            <span className="font-medium">
-              {card.forkedFrom ? "Tangent: " : "Goal: "}
+            <span className="flex shrink-0 items-center gap-1">
+              <PinToggle card={card} />
+              <CardControl card={card} />
             </span>
-            {card.intent}
-          </p>
-        )}
-        {card.lastPrompt && card.lastPrompt !== card.intent && (
-          <Faded from="start" className="max-h-12 text-muted-foreground">
-            <span className="font-medium text-foreground">You: </span>
-            {card.lastPrompt}
-          </Faded>
-        )}
-        {card.lastReply && <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />}
-        {card.closing && (
-          <p
-            className={cn(
-              "rounded-md px-2 py-1",
-              card.closing.state === "held"
-                ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                : "bg-muted text-muted-foreground",
+          </CardTitle>
+          <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <PathSwatch cwd={card.cwd} />
+              <span className="truncate font-mono">{shortPath(card.cwd)}</span>
+            </span>
+            {card.branch && (
+              <span className="inline-flex items-center gap-1 font-mono">
+                <GitBranch className="size-3" />
+                {card.branch}
+              </span>
             )}
-          >
-            {card.closing.state === "cleaning"
-              ? "Closing: running the close-session macro, then it exits."
-              : card.closing.note}
-          </p>
-        )}
-        <WaitingPanel card={card} />
-        <SubagentSummary subagents={card.subagents} now={now} />
-        {card.background.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {card.background.map((b) => (
-              <Badge
-                key={b.id}
-                variant={
-                  b.state === "blocked" || b.state === "failed"
-                    ? "destructive"
-                    : "secondary"
-                }
-                title={b.needs ?? undefined}
-              >
-                <Layers />
-                {b.name} · {b.state}
+            <span>{ago(card.lastActivityAt, now)}</span>
+            {card.engine !== "claude" && (
+              <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                {ENGINE_LABELS[card.engine]}
               </Badge>
-            ))}
-          </div>
-        )}
-        <CardState
-          column={card.column}
-          queued={card.terminalQueue.length + card.boardQueue.length}
-          onOpen={() => setChatOpen(true)}
-        />
-        <ChatInput card={card} open={chatOpen} setOpen={setChatOpen} />
-      </CardContent>
-    </Card>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 text-xs">
+          {errors.map((e) => (
+            <ActionError key={e} error={e} />
+          ))}
+          {card.worker && (
+            <p className="flex items-center gap-1.5 font-mono text-muted-foreground">
+              <WorkerStatus status={card.worker.reported} />
+              worker {card.worker.key} · {card.worker.dispatchId}
+            </p>
+          )}
+          {card.intent && (
+            <p className="line-clamp-2 rounded-md bg-muted px-2 py-1">
+              <span className="font-medium">
+                {card.forkedFrom ? "Tangent: " : "Goal: "}
+              </span>
+              {card.intent}
+            </p>
+          )}
+          {card.lastPrompt && card.lastPrompt !== card.intent && (
+            <Faded from="start" className="max-h-12 text-muted-foreground">
+              <span className="font-medium text-foreground">You: </span>
+              {card.lastPrompt}
+            </Faded>
+          )}
+          {card.lastReply && <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />}
+          {card.closing && (
+            <p
+              className={cn(
+                "rounded-md px-2 py-1",
+                card.closing.state === "held"
+                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {card.closing.state === "cleaning"
+                ? "Closing: running the close-session macro, then it exits."
+                : card.closing.note}
+            </p>
+          )}
+          <WaitingPanel card={card} />
+          <SubagentSummary subagents={card.subagents} now={now} />
+          {card.background.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {card.background.map((b) => (
+                <Badge
+                  key={b.id}
+                  variant={
+                    b.state === "blocked" || b.state === "failed"
+                      ? "destructive"
+                      : "secondary"
+                  }
+                  title={b.needs ?? undefined}
+                >
+                  <Layers />
+                  {b.name} · {b.state}
+                </Badge>
+              ))}
+            </div>
+          )}
+          <CardState
+            column={card.column}
+            queued={card.terminalQueue.length + card.boardQueue.length}
+            onOpen={() => setChatOpen(true)}
+          />
+          <ChatInput card={card} open={chatOpen} setOpen={setChatOpen} />
+        </CardContent>
+      </Card>
+    </CardErrorsContext.Provider>
   );
 }
 
@@ -1008,7 +1073,7 @@ function BoardColumn({
         "flex min-w-0 flex-col gap-3",
         // One slide of the carousel below md: a little narrower than the
         // screen, so the next column's edge shows there is more.
-        "max-md:h-full max-md:w-[92%] max-md:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-4",
+        "max-md:h-full max-md:w-[92%] max-md:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]",
         className,
       )}
     >
@@ -1046,6 +1111,123 @@ function BoardColumn({
   );
 }
 
+const ORPHANS_NOTE =
+  "`claude agents` names no parent, so a background session belongs to an open chat in its directory that started before it. These match none: their chat has closed, or runs in another directory.";
+
+// The header's overflow below md: the links, version and time that line the
+// header's right on a wide screen, and the background sessions listed under
+// the board there.
+function BoardMenu({
+  remote,
+  orphans,
+  version,
+  now,
+}: {
+  remote: RemoteStatus;
+  orphans: Board["orphans"];
+  version: Board["version"];
+  now: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [background, setBackground] = useState(false);
+  const row =
+    "flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-foreground hover:bg-muted";
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          aria-label="More"
+          render={<Button size="icon-sm" variant="ghost" />}
+        >
+          <Ellipsis />
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 gap-0.5 p-1.5">
+          {remote.enabled && remote.mdns.listening && (
+            <a href={remote.mdns.url} className={row}>
+              <Wifi className="size-4" />
+              On the LAN at {remote.mdns.url.replace(/^https?:\/\//, "")}
+            </a>
+          )}
+          {remote.pid && remote.domain && (
+            <a
+              href={`https://${remote.domain}`}
+              target="_blank"
+              rel="noreferrer"
+              className={row}
+            >
+              <Globe className="size-4" />
+              <span className="truncate">Remote at {remote.domain}</span>
+            </a>
+          )}
+          {orphans.length > 0 && (
+            <button
+              type="button"
+              className={row}
+              onClick={() => {
+                setOpen(false);
+                setBackground(true);
+              }}
+            >
+              <Layers className="size-4" />
+              Background sessions
+              <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[0.7rem] tabular-nums">
+                {orphans.length}
+              </span>
+            </button>
+          )}
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+            {version && (
+              <span className="font-mono">{version.hash} · </span>
+            )}
+            updated {new Date(now).toLocaleTimeString()}
+          </p>
+        </PopoverContent>
+      </Popover>
+      <Dialog open={background} onOpenChange={setBackground}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Background sessions</DialogTitle>
+            <DialogDescription>
+              Not matched to an open chat. {ORPHANS_NOTE.replace(/`/g, "")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-1">
+            {orphans.map((b) => (
+              <OrphanBadge key={b.id} orphan={b} />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// The board's warnings. Below md they fold into one line that opens them,
+// so they don't push the columns down.
+function Warnings({ warnings }: { warnings: string[] }) {
+  const [open, setOpen] = useState(false);
+  if (warnings.length === 0) return null;
+  const tone = "text-sm text-amber-600 dark:text-amber-400";
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className={cn("cursor-pointer text-left md:hidden", tone)}
+      >
+        {warnings.length === 1 ? "1 warning" : `${warnings.length} warnings`}
+        {open ? " ▾" : " ▸"}
+      </button>
+      {warnings.map((w) => (
+        <p key={w} className={cn(tone, !open && "max-md:hidden")}>
+          {w}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 // Below md the columns are a carousel, and this strip of tabs sits above it:
 // each tab names a column and its count, follows the swipe, and scrolls to
 // its column when tapped. Waiting's count turns amber, to be seen from any
@@ -1077,7 +1259,7 @@ function ColumnTabs({
     <div
       ref={strip}
       role="tablist"
-      className="sticky top-0 z-10 -mx-4 flex h-12 items-center gap-1.5 overflow-x-auto bg-background px-4 [scrollbar-width:none] md:hidden"
+      className="sticky top-[env(safe-area-inset-top)] z-10 -mx-4 flex h-12 items-center gap-1.5 overflow-x-auto bg-background px-4 [scrollbar-width:none] md:hidden"
     >
       {columns.map((column) => {
         const count = counts[column];
@@ -1214,6 +1396,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     mobileColumns,
     counts.waiting,
   );
+  // Below md the dispatch bar is a sheet over the board, opened from the
+  // header; Esc closes it, and the board under it stays put.
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+  useEffect(() => {
+    if (!dispatchOpen) return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDispatchOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", close);
+      document.body.style.overflow = overflow;
+    };
+  }, [dispatchOpen]);
   const [drafts, setDrafts] = useSessionStorage<Record<string, string>>(
     "seamux:drafts",
     {},
@@ -1236,12 +1434,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <DraftsContext.Provider value={{ drafts, setDraft }}>
       <ProjectColorsContext.Provider value={{ colors, setColor }}>
-        <main className="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 md:p-6">
+        <main className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4 md:gap-6 md:p-6">
           <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="flex items-center gap-2.5">
-                <SeamuxMark size={32} />
-                <span className="text-xl font-bold tracking-tight text-foreground">
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="shrink-0">
+                  <SeamuxMark size={32} />
+                </span>
+                <span className="truncate text-xl font-bold tracking-tight text-foreground">
                   {name}
                 </span>
               </span>
@@ -1253,7 +1453,23 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               />
               <ThemeToggle />
             </span>
-            <span className="flex min-w-0 items-center gap-3">
+            <span className="flex shrink-0 items-center gap-1 md:hidden">
+              <Button
+                size="sm"
+                onClick={() => setDispatchOpen(true)}
+                className="bg-brand-ramp text-white shadow-sm hover:opacity-90"
+              >
+                <Plus />
+                New
+              </Button>
+              <BoardMenu
+                remote={remote}
+                orphans={board.orphans}
+                version={board.version}
+                now={now}
+              />
+            </span>
+            <span className="flex min-w-0 items-center gap-3 max-md:hidden">
               {remote.enabled && remote.mdns.listening && (
                 <a
                   href={remote.mdns.url}
@@ -1304,19 +1520,33 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </span>
           </header>
 
-          <DispatchBar
-            directories={config.directories}
-            worktreeByDefault={config.worktreeByDefault}
-            defaultEngine={config.defaultEngine}
-            engines={engines}
-          />
+          <div
+            className={cn(
+              dispatchOpen
+                ? "max-md:fixed max-md:inset-0 max-md:z-40 max-md:flex max-md:flex-col max-md:gap-3 max-md:overflow-y-auto max-md:bg-background max-md:p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))]"
+                : "max-md:hidden",
+            )}
+          >
+            <div className="flex items-center justify-between md:hidden">
+              <h2 className="text-base font-medium">Dispatch new work</h2>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Close"
+                onClick={() => setDispatchOpen(false)}
+              >
+                <X />
+              </Button>
+            </div>
+            <DispatchBar
+              directories={config.directories}
+              worktreeByDefault={config.worktreeByDefault}
+              defaultEngine={config.defaultEngine}
+              engines={engines}
+            />
+          </div>
           <DispatchStrip sets={board.dispatches} />
-
-          {board.warnings.map((w) => (
-            <p key={w} className="text-sm text-amber-600 dark:text-amber-400">
-              {w}
-            </p>
-          ))}
+          <Warnings warnings={board.warnings} />
 
           {/* Below md, a carousel of columns under a sticky strip of tabs,
               filling the screen once scrolled to, each column scrolling on
@@ -1331,7 +1561,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <div
               ref={carousel}
               className={cn(
-                "relative max-md:-mx-4 max-md:flex max-md:h-[calc(100dvh-3rem)] max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:scroll-px-4 max-md:px-4 max-md:[scrollbar-width:none]",
+                "relative max-md:-mx-4 max-md:flex max-md:h-[calc(100dvh-3rem-env(safe-area-inset-top))] max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:scroll-px-4 max-md:px-4 max-md:[scrollbar-width:none]",
                 "md:grid md:grid-cols-2 md:gap-4",
                 XL_GRID_COLS[columnCount],
               )}
@@ -1352,8 +1582,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </div>
 
           {board.orphans.length > 0 && (
-            <footer className="flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground">
-              <span title="`claude agents` names no parent, so a background session belongs to an open chat in its directory that started before it. These match none: their chat has closed, or runs in another directory.">
+            <footer className="flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground max-md:hidden">
+              <span title={ORPHANS_NOTE}>
                 Background sessions not matched to an open chat
               </span>
               <div className="flex flex-wrap gap-1">

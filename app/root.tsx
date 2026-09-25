@@ -15,6 +15,14 @@ import "./app.css";
 
 export const links: Route.LinksFunction = () => [
   { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+  { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+  // Fetched with credentials, so it gets through the tunnel's Access check
+  // like the page did.
+  {
+    rel: "manifest",
+    href: "/manifest.webmanifest",
+    crossOrigin: "use-credentials",
+  },
 ];
 
 export const middleware: Route.MiddlewareFunction[] = [requireAuth];
@@ -35,7 +43,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     >
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Drawn edge to edge on a phone, with the safe areas padded in
+            app.css; the keyboard shrinks the layout rather than covering it,
+            where the browser allows. */}
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+        />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="seamux" />
         <meta name="theme-color" content={unsecured ? "#3A0B0B" : "#0B1220"} />
         <Meta />
         <Links />

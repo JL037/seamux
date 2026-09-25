@@ -5,6 +5,8 @@ Out of the box the board answers only this Mac, at `127.0.0.1`. The config dialo
 - **mDNS**, for devices on the same network: the board answers at this Mac's `.local` name, behind its HTTP Basic password.
 - **A Cloudflare tunnel**, for anywhere: the board answers at a hostname of yours, behind Cloudflare Access.
 
+On a phone the board shows one column at a time; see [Columns](../README.md#columns). Through the tunnel it can also be added to the Home Screen, where it opens full screen with its own icon.
+
 Both sit under one switch, **Enable remote connections**. With it off, neither is open and the Remote tab hides their settings. Every switch on the tab can only be turned on from this Mac, and turns off from anywhere, so a lost phone can't reopen the board once you've shut it.
 
 <!-- Screenshot: the Remote tab with remote connections off -->

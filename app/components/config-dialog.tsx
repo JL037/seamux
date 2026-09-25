@@ -79,14 +79,17 @@ export function ConfigDialog({
         <Settings />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="h-[min(40rem,calc(100dvh-2rem))] grid-rows-[auto_auto_minmax(0,1fr)] sm:max-w-2xl">
+        <DialogContent className="h-[min(40rem,calc(100dvh-2rem))] grid-rows-[auto_auto_minmax(0,1fr)] sm:max-w-2xl max-md:h-dvh! max-md:max-w-none! max-md:rounded-none max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:ring-0">
           <DialogHeader>
             <DialogTitle>Configure seamux</DialogTitle>
             <DialogDescription>
               Kept in seamux's store, and applied as soon as you change it.
             </DialogDescription>
           </DialogHeader>
-          <div role="tablist" className="flex gap-1 border-b">
+          <div
+            role="tablist"
+            className="flex gap-1 overflow-x-auto border-b [scrollbar-width:none]"
+          >
             {TABS.map((t) => (
               <button
                 key={t.key}
@@ -95,7 +98,7 @@ export function ConfigDialog({
                 aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
                 className={cn(
-                  "-mb-px cursor-pointer border-b-2 px-3 py-1.5 text-sm",
+                  "-mb-px shrink-0 cursor-pointer border-b-2 px-3 py-1.5 text-sm",
                   tab === t.key
                     ? "border-foreground font-medium text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",

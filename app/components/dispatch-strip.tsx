@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Check, CircleDashed, X } from "lucide-react";
 
 import type { DispatchSet } from "~/lib/board";
@@ -10,10 +11,30 @@ export function WorkerStatus({ status }: { status: "ok" | "failed" | null }) {
 }
 
 // Fan-outs from the protocol: each set, and which workers have reported.
+// Below md they fold into one line that opens them.
 export function DispatchStrip({ sets }: { sets: DispatchSet[] }) {
+  const [open, setOpen] = useState(false);
   if (sets.length === 0) return null;
+  const workers = sets.flatMap((s) => s.workers);
+  const reported = workers.filter((w) => w.status).length;
   return (
     <section className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex cursor-pointer items-center gap-2 rounded-xl border bg-card px-3 py-2 text-left text-sm md:hidden"
+      >
+        <span className="font-medium">
+          {sets.length === 1 ? "1 fan-out" : `${sets.length} fan-outs`}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {reported}/{workers.length} reported
+        </span>
+        <span className="ml-auto text-muted-foreground">
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
       {sets.map((set) => {
         const reported = set.workers.filter((w) => w.status).length;
         const complete = reported === set.workers.length;
@@ -23,6 +44,7 @@ export function DispatchStrip({ sets }: { sets: DispatchSet[] }) {
             className={cn(
               "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-card px-3 py-2 text-sm",
               complete && "opacity-70",
+              !open && "max-md:hidden",
             )}
           >
             <span className="font-medium">{set.title}</span>
