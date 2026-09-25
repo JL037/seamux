@@ -135,6 +135,13 @@ function ago(ms: number | null, now: number): string {
   return `${Math.round(s / 86400)}d ago`;
 }
 
+function firstWords(text: string, count: number): string {
+  const words = text.split(/\s+/);
+  return words.length > count
+    ? `${words.slice(0, count).join(" ")}…`
+    : text;
+}
+
 function shortPath(cwd: string): string {
   return cwd.replace(/^\/Users\/[^/]+/, "~");
 }
@@ -1073,9 +1080,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               {board.version && (
                 <span
                   className="truncate font-mono text-xs opacity-70"
-                  title="Commit being served"
+                  title={firstWords(board.version.subject, 12)}
                 >
-                  {board.version}
+                  {board.version.hash}
                 </span>
               )}
               <span className="shrink-0 text-xs tabular-nums">

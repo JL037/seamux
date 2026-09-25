@@ -150,7 +150,7 @@ export interface DispatchSet {
 export interface Board {
   generatedAt: number;
   // The commit the board is serving, so a landed change is visible.
-  version: string | null;
+  version: { hash: string; subject: string } | null;
   cards: Card[];
   dispatches: DispatchSet[];
   // Background sessions not matched to an open chat. Every one `claude

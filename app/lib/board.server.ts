@@ -950,14 +950,15 @@ async function branchOf(cwd: string | null): Promise<string | null> {
 // Two levels up is the repo root from app/lib/ and from build/server/.
 const SEAMUX_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
-async function servedVersion(): Promise<string | null> {
+async function servedVersion(): Promise<Board["version"]> {
   try {
     const { stdout } = await run(
       "git",
       ["-C", SEAMUX_ROOT, "log", "-1", "--format=%h %s"],
       { timeout: 5_000 },
     );
-    return stdout.trim();
+    const [hash, ...subject] = stdout.trim().split(" ");
+    return hash ? { hash, subject: subject.join(" ") } : null;
   } catch {
     return null;
   }
