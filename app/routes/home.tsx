@@ -75,7 +75,7 @@ import {
   type Column,
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
-import { ENGINE_LABELS } from "~/lib/config";
+import { ENGINE_LABELS, type Engine } from "~/lib/config";
 import { configOrDefaults } from "~/lib/config.server";
 import { installedEngines } from "~/lib/drive.server";
 import { startQueue } from "~/lib/queue.server";
@@ -670,6 +670,13 @@ const CARD_EDGE: Partial<Record<Column, string>> = {
   working: "before:bg-brand-ramp",
 };
 
+// Which agent runs the chat, as its card's top-right corner: Anthropic's
+// orange for Claude Code, OpenAI's teal for Codex.
+const ENGINE_CORNER: Record<Engine, string> = {
+  claude: "after:border-[#d97757]",
+  codex: "after:border-[#10a37f]",
+};
+
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   // Kept across a reload, like the draft, so an open chat stays open.
   const [chatOpen, setChatOpen] = useSessionStorage(
@@ -680,8 +687,9 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
     <Card
       size="sm"
       className={cn(
-        "relative shadow-sm transition-shadow before:absolute before:inset-x-0 before:top-0 before:h-0.5 hover:shadow-md dark:shadow-black/20",
+        "relative shadow-sm transition-shadow before:absolute before:inset-x-0 before:top-0 before:h-0.5 after:pointer-events-none after:absolute after:top-0 after:right-0 after:size-5 after:rounded-tr-xl after:border-t-2 after:border-r-2 hover:shadow-md dark:shadow-black/20",
         CARD_EDGE[card.column],
+        ENGINE_CORNER[card.engine],
         card.column === "done" && "opacity-70",
       )}
     >

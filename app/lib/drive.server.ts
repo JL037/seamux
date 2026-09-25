@@ -131,16 +131,30 @@ function target(s: Surface) {
   return { surface_id: s.surfaceId, workspace_id: s.workspaceId };
 }
 
-// A message with a line break is pasted, so its newlines stay inside it (cmux
-// wraps it in bracketed paste); anything else is typed, since Claude Code
-// folds a long paste into a "[Pasted text #1]" placeholder. Tabs count as a
-// break too: typed, one would autocomplete. A separate Enter submits it.
-export async function sendMessage(sessionId: string, text: string) {
-  const surface = await surfaceFor(sessionId);
-  await rpc(/[\r\n\t]/.test(text) ? "terminal.paste" : "surface.send_text", {
+// Claude Code folds a long paste into a "[Pasted text #1]" placeholder, so a
+// message for it is typed, and pasted only when it has a line break, which
+// cmux's bracketed paste keeps inside the message. A tab counts too: typed,
+// one would autocomplete. Codex is the other way round: it folds long typed
+// input into "[Pasted Content N chars]" but shows a paste in full, so it
+// always gets one. A separate Enter submits it.
+const MUST_PASTE = /[\r\n\t]/;
+
+async function enterText(surface: Surface, text: string, paste: boolean) {
+  await rpc(paste ? "terminal.paste" : "surface.send_text", {
     ...target(surface),
     text,
   });
+}
+
+export async function sendMessage(sessionId: string, text: string) {
+  const live = (await listLive()).get(sessionId);
+  if (!live) throw new Error("This session is not running in a cmux surface");
+  const { surface, engine } = live;
+  await enterText(
+    surface,
+    text,
+    engine === "codex" || MUST_PASTE.test(text),
+  );
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
@@ -158,12 +172,16 @@ const KEY_GAP_MS = 400;
 
 // Answer an open AskUserQuestion by driving its dialog, so the model gets a
 // real answer rather than an interrupted turn. Measured against Claude Code
-// 2.1.281:
+// 2.1.281 and 2.1.282:
 // - a digit picks an option on a single-select question and moves on,
 //   submitting outright when there is only one question;
 // - on a multi-select question digits toggle, and Tab moves on;
-// - the digit after the last option is "Type something", and pasted text
-//   there is submitted as the answer;
+// - the row after the last option is "Type something". On a single-select
+//   question its digit puts the cursor in it; on a multi-select one the
+//   digit only ticks it, so the cursor walks down to it instead. Pasted text
+//   there is taken as the answer and moves on. Typed text, which Claude Code
+//   shows in full rather than folded, needs an Enter, or on a multi-select
+//   question a Tab down to "Next" and an Enter;
 // - with several questions, or any multi-select one, a review screen comes
 //   last, and 1 submits it.
 export async function answerQuestion(
@@ -172,6 +190,10 @@ export async function answerQuestion(
   answers: Answer[],
 ) {
   const surface = await surfaceFor(sessionId);
+  const key = async (k: string) => {
+    await rpc("surface.send_key", { ...target(surface), key: k });
+    await pause(KEY_GAP_MS);
+  };
   const digit = async (n: number) => {
     await rpc("surface.send_text", { ...target(surface), text: String(n) });
     await pause(KEY_GAP_MS);
@@ -179,13 +201,19 @@ export async function answerQuestion(
   for (const [i, q] of questions.entries()) {
     const a = answers[i];
     if ("text" in a) {
-      await digit(q.options.length + 1);
-      await rpc("terminal.paste", { ...target(surface), text: a.text });
+      if (q.multiSelect)
+        for (let n = 0; n < q.options.length; n++) await key("down");
+      else await digit(q.options.length + 1);
+      const paste = MUST_PASTE.test(a.text);
+      await enterText(surface, a.text, paste);
       await pause(KEY_GAP_MS);
+      if (!paste) {
+        if (q.multiSelect) await key("tab");
+        await key("enter");
+      }
     } else if (q.multiSelect) {
       for (const pick of a.picks) await digit(pick + 1);
-      await rpc("surface.send_key", { ...target(surface), key: "tab" });
-      await pause(KEY_GAP_MS);
+      await key("tab");
     } else {
       await digit(a.picks[0] + 1);
     }
