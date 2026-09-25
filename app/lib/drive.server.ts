@@ -131,11 +131,16 @@ function target(s: Surface) {
   return { surface_id: s.surfaceId, workspace_id: s.workspaceId };
 }
 
-// Pasted, so newlines stay inside the message (cmux wraps it in bracketed
-// paste), then a separate Enter submits it.
+// A message with a line break is pasted, so its newlines stay inside it (cmux
+// wraps it in bracketed paste); anything else is typed, since Claude Code
+// folds a long paste into a "[Pasted text #1]" placeholder. Tabs count as a
+// break too: typed, one would autocomplete. A separate Enter submits it.
 export async function sendMessage(sessionId: string, text: string) {
   const surface = await surfaceFor(sessionId);
-  await rpc("terminal.paste", { ...target(surface), text });
+  await rpc(/[\r\n\t]/.test(text) ? "terminal.paste" : "surface.send_text", {
+    ...target(surface),
+    text,
+  });
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
