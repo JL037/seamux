@@ -30,6 +30,8 @@ Measured against cloudflared 2026.9.3, with a tunnel managed from the dashboard.
 - **The origin sees the public hostname as `Host`.** Vite's host check refused `seamux.technein.com` until it was in `allowedHosts`, so the guard matches the tunnel's hostname, not `localhost`.
 - **The ingress comes from the dashboard, not the token.** `cloudflared tunnel run` with only `TUNNEL_TOKEN` set logs the dashboard's config on connect (`Updated to new configuration config=...`), including the local service each hostname points at. The token goes in the environment, so it stays out of `ps`.
 - **A bad token exits with code 255 at once** ("Provided Tunnel token is not valid"), so the supervisor backs off rather than spinning.
+- **A renamed team keeps its old issuer.** After renaming a Zero Trust team, a login made before the rename still reached the board, and its token's `iss` still named the old team domain. The new domain's certs endpoint serves the old signing key alongside a new one, and the old domain's endpoint 404s. The board checks the key and the AUD, not `iss`.
+- **Access's sign-out page errors without a cookie.** `/cdn-cgi/access/logout`, on the application's hostname or the team domain, answers "No Access cookie found. Please login first." on an error page, so it's no help as a recovery link.
 - **A tunnel with no Access application is wide open.** Without one, a request reached the Mac with no login at all. Access is set up separately from the tunnel, which is why the board checks the Access token itself.
 
 ## Codex

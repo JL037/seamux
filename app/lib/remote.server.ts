@@ -198,11 +198,7 @@ export async function checkTunnelRequest(
   return { verdict: "denied", reason: checked.reason };
 }
 
-// Where Cloudflare signs you out of Access. Cloudflare answers it at its
-// edge, so it works even while the board refuses the login.
-export const ACCESS_LOGOUT = "/cdn-cgi/access/logout";
-
-// The 403 for a refused tunnel request: why, and how to sign in afresh.
+// The 403 for a refused tunnel request, and why.
 export function forbiddenPage(reason: string): string {
   const escaped = reason.replace(
     /[&<>"']/g,
@@ -215,7 +211,7 @@ export function forbiddenPage(reason: string): string {
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}</style>
 <h1>Forbidden</h1>
 <p>seamux refused this request because ${escaped}.</p>
-<p>If you signed in before the Access settings changed, <a href="${ACCESS_LOGOUT}">sign out of Cloudflare Access</a> and sign in again.</p>
+<p>If Cloudflare Access let you in, check SEAMUX_CF_TEAM and SEAMUX_CF_AUD in the board's .env against the Access application.</p>
 `;
 }
 
@@ -223,7 +219,7 @@ export function forbiddenPage(reason: string): string {
 const SKEW_S = 60;
 
 export interface AccessClaims {
-  iss: string;
+  iss?: string;
   aud: string | string[];
   exp: number;
   nbf?: number;
@@ -231,7 +227,9 @@ export interface AccessClaims {
 }
 
 // Checks a Cloudflare Access JWT: RS256, signed by one of the team's keys,
-// issued by the team, for this application, and in date. The reason for a
+// for this application, and in date. The issuer isn't checked: a renamed
+// team keeps issuing under its old name, and the team's key and the
+// application's AUD already rule out any other team or app. The reason for a
 // refusal finishes "seamux refused this request because …".
 export async function verifyAccessToken(
   token: string,
@@ -254,7 +252,9 @@ export async function verifyAccessToken(
   }
   const key = await accessKey(team, header.kid);
   if (!key) {
-    return { reason: `its Access token isn't signed by a key of ${team}` };
+    return {
+      reason: `its Access token isn't signed by any key of ${team}, the team in SEAMUX_CF_TEAM`,
+    };
   }
   const signed = verify(
     "RSA-SHA256",
@@ -266,15 +266,10 @@ export async function verifyAccessToken(
   // Signed by the team, so the claims below can be named in the reason.
   const now = Date.now() / 1000;
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (claims.iss !== `https://${team}`) {
-    return {
-      reason: `its Access login is from ${String(claims.iss).replace(/^https:\/\//, "")}, not ${team}, the team seamux is set to`,
-    };
-  }
   if (!audiences.includes(aud)) {
     return {
       reason:
-        "its Access login is for another application, not the one seamux is set to (SEAMUX_CF_AUD)",
+        "its Access login is for a different application from the one in SEAMUX_CF_AUD",
     };
   }
   if (typeof claims.exp !== "number" || claims.exp < now - SKEW_S) {
