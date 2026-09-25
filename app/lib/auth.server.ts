@@ -5,6 +5,7 @@ import { basicAuthHeader, readCredentials } from "~/lib/credentials";
 import {
   ACCESS_HEADER,
   checkTunnelRequest,
+  forbiddenPage,
   isTunnelHost,
 } from "~/lib/remote.server";
 
@@ -32,8 +33,13 @@ export const requireAuth: MiddlewareFunction<Response> = async (
     request.headers.get("host"),
     request.headers.get(ACCESS_HEADER),
   );
-  if (tunnel === "allowed") return next();
-  if (tunnel === "denied") return new Response("Forbidden", { status: 403 });
+  if (tunnel.verdict === "allowed") return next();
+  if (tunnel.verdict === "denied") {
+    return new Response(forbiddenPage(tunnel.reason), {
+      status: 403,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
   const credentials = readCredentials(process.cwd());
   if (!credentials) return next();
   const given = request.headers.get("authorization") ?? "";

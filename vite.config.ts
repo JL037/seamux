@@ -6,6 +6,7 @@ import { defineConfig, type Plugin } from "vite";
 import {
   ACCESS_HEADER,
   checkTunnelRequest,
+  forbiddenPage,
   remoteDomain,
 } from "./app/lib/remote.server.ts";
 
@@ -36,10 +37,11 @@ function tunnelAccess(): Plugin {
           process.cwd(),
           req.headers.host ?? null,
           typeof token === "string" ? token : null,
-        ).then((verdict) => {
-          if (verdict !== "denied") return next();
+        ).then((tunnel) => {
+          if (tunnel.verdict !== "denied") return next();
           res.statusCode = 403;
-          res.end("Forbidden");
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.end(forbiddenPage(tunnel.reason));
         }, next);
       });
     },

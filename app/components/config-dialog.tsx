@@ -445,6 +445,18 @@ function RemoteTab({ remote }: { remote: RemoteStatus }) {
           </span>
         </label>
         {action.error && <p className="text-destructive">{action.error}</p>}
+        {url && (
+          <p className="text-muted-foreground">
+            <a
+              href={`${url}/cdn-cgi/access/logout`}
+              className="text-foreground underline"
+            >
+              Sign out of Cloudflare Access
+            </a>{" "}
+            in this browser, to sign in again after the team or application
+            changes. A refused login's Forbidden page links there too.
+          </p>
+        )}
       </section>
       <section className="flex flex-col gap-2">
         <h3 className="font-medium">Settings</h3>

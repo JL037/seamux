@@ -65,7 +65,9 @@ Edit the port there, or start `npm run seamux` once with `SEAMUX_PORT` set, and 
 4. **Team.** Your team name is on the right of Zero Trust's Get started page (`https://dash.cloudflare.com/<account>/one/overview/get-started`). Put it in `SEAMUX_CF_TEAM`, as the name or as `<team>.cloudflareaccess.com`.
 5. Restart `npm run seamux`, since Vite reads the hostname once at startup.
 
-To check Access covers the hostname, run `curl -sI https://seamux.example.com`. It should redirect (302) to `<team>.cloudflareaccess.com`. A plain 403 `Forbidden` means requests reach the board without an Access token, so fix the application's hostname.
+To check Access covers the hostname, run `curl -sI https://seamux.example.com`. It should redirect (302) to `<team>.cloudflareaccess.com`. A 403 `Forbidden` without that redirect means requests reach the board without an Access token, so fix the application's hostname.
+
+A refused login gets a Forbidden page that says why, which the board also logs, with a link to sign out of Access (`/cdn-cgi/access/logout`). Renaming the team or changing the application refuses logins made before the change, so sign out and in again; the Remote tab links there too.
 
 The switch can only be turned on from the Mac, and only once all four are set; it turns off from anywhere. While it's on, the supervisor runs `cloudflared`, restarts it if it exits, and writes its log to `data/tunnel.log`; the header shows "Remote". A request through the tunnel must carry a valid Cloudflare Access token for that team and application, including Vite's own files, and is then let in without the HTTP Basic password. Without a valid token it gets a 403, so if the Access application is ever removed, the board stays shut. The switch is kept in `.seamux.json` as `"remote": true`, so it survives restarts.
 

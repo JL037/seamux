@@ -174,19 +174,49 @@ export function isTunnelHost(dir: string, host: string | null): boolean {
   return domain !== null && host !== null && hostOf(host) === domain;
 }
 
+export type TunnelVerdict =
+  | { verdict: "local" }
+  | { verdict: "allowed" }
+  | { verdict: "denied"; reason: string };
+
 // "local" for a request that didn't come through the tunnel; otherwise
-// whether its Access token checks out.
+// whether its Access token checks out, and if not, why.
 export async function checkTunnelRequest(
   dir: string,
   host: string | null,
   token: string | null,
-): Promise<"local" | "allowed" | "denied"> {
+): Promise<TunnelVerdict> {
   const { settings } = readRemoteSettings(dir);
   if (!settings || host === null || hostOf(host) !== settings.domain) {
-    return "local";
+    return { verdict: "local" };
   }
-  if (!token) return "denied";
-  return (await verifyAccessToken(token, settings)) ? "allowed" : "denied";
+  const checked = token
+    ? await verifyAccessToken(token, settings)
+    : { reason: "it carried no Cloudflare Access token" };
+  if ("claims" in checked) return { verdict: "allowed" };
+  console.warn(`[seamux] refused a request through the tunnel: ${checked.reason}`);
+  return { verdict: "denied", reason: checked.reason };
+}
+
+// Where Cloudflare signs you out of Access. Cloudflare answers it at its
+// edge, so it works even while the board refuses the login.
+export const ACCESS_LOGOUT = "/cdn-cgi/access/logout";
+
+// The 403 for a refused tunnel request: why, and how to sign in afresh.
+export function forbiddenPage(reason: string): string {
+  const escaped = reason.replace(
+    /[&<>"']/g,
+    (c) => `&#${c.charCodeAt(0)};`,
+  );
+  return `<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>seamux: forbidden</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}</style>
+<h1>Forbidden</h1>
+<p>seamux refused this request because ${escaped}.</p>
+<p>If you signed in before the Access settings changed, <a href="${ACCESS_LOGOUT}">sign out of Cloudflare Access</a> and sign in again.</p>
+`;
 }
 
 // Leeway for the clock on either side.
@@ -201,13 +231,15 @@ export interface AccessClaims {
 }
 
 // Checks a Cloudflare Access JWT: RS256, signed by one of the team's keys,
-// issued by the team, for this application, and in date.
+// issued by the team, for this application, and in date. The reason for a
+// refusal finishes "seamux refused this request because …".
 export async function verifyAccessToken(
   token: string,
   { team, aud }: { team: string; aud: string },
-): Promise<AccessClaims | null> {
+): Promise<{ claims: AccessClaims } | { reason: string }> {
+  const malformed = { reason: "its Access token is malformed" };
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3) return malformed;
   const [head, body, signature] = parts;
   let header: { alg?: unknown; kid?: unknown };
   let claims: AccessClaims;
@@ -215,25 +247,43 @@ export async function verifyAccessToken(
     header = JSON.parse(Buffer.from(head, "base64url").toString("utf8"));
     claims = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
   } catch {
-    return null;
+    return malformed;
   }
-  if (header.alg !== "RS256" || typeof header.kid !== "string") return null;
+  if (header.alg !== "RS256" || typeof header.kid !== "string") {
+    return malformed;
+  }
   const key = await accessKey(team, header.kid);
-  if (!key) return null;
+  if (!key) {
+    return { reason: `its Access token isn't signed by a key of ${team}` };
+  }
   const signed = verify(
     "RSA-SHA256",
     Buffer.from(`${head}.${body}`),
     key,
     Buffer.from(signature, "base64url"),
   );
-  if (!signed) return null;
+  if (!signed) return { reason: "its Access token's signature is invalid" };
+  // Signed by the team, so the claims below can be named in the reason.
   const now = Date.now() / 1000;
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (claims.iss !== `https://${team}`) return null;
-  if (!audiences.includes(aud)) return null;
-  if (typeof claims.exp !== "number" || claims.exp < now - SKEW_S) return null;
-  if (typeof claims.nbf === "number" && claims.nbf > now + SKEW_S) return null;
-  return claims;
+  if (claims.iss !== `https://${team}`) {
+    return {
+      reason: `its Access login is from ${String(claims.iss).replace(/^https:\/\//, "")}, not ${team}, the team seamux is set to`,
+    };
+  }
+  if (!audiences.includes(aud)) {
+    return {
+      reason:
+        "its Access login is for another application, not the one seamux is set to (SEAMUX_CF_AUD)",
+    };
+  }
+  if (typeof claims.exp !== "number" || claims.exp < now - SKEW_S) {
+    return { reason: "its Access login has expired" };
+  }
+  if (typeof claims.nbf === "number" && claims.nbf > now + SKEW_S) {
+    return { reason: "its Access login isn't valid yet" };
+  }
+  return { claims };
 }
 
 // The team's signing keys, from its certs endpoint. Kept for an hour, and
