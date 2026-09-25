@@ -38,7 +38,7 @@ SEAMUX_USER=you
 SEAMUX_PASS=something-long
 ```
 
-It reads them on every request, so a new value takes effect without a restart. Deleting one from `.env` needs a restart, because the dev server keeps the value it loaded. With either one unset the board still runs, but its background turns red and it calls itself "seamux (unsecured)". mDNS won't turn on without them.
+It reads them on every request, so a change to `.env` takes effect without a restart. With either one unset the board still runs, but its background turns red and it calls itself "seamux (unsecured)". mDNS won't turn on without them.
 
 <!-- Screenshot: the red "seamux (unsecured)" board -->
 

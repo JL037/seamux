@@ -32,6 +32,27 @@ export function readEnv<K extends string>(
   ) as Record<K, string | undefined>;
 }
 
+// The SEAMUX_ variables the dev server's own environment set, kept on
+// globalThis so it outlives Vite's restarts, which evaluate vite.config.ts
+// again in the same process.
+const SHELL_ENV = Symbol.for("seamux.shellEnv");
+
+// React Router's dev server copies .env into process.env when it starts, and
+// again when Vite restarts over a changed .env, but never deletes a variable,
+// so one removed from .env would stay set and readEnv would still find it.
+// vite.config.ts calls this before React Router loads .env: the first time it
+// notes which SEAMUX_ variables the environment really set, and every time it
+// clears the rest, so what's left is the environment plus the current .env.
+export function forgetDotenv() {
+  const store = globalThis as { [SHELL_ENV]?: Set<string> };
+  const shell = (store[SHELL_ENV] ??= new Set(
+    Object.keys(process.env).filter((name) => name.startsWith("SEAMUX_")),
+  ));
+  for (const name of Object.keys(process.env)) {
+    if (name.startsWith("SEAMUX_") && !shell.has(name)) delete process.env[name];
+  }
+}
+
 export function readCredentials(dir: string): Credentials | null {
   const env = readEnv(dir, ["SEAMUX_USER", "SEAMUX_PASS"]);
   const user = env.SEAMUX_USER;

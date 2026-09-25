@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
+import { forgetDotenv } from "./app/lib/credentials.ts";
 import {
   ACCESS_HEADER,
   checkLanRequest,
@@ -78,6 +79,9 @@ function remoteAccess(): Plugin {
     },
   };
 }
+
+// Before React Router loads .env again, so a variable deleted from it goes.
+forgetDotenv();
 
 // The tunnel's hostname and whether mDNS is on, read once at startup:
 // changing either needs the dev server restarted, which the supervisor does
