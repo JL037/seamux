@@ -43,6 +43,12 @@ import {
 import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
 import { ThemeToggle } from "~/components/theme-toggle";
+import {
+  NotifyToggle,
+  titleWithCount,
+  useWaitingNotifications,
+  waitingCards,
+} from "~/components/waiting-alerts";
 import { WaitingPanel } from "~/components/waiting-panel";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -91,8 +97,9 @@ import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
 
-export function meta({ matches }: Route.MetaArgs) {
-  return [{ title: productNameFromMatches(matches) }];
+export function meta({ matches, loaderData }: Route.MetaArgs) {
+  const waiting = loaderData ? waitingCards(loaderData.board.cards).length : 0;
+  return [{ title: titleWithCount(productNameFromMatches(matches), waiting) }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -105,15 +112,20 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-// Re-run the loader on an interval while the tab is visible.
+// A hidden tab still polls, more slowly, so the title's count and the
+// notifications keep up while Jakob is elsewhere.
+const HIDDEN_POLL_MS = 15000;
+
+// Re-run the loader on an interval.
 function usePoll(ms: number) {
   const revalidator = useRevalidator();
+  const last = useRef(0);
   useEffect(() => {
     const id = setInterval(() => {
-      if (
-        document.visibilityState === "visible" &&
-        revalidator.state === "idle"
-      ) {
+      const wait =
+        document.visibilityState === "visible" ? ms : HIDDEN_POLL_MS;
+      if (revalidator.state === "idle" && Date.now() - last.current >= wait) {
+        last.current = Date.now();
         revalidator.revalidate();
       }
     }, ms);
@@ -1027,6 +1039,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const board: Board = loaderData.board;
   const { config, engines, remote } = loaderData;
   const now = board.generatedAt;
+  const notifications = useWaitingNotifications(board.cards);
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
   // Done is hidden until asked for, and the choice outlives the tab.
@@ -1073,6 +1086,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 remote={remote}
               />
               <ThemeToggle />
+              <NotifyToggle {...notifications} />
             </span>
             <span className="flex min-w-0 items-center gap-3">
               {remote.enabled && remote.mdns.listening && (

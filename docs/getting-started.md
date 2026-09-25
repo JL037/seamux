@@ -74,7 +74,7 @@ Switches on remote connections: mDNS for your own network, and a Cloudflare tunn
 
 ### In the browser
 
-Some choices are kept in the browser rather than the store: light or dark theme, whether DONE is shown, and project colours.
+Some choices are kept in the browser rather than the store: light or dark theme, whether DONE is shown, project colours, and whether to send desktop notifications.
 
 ## `.seamux.json`
 
