@@ -40,7 +40,7 @@ The store at `data/seamux.db` holds only what those don't record: subagent lifec
 
 Each column lists its oldest card first, so the work that's been waiting longest is at the top.
 
-While anything waits, the tab's title counts it: `(2) seamux`. The bell beside the theme toggle turns on desktop notifications, which fire when a chat starts waiting while the board isn't the focused window. Browsers only allow them on a secure origin, so the bell shows on `localhost` and through the tunnel, but not on the plain-HTTP `.local` address.
+While anything waits, the tab's title counts it: `(2) seamux`. **Desktop notifications**, a switch in the config dialog's General tab, fire when a chat starts waiting while the board isn't the focused window. Browsers only allow them on a secure origin, so they work on `localhost` and through the tunnel, but not on the plain-HTTP `.local` address.
 
 Background sessions (`claude --bg`) belong to the chat that started them. They show as a marker on that chat's card, not as cards of their own. Any that no open chat accounts for are listed below the board, where you can resume one, or ask for it to be deleted.
 

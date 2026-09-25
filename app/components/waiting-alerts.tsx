@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
 import { ASKED_IN_REPLY, type Card } from "~/lib/board";
 import { useLocalStorage } from "~/lib/use-session-storage";
 
@@ -83,30 +81,4 @@ function describe(card: Card): string {
   return w.detail ? `${head}${tool}\n${w.detail}` : `${head}${tool}`;
 }
 
-// The bell beside the theme toggle. Hidden where the browser can't notify.
-export function NotifyToggle({
-  enabled,
-  permission,
-  toggle,
-}: ReturnType<typeof useWaitingNotifications>) {
-  if (permission === "unsupported") return null;
-  const label =
-    permission === "denied"
-      ? "Notifications are blocked for this site in the browser's settings"
-      : enabled
-        ? "Stop notifying when a chat starts waiting"
-        : "Notify when a chat starts waiting";
-  return (
-    <Button
-      size="icon-xs"
-      variant="ghost"
-      title={label}
-      aria-label={label}
-      aria-pressed={enabled}
-      disabled={permission === "denied"}
-      onClick={toggle}
-    >
-      {enabled ? <Bell /> : <BellOff />}
-    </Button>
-  );
-}
+export type Notifications = ReturnType<typeof useWaitingNotifications>;

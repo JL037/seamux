@@ -52,6 +52,7 @@ Most settings live in the board. Click the cog beside the seamux name.
 
 - **Default agent**: what the dispatch bar starts new sessions with, Claude Code or Codex. An agent that isn't installed is greyed out. The dispatch bar has a picker to change it for one dispatch. Fan-out workers always run Claude Code, since they rely on its hooks and the dispatch skill.
 - **Worktrees**: whether the dispatch bar's "new worktree" switch starts on.
+- **Notifications**: desktop notifications when a chat starts waiting while the board isn't the focused window. Turning it on asks the browser for permission, and the choice is kept in this browser rather than the store. Browsers only allow notifications on a secure origin, so the switch is greyed out on the plain-HTTP `.local` address.
 - **Directories**: what the dispatch bar's directory picker offers. When this is empty, the picker lists directories with live sessions, past dispatches, and every git repo up to two levels under `~/code`. ↓ or the chevron opens the whole list, whatever is already in the field; typing narrows it.
 
 ### Macros

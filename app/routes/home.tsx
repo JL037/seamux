@@ -44,7 +44,6 @@ import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
 import { ThemeToggle } from "~/components/theme-toggle";
 import {
-  NotifyToggle,
   titleWithCount,
   useWaitingNotifications,
   waitingCards,
@@ -1084,9 +1083,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 config={config}
                 engines={engines}
                 remote={remote}
+                notifications={notifications}
               />
               <ThemeToggle />
-              <NotifyToggle {...notifications} />
             </span>
             <span className="flex min-w-0 items-center gap-3">
               {remote.enabled && remote.mdns.listening && (

@@ -24,6 +24,7 @@ import {
   type MacroName,
 } from "~/lib/config";
 import type { RemoteStatus } from "~/lib/remote.server";
+import type { Notifications } from "~/components/waiting-alerts";
 import { cn } from "~/lib/utils";
 import type { ConfigResult } from "~/routes/config";
 
@@ -56,11 +57,13 @@ export function ConfigDialog({
   config,
   engines,
   remote,
+  notifications,
 }: {
   config: Config;
   // Which agents this Mac can launch.
   engines: Record<Engine, boolean>;
   remote: RemoteStatus;
+  notifications: Notifications;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("general");
@@ -104,7 +107,11 @@ export function ConfigDialog({
           </div>
           <div className="-mx-4 overflow-y-auto px-4 pb-1">
             {tab === "general" ? (
-              <GeneralTab config={config} engines={engines} />
+              <GeneralTab
+                config={config}
+                engines={engines}
+                notifications={notifications}
+              />
             ) : tab === "macros" ? (
               <MacrosTab config={config} />
             ) : tab === "remote" ? (
@@ -122,14 +129,17 @@ export function ConfigDialog({
 function GeneralTab({
   config,
   engines,
+  notifications,
 }: {
   config: Config;
   engines: Record<Engine, boolean>;
+  notifications: Notifications;
 }) {
   return (
     <div className="flex flex-col gap-6">
       <EngineSetting current={config.defaultEngine} installed={engines} />
       <WorktreeSetting on={config.worktreeByDefault} />
+      <NotificationSetting {...notifications} />
       {/* Last, since the list can grow long. */}
       <DirectoriesSetting directories={config.directories} />
     </div>
@@ -289,6 +299,28 @@ function WorktreeSetting({ on }: { on: boolean }) {
         </span>
       </label>
       {action.error && <p className="text-destructive">{action.error}</p>}
+    </section>
+  );
+}
+
+// Kept in this browser rather than the store, since the permission is the
+// browser's to give.
+function NotificationSetting({ enabled, permission, toggle }: Notifications) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-medium">Notifications</h3>
+      <SwitchRow
+        checked={enabled}
+        disabled={permission === "unsupported" || permission === "denied"}
+        onCheckedChange={() => void toggle()}
+        label="Desktop notifications"
+      >
+        {permission === "unsupported"
+          ? "This browser can't notify from this address. Browsers only allow it on a secure origin: open the board on localhost or through the tunnel."
+          : permission === "denied"
+            ? "Notifications are blocked for this site. Allow them in the browser's site settings, then turn this on."
+            : "Notify when a chat starts waiting while the board isn't the focused window. Kept in this browser only."}
+      </SwitchRow>
     </section>
   );
 }
