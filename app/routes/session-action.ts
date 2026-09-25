@@ -1,7 +1,7 @@
 import { data } from "react-router";
 
 import type { Route } from "./+types/session-action";
-import { closable, type Answer, type Question } from "~/lib/board";
+import { closable, hasPreviews, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
   answerApproval,
@@ -70,7 +70,7 @@ function parseAnswers(raw: string, questions: Question[]): Answer[] {
   }
   return questions.map((q, i) => {
     const a = answers[i];
-    if (typeof a?.text === "string" && !q.multiSelect) {
+    if (typeof a?.text === "string" && !q.multiSelect && !hasPreviews(q)) {
       const text = a.text.trim();
       if (!text) throw new Error("Answer every question");
       if (text.length > MAX_MESSAGE) throw new Error("Answer too long");
@@ -84,7 +84,13 @@ function parseAnswers(raw: string, questions: Question[]): Answer[] {
       new Set(picks).size === picks.length &&
       picks.every((p) => Number.isInteger(p) && p >= 0 && p < q.options.length);
     if (!valid) throw new Error("Answer every question");
-    return { picks };
+    // One line: a line break would end the note early.
+    const notes =
+      typeof a.notes === "string" && hasPreviews(q)
+        ? a.notes.replace(/\s+/g, " ").trim()
+        : "";
+    if (notes.length > MAX_MESSAGE) throw new Error("Note too long");
+    return notes ? { picks, notes } : { picks };
   });
 }
 

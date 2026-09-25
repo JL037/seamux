@@ -517,6 +517,7 @@ function questionsOf(input: any): Question[] | null {
       options: q.options.map((o: any) => ({
         label: String(o?.label ?? ""),
         description: typeof o?.description === "string" ? o.description : null,
+        preview: typeof o?.preview === "string" ? o.preview : null,
       })),
     });
   }

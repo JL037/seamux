@@ -12,6 +12,7 @@ import { promisify } from "node:util";
 
 import {
   ASKED_IN_REPLY,
+  hasPreviews,
   type Answer,
   type Card,
   type Dialog,
@@ -150,11 +151,7 @@ export async function sendMessage(sessionId: string, text: string) {
   const live = (await listLive()).get(sessionId);
   if (!live) throw new Error("This session is not running in a cmux surface");
   const { surface, engine } = live;
-  await enterText(
-    surface,
-    text,
-    engine === "codex" || MUST_PASTE.test(text),
-  );
+  await enterText(surface, text, engine === "codex" || MUST_PASTE.test(text));
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
@@ -182,6 +179,10 @@ const KEY_GAP_MS = 400;
 //   there is taken as the answer and moves on. Typed text, which Claude Code
 //   shows in full rather than folded, needs an Enter, or on a multi-select
 //   question a Tab down to "Next" and an Enter;
+// - a question whose options have previews shows each beside the list, has
+//   no "Type something" row, and a digit there only moves the cursor, so an
+//   Enter picks. Before it, n opens a note on the option under the cursor,
+//   and typed text fills it; the Enter then picks with the note;
 // - with several questions, or any multi-select one, a review screen comes
 //   last, and 1 submits it.
 export async function answerQuestion(
@@ -211,6 +212,15 @@ export async function answerQuestion(
         if (q.multiSelect) await key("tab");
         await key("enter");
       }
+    } else if (hasPreviews(q)) {
+      await digit(a.picks[0] + 1);
+      if (a.notes) {
+        await rpc("surface.send_text", { ...target(surface), text: "n" });
+        await pause(KEY_GAP_MS);
+        await enterText(surface, a.notes, false);
+        await pause(KEY_GAP_MS);
+      }
+      await key("enter");
     } else if (q.multiSelect) {
       for (const pick of a.picks) await digit(pick + 1);
       await key("tab");

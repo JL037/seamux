@@ -41,12 +41,23 @@ export interface Question {
   question: string;
   header: string | null;
   multiSelect: boolean;
-  options: { label: string; description: string | null }[];
+  options: {
+    label: string;
+    description: string | null;
+    // A mockup or snippet to compare, shown when the option is picked.
+    preview: string | null;
+  }[];
 }
 
-// How Jakob answers one question: option indices, or his own text. Own text
-// is only offered on single-select questions.
-export type Answer = { picks: number[] } | { text: string };
+// Options with previews make a different dialog: single-select, no "Type
+// something" row, and a note can go with the pick.
+export function hasPreviews(q: Question): boolean {
+  return !q.multiSelect && q.options.some((o) => o.preview != null);
+}
+
+// How Jakob answers one question: option indices, with a note on a question
+// with previews, or his own text on any other single-select question.
+export type Answer = { picks: number[]; notes?: string } | { text: string };
 
 // The reason on a chat whose turn ended on a question in its reply. Claude
 // Code calls that session idle, since no dialog is open.

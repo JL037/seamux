@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Check, CircleHelp, ShieldQuestion } from "lucide-react";
+import { Check, CircleHelp, Plus, ShieldQuestion } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
   ASKED_IN_REPLY,
+  hasPreviews,
   type Answer,
   type Card,
   type Question,
@@ -15,12 +16,25 @@ import { cn } from "~/lib/utils";
 interface Draft {
   picks: number[];
   text: string;
+  // null until "Add a note" opens the box.
+  notes: string | null;
 }
 
 function answerOf(q: Question, d: Draft): Answer | null {
   if (!q.multiSelect && d.text.trim()) return { text: d.text.trim() };
-  return d.picks.length ? { picks: d.picks } : null;
+  if (!d.picks.length) return null;
+  const notes = d.notes?.trim();
+  return notes ? { picks: d.picks, notes } : { picks: d.picks };
 }
+
+// Enter in a box inside the form leaves it be rather than answering: only
+// the Answer button sends.
+const holdEnter = (e: React.KeyboardEvent) => {
+  if (e.key === "Enter") e.preventDefault();
+};
+
+const BOX =
+  "rounded-md border bg-background px-2 py-1 outline-none placeholder:text-muted-foreground";
 
 // An open AskUserQuestion, answered from the card. The board drives the
 // same dialog Jakob would see in the terminal.
@@ -32,7 +46,7 @@ function QuestionForm({
   ask: NonNullable<Waiting["ask"]>;
 }) {
   const [drafts, setDrafts] = useState<Draft[]>(() =>
-    ask.questions.map(() => ({ picks: [], text: "" })),
+    ask.questions.map(() => ({ picks: [], text: "", notes: null })),
   );
   const { submit, pending, error } = useSessionAction(card.sessionId);
   const update = (i: number, d: Draft) =>
@@ -41,13 +55,14 @@ function QuestionForm({
   const ready = card.drivable && !pending && answers.every((a) => a != null);
 
   const toggle = (i: number, q: Question, option: number) => {
-    const { picks } = drafts[i];
-    if (!q.multiSelect) return update(i, { picks: [option], text: "" });
+    const { picks, notes } = drafts[i];
+    if (!q.multiSelect) return update(i, { picks: [option], text: "", notes });
     update(i, {
       picks: picks.includes(option)
         ? picks.filter((p) => p !== option)
         : [...picks, option].sort((a, b) => a - b),
       text: "",
+      notes,
     });
   };
 
@@ -64,64 +79,100 @@ function QuestionForm({
         }
       }}
     >
-      {ask.questions.map((q, i) => (
-        <fieldset key={i} className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 flex items-start gap-1.5 font-medium">
-            <CircleHelp className="mt-px size-3.5 shrink-0 text-amber-500" />
-            <span>
-              {q.question}
-              {q.multiSelect && (
-                <span className="font-normal text-muted-foreground">
-                  {" "}
-                  (pick any)
-                </span>
-              )}
-            </span>
-          </legend>
-          {q.options.map((o, j) => {
-            const picked = drafts[i].picks.includes(j);
-            return (
-              <button
-                type="button"
-                key={j}
-                onClick={() => toggle(i, q, j)}
-                aria-pressed={picked}
-                title={o.description ?? undefined}
-                className={cn(
-                  "flex cursor-pointer items-start gap-2 rounded-md border bg-background px-2 py-1 text-left",
-                  picked && "border-amber-500 bg-amber-500/10",
+      {ask.questions.map((q, i) => {
+        const draft = drafts[i];
+        const previews = hasPreviews(q);
+        const shown = previews ? q.options[draft.picks[0]]?.preview : null;
+        return (
+          <fieldset key={i} className="flex flex-col gap-1.5">
+            <legend className="mb-1.5 flex items-start gap-1.5 font-medium">
+              <CircleHelp className="mt-px size-3.5 shrink-0 text-amber-500" />
+              <span>
+                {q.question}
+                {q.multiSelect && (
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    (pick any)
+                  </span>
                 )}
-              >
-                <span
+              </span>
+            </legend>
+            {q.options.map((o, j) => {
+              const picked = draft.picks.includes(j);
+              return (
+                <button
+                  type="button"
+                  key={j}
+                  onClick={() => toggle(i, q, j)}
+                  aria-pressed={picked}
+                  title={o.description ?? undefined}
                   className={cn(
-                    "mt-0.5 flex size-3 shrink-0 items-center justify-center border",
-                    q.multiSelect ? "rounded-[3px]" : "rounded-full",
-                    picked && "border-amber-500 bg-amber-500 text-white",
+                    "flex cursor-pointer items-start gap-2 rounded-md border bg-background px-2 py-1 text-left",
+                    picked && "border-amber-500 bg-amber-500/10",
                   )}
                 >
-                  {picked && <Check className="size-2.5" />}
-                </span>
-                <span className="min-w-0">
-                  {o.label}
-                  {o.description && o.description !== o.label && (
-                    <span className="block text-muted-foreground">
-                      {o.description}
-                    </span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
-          {!q.multiSelect && (
-            <input
-              value={drafts[i].text}
-              onChange={(e) => update(i, { picks: [], text: e.target.value })}
-              placeholder="Or type your own answer"
-              className="rounded-md border bg-background px-2 py-1 outline-none placeholder:text-muted-foreground"
-            />
-          )}
-        </fieldset>
-      ))}
+                  <span
+                    className={cn(
+                      "mt-0.5 flex size-3 shrink-0 items-center justify-center border",
+                      q.multiSelect ? "rounded-[3px]" : "rounded-full",
+                      picked && "border-amber-500 bg-amber-500 text-white",
+                    )}
+                  >
+                    {picked && <Check className="size-2.5" />}
+                  </span>
+                  <span className="min-w-0">
+                    {o.label}
+                    {o.description && o.description !== o.label && (
+                      <span className="block text-muted-foreground">
+                        {o.description}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+            {shown != null && (
+              <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px] leading-snug">
+                {shown}
+              </pre>
+            )}
+            {previews &&
+              draft.picks.length > 0 &&
+              (draft.notes == null ? (
+                <button
+                  type="button"
+                  onClick={() => update(i, { ...draft, notes: "" })}
+                  className="flex cursor-pointer items-center gap-1 self-start text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="size-3" />
+                  Add a note
+                </button>
+              ) : (
+                <input
+                  autoFocus
+                  value={draft.notes}
+                  onChange={(e) =>
+                    update(i, { ...draft, notes: e.target.value })
+                  }
+                  onKeyDown={holdEnter}
+                  placeholder="A note to go with your pick"
+                  className={BOX}
+                />
+              ))}
+            {!q.multiSelect && !previews && (
+              <input
+                value={draft.text}
+                onChange={(e) =>
+                  update(i, { picks: [], text: e.target.value, notes: null })
+                }
+                onKeyDown={holdEnter}
+                placeholder="Or type your own answer"
+                className={BOX}
+              />
+            )}
+          </fieldset>
+        );
+      })}
       <div className="flex items-center justify-end gap-2">
         {error && <p className="text-destructive">{error}</p>}
         <Button type="submit" size="xs" disabled={!ready}>
