@@ -192,9 +192,10 @@ function SessionList({
   );
 }
 
-// A sign-in in progress. Claude Code's opens a tab on this Mac too, which
-// needs nothing more; from anywhere else its page shows a code to paste
-// back here. Codex's shows a code to enter on its site.
+// A sign-in in progress, which opens no tab by itself. Claude Code's has a
+// link that calls back to this Mac, used when the board is viewed here, and
+// one whose page shows a code to paste back, used anywhere else. Codex's
+// shows a code to enter on its site.
 function SignIn({
   notice,
   action,
@@ -204,6 +205,13 @@ function SignIn({
 }) {
   const login = notice.login!;
   const [code, setCode] = useState("");
+  // Known only in the browser, so the server's render assumes elsewhere.
+  const [onThisMac, setOnThisMac] = useState(false);
+  useEffect(
+    () =>
+      setOnThisMac(["127.0.0.1", "localhost"].includes(location.hostname)),
+    [],
+  );
   const sent = useRef(false);
   useEffect(() => {
     if (sent.current && !action.pending && !action.error) setCode("");
@@ -217,9 +225,10 @@ function SignIn({
       </p>
     );
   }
+  const direct = onThisMac ? login.localUrl : null;
   const open = (
     <a
-      href={login.url}
+      href={direct ?? login.url}
       target="_blank"
       rel="noreferrer"
       className={cn(
@@ -262,14 +271,15 @@ function SignIn({
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted-foreground">
-        On this Mac, finish in the browser tab that opened. Anywhere else,
-        open the page, sign in, and paste the code it shows.
+        {direct
+          ? "Open the page and sign in. It finishes here by itself."
+          : "Open the page, sign in, and paste the code it shows."}
       </p>
       <div className="flex flex-wrap gap-2">
         {open}
         {cancel}
       </div>
-      {login.takesCode && (
+      {login.takesCode && !direct && (
         <form
           className="flex gap-2"
           onSubmit={(e) => {

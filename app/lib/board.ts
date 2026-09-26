@@ -157,6 +157,9 @@ export interface ApiError {
 export interface ServiceLogin {
   state: "running" | "failed" | "done";
   url: string | null;
+  // Claude Code's sign-in URL that calls back to this Mac, so nothing is
+  // pasted, but only a browser on this Mac can finish it.
+  localUrl: string | null;
   // Codex's one-time device code, entered on its site.
   deviceCode: string | null;
   // Claude Code's sign-in page can show a code to paste back.

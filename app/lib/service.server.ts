@@ -7,14 +7,20 @@
 // A sign-in runs without a terminal, so it can be finished from any device.
 // Measured against Claude Code 2.1.283 and Codex 0.156.1, in docs/findings.md:
 // - `claude auth login` with a pipe for stdin prints a sign-in URL whose
-//   page shows a code, then reads that code from stdin; it also opens a
-//   browser on this Mac, which finishes through a localhost callback with
-//   nothing to paste. Either way it prints "Login successful." and exits 0,
-//   or "Login failed: ..." and exits 1.
+//   page shows a code, then reads that code from stdin. It also hands
+//   `BROWSER` a second URL, whose callback is a port it listens on here, so
+//   it finishes with nothing to paste, but only in a browser on this Mac.
+//   The board gives it a browser that opens no tab and keeps that URL for a
+//   board viewed on this Mac. Either way it prints "Login successful." and
+//   exits 0, or "Login failed: ..." and exits 1.
 // - `codex login --device-auth` prints a URL and a one-time code to enter
 //   there, and needs no input.
 
 import { spawn, type ChildProcess, execFile } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import type { Card, ServiceLogin, ServiceNotice } from "./board.ts";
@@ -36,6 +42,12 @@ const OUTAGE_WINDOW_MS = 15 * 60 * 1000;
 // What each chat stopped on an expired login is sent once signed in again.
 const RESUME_PROMPT = "continue";
 
+// Stands in for a browser: writes the URL it is given to a file.
+const LOGIN_BROWSER = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../scripts/login-browser.sh",
+);
+
 const env = () => ({
   ...process.env,
   PATH: [...BIN_DIRS, process.env.PATH ?? ""].join(":"),
@@ -44,6 +56,8 @@ const env = () => ({
 interface Login {
   child: ChildProcess;
   output: string;
+  // Where the stand-in browser writes Claude Code's localhost sign-in URL.
+  urlFile: string | null;
   startedAt: number;
   endedAt: number | null;
   ok: boolean | null;
@@ -107,6 +121,14 @@ function urlIn(output: string): string | null {
   return /https:\/\/[^\s\x1b\x07]+/.exec(output)?.[0] ?? null;
 }
 
+function readUrl(file: string): string | null {
+  try {
+    return urlIn(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function viewOf(service: Engine, login: Login): ServiceLogin {
   const output = login.output.replace(ESCAPES, "");
   return {
@@ -116,6 +138,7 @@ function viewOf(service: Engine, login: Login): ServiceLogin {
       service === "codex"
         ? (/\b[A-Z0-9]{4}-[A-Z0-9]{4,6}\b/.exec(output)?.[0] ?? null)
         : null,
+    localUrl: login.urlFile ? readUrl(login.urlFile) : null,
     takesCode: service === "claude",
     message: login.message,
     startedAt: login.startedAt,
@@ -153,13 +176,19 @@ export function startLogin(service: Engine) {
     service === "claude"
       ? ["claude", ["auth", "login"]]
       : ["codex", ["login", "--device-auth"]];
+  const dir =
+    service === "claude" ? mkdtempSync(join(tmpdir(), "seamux-login-")) : null;
+  const urlFile = dir ? join(dir, "url") : null;
   const child = spawn(cmd, args, {
-    env: env(),
+    env: urlFile
+      ? { ...env(), BROWSER: LOGIN_BROWSER, SEAMUX_LOGIN_URL_FILE: urlFile }
+      : env(),
     stdio: [service === "claude" ? "pipe" : "ignore", "pipe", "pipe"],
   });
   const login: Login = {
     child,
     output: "",
+    urlFile,
     startedAt: Date.now(),
     endedAt: null,
     ok: null,
@@ -180,6 +209,7 @@ export function startLogin(service: Engine) {
     if (login.endedAt != null) return;
     login.endedAt = Date.now();
     login.ok = ok;
+    if (dir) rmSync(dir, { recursive: true, force: true });
     login.message ??= message;
     state.status.delete(service);
     if (ok) state.signedInAt.set(service, login.endedAt);
