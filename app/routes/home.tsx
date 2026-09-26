@@ -1419,7 +1419,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     counts.waiting,
   );
   // Below md the dispatch bar is a sheet over the board, opened from the
-  // header; Esc closes it, and the board under it stays put.
+  // header; Esc closes it, as does a dispatch that starts, and the board
+  // under it stays put.
   const [dispatchOpen, setDispatchOpen] = useState(false);
   useEffect(() => {
     if (!dispatchOpen) return;
@@ -1571,6 +1572,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               worktreeByDefault={config.worktreeByDefault}
               defaultEngine={config.defaultEngine}
               engines={engines}
+              onDispatched={() => setDispatchOpen(false)}
             />
           </div>
           <DispatchStrip sets={board.dispatches} />

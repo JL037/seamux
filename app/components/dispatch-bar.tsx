@@ -39,6 +39,7 @@ export function DispatchBar({
   worktreeByDefault,
   defaultEngine,
   engines,
+  onDispatched,
 }: {
   // The configured directories; empty means offer every one seamux finds.
   directories: string[];
@@ -46,6 +47,8 @@ export function DispatchBar({
   defaultEngine: Engine;
   // Which agents this Mac can launch.
   engines: Record<Engine, boolean>;
+  // Called once a dispatch has started; a failure doesn't call it.
+  onDispatched?: () => void;
 }) {
   const dispatcher = useFetcher<DispatchResult>();
   const dirs = useFetcher<{ directories: string[] }>();
@@ -100,10 +103,11 @@ export function DispatchBar({
       setStarted(sent.current.trim().split("\n")[0].slice(0, 80));
       releaseFocus("dispatch:prompt");
       writeLastDir(cwd);
+      onDispatched?.();
     } else {
       setPrompt((p) => p || sent.current);
     }
-  }, [pending, result, cwd, setPrompt]);
+  }, [pending, result, cwd, setPrompt, onDispatched]);
 
   const loadDirs = () => {
     if (directories.length === 0 && dirs.state === "idle" && !dirs.data)
