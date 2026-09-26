@@ -309,7 +309,7 @@ function ChatInput({
         <Button
           variant="secondary"
           size="lg"
-          className="w-full rounded-b-none"
+          className="w-full rounded-b-none border-b-0"
           onClick={() => setOpen(true)}
         >
           <MessageSquare />
