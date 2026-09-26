@@ -137,6 +137,38 @@ function usePoll(ms: number) {
   }, [ms, revalidator]);
 }
 
+// Reload once main moves on. Hot reload keeps a Mac's tab current, but a
+// phone's often misses it: Safari drops the socket while the phone sleeps,
+// and the polled board keeps arriving to code from before the landing.
+// Drafts, open chats, scroll and focus all come back after a reload; it only
+// waits while a box is being typed in, unless the tab is hidden.
+function useReloadOnLanding(hash: string | undefined) {
+  const first = useRef(hash);
+  useEffect(() => {
+    if (!hash || !first.current || hash === first.current) return;
+    const reload = () => {
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLTextAreaElement ||
+        (el instanceof HTMLInputElement && el.type !== "checkbox");
+      if (document.visibilityState === "hidden" || !typing) {
+        location.reload();
+        return true;
+      }
+      return false;
+    };
+    if (reload()) return;
+    // Focus has only settled once focusout is over.
+    const later = () => setTimeout(reload);
+    document.addEventListener("focusout", later);
+    document.addEventListener("visibilitychange", reload);
+    return () => {
+      document.removeEventListener("focusout", later);
+      document.removeEventListener("visibilitychange", reload);
+    };
+  }, [hash]);
+}
+
 const COLUMN_ACCENT: Record<Column, string> = {
   idle: "bg-muted-foreground/40",
   waiting: "bg-amber-500",
@@ -302,19 +334,23 @@ function ChatInput({
 
   return (
     <div className="flex flex-col gap-1">
-      {/* A phone's card has no room to write in, so it opens the chat. */}
-      <Button
-        variant="secondary"
-        size="lg"
-        className="w-full md:hidden"
-        onClick={() => setOpen(true)}
-      >
-        <MessageSquare />
-        Open chat
-        {draft.trim() && (
-          <span className="font-normal text-muted-foreground">· draft</span>
-        )}
-      </Button>
+      {/* A phone's card has no room to write in, so it opens the chat,
+          with the context bar hung under it as it is under the input. */}
+      <div className="flex flex-col md:hidden">
+        <Button
+          variant="secondary"
+          size="lg"
+          className="w-full rounded-b-none"
+          onClick={() => setOpen(true)}
+        >
+          <MessageSquare />
+          Open chat
+          {draft.trim() && (
+            <span className="font-normal text-muted-foreground">· draft</span>
+          )}
+        </Button>
+        <ContextBar context={card.context} />
+      </div>
       <div className="flex items-center gap-1 max-md:hidden">
         <div className="min-w-0 flex-1">
           <form
@@ -1390,6 +1426,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const board: Board = loaderData.board;
   const { config, engines, remote } = loaderData;
   const now = board.generatedAt;
+  useReloadOnLanding(board.version?.hash);
   const notifications = useWaitingNotifications(board.cards);
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
