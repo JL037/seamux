@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useFetcher, useRevalidator } from "react-router";
+import { toast } from "sonner";
 import {
   GitBranch,
   CircleCheck,
@@ -136,6 +137,24 @@ function usePoll(ms: number) {
     }, ms);
     return () => clearInterval(id);
   }, [ms, revalidator]);
+}
+
+// A neutral toast for each chat that moves to Done, whether it was closed
+// from the board or ended on its own. null until the first board is seen,
+// so opening the tab doesn't announce everything already done.
+function useDoneToasts(cards: BoardCard[]) {
+  const seen = useRef<Map<string, BoardCard["column"]> | null>(null);
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = new Map(cards.map((c) => [c.sessionId, c.column]));
+    if (!before) return;
+    for (const card of cards) {
+      const was = before.get(card.sessionId);
+      if (card.column !== "done" || was === undefined || was === "done")
+        continue;
+      toast(`${card.name} is done`, { id: `done:${card.sessionId}` });
+    }
+  }, [cards]);
 }
 
 const COLUMN_ACCENT: Record<Column, string> = {
@@ -1397,6 +1416,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const now = board.generatedAt;
   const diagnostics = useDiagnostics(board.version?.hash);
   const notifications = useWaitingNotifications(board.cards);
+  useDoneToasts(board.cards);
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
   // Done is hidden until asked for, and the choice outlives the tab.

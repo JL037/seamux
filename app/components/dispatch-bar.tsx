@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { SendHorizontal } from "lucide-react";
+import { toast } from "sonner";
 
 import { DirectoryPicker } from "~/components/directory-picker";
 
@@ -80,7 +81,6 @@ export function DispatchBar({
   const available = ENGINES.filter((e) => engines[e]);
   // One remembered from before it was uninstalled falls back to one that is.
   const chosen = engines[engine] ? engine : (available[0] ?? "claude");
-  const [started, setStarted] = useState<string | null>(null);
   const handled = useRef<DispatchResult | undefined>(undefined);
   // The prompt is cleared, from state and storage, as it is sent, so a
   // reload mid-dispatch can't bring it back; a failure puts it back.
@@ -100,7 +100,10 @@ export function DispatchBar({
     if (pending || !result || handled.current === result) return;
     handled.current = result;
     if (result.ok) {
-      setStarted(sent.current.trim().split("\n")[0].slice(0, 80));
+      toast.success(
+        `Started “${sent.current.trim().split("\n")[0].slice(0, 80)}”`,
+        { description: "It will appear on the board in a few seconds." },
+      );
       releaseFocus("dispatch:prompt");
       writeLastDir(cwd);
       onDispatched?.();
@@ -119,7 +122,6 @@ export function DispatchBar({
   const canDispatch = !pending && prompt.trim() !== "" && cwd.trim() !== "";
   const submit = () => {
     if (!canDispatch) return;
-    setStarted(null);
     sent.current = prompt;
     setPrompt("");
     dispatcher.submit(
@@ -192,11 +194,6 @@ export function DispatchBar({
       </div>
       {result && !pending && !result.ok && (
         <p className="px-1 text-sm text-destructive">{result.error}</p>
-      )}
-      {started && (
-        <p className="px-1 text-sm text-muted-foreground">
-          Started “{started}”. It will appear on the board in a few seconds.
-        </p>
       )}
     </section>
   );

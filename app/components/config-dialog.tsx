@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
+import { toast } from "sonner";
 import {
   ChevronRight,
   Plus,
@@ -46,15 +47,29 @@ const TABS = [
 type Tab = (typeof TABS)[number]["key"];
 
 // Posts one config change. The board's loader re-runs after it, which is
-// how the dialog sees the new config.
-function useConfigAction() {
+// how the dialog sees the new config. onSaved hears each change that saved,
+// with the fields it was sent with.
+function useConfigAction(onSaved?: (fields: Record<string, string>) => void) {
   const fetcher = useFetcher<ConfigResult>();
+  const sent = useRef<Record<string, string>>({});
+  const handled = useRef<ConfigResult | undefined>(undefined);
+  const saved = useRef(onSaved);
+  saved.current = onSaved;
+  useEffect(() => {
+    const result = fetcher.data;
+    if (fetcher.state !== "idle" || !result || handled.current === result)
+      return;
+    handled.current = result;
+    if (result.ok) saved.current?.(sent.current);
+  }, [fetcher.state, fetcher.data]);
   return {
-    submit: (intent: string, fields: Record<string, string> = {}) =>
+    submit: (intent: string, fields: Record<string, string> = {}) => {
+      sent.current = fields;
       fetcher.submit(
         { intent, ...fields },
         { method: "post", action: "/config" },
-      ),
+      );
+    },
     pending: fetcher.state !== "idle",
     ok: fetcher.state === "idle" && fetcher.data?.ok === true,
     error: fetcher.state === "idle" ? (fetcher.data?.error ?? null) : null,
@@ -590,7 +605,9 @@ function MdnsSetting({
   remote: RemoteStatus;
   local: boolean;
 }) {
-  const action = useConfigAction();
+  const action = useConfigAction(({ on }) =>
+    on === "true" ? toast.success("mDNS enabled") : toast("mDNS disabled"),
+  );
   const { mdns } = remote;
   const host = new URL(mdns.url).hostname;
   let state: string;
@@ -636,7 +653,11 @@ function TunnelSetting({
   remote: RemoteStatus;
   local: boolean;
 }) {
-  const action = useConfigAction();
+  const action = useConfigAction(({ on }) =>
+    on === "true"
+      ? toast.success("Cloudflare Tunnel enabled")
+      : toast("Cloudflare Tunnel disabled"),
+  );
   const configured = remote.missing.length === 0;
   const url = remote.domain ? `https://${remote.domain}` : null;
   const canToggle = remote.wanted || (configured && local);

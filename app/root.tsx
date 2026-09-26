@@ -10,6 +10,7 @@ import {
 
 import type { Route } from "./+types/root";
 import { THEME_KEY } from "~/components/theme-toggle";
+import { Toaster } from "~/components/ui/sonner";
 import { isSecured, requireAuth } from "~/lib/auth.server";
 import "./app.css";
 
@@ -74,7 +75,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <Toaster />
+    </>
+  );
 }
 
 // A page that fails as it starts has no Debug tab to send diagnostics from,
