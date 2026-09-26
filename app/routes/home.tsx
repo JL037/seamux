@@ -1456,7 +1456,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <DraftsContext.Provider value={{ drafts, setDraft }}>
       <ProjectColorsContext.Provider value={{ colors, setColor }}>
-        <main className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4 md:gap-6 md:p-6">
+        {/* No bottom padding below md: the carousel is sized to end at the
+            screen's foot, and any page left below it lets the page scroll
+            on, pushing the first card's top under the tab strip. */}
+        <main className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4 max-md:pb-0 md:gap-6 md:p-6">
           {/* Below md the header stays put while the page scrolls, with a
               band above it covering the notch so nothing shows through. */}
           <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground max-md:sticky max-md:top-[env(safe-area-inset-top)] max-md:z-20 max-md:-mx-4 max-md:-mt-4 max-md:h-14 max-md:bg-background max-md:px-4 max-md:before:absolute max-md:before:inset-x-0 max-md:before:bottom-full max-md:before:h-[env(safe-area-inset-top)] max-md:before:bg-background">
