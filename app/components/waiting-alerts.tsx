@@ -23,6 +23,22 @@ function currentPermission(): Permission {
   return Notification.permission;
 }
 
+// One notification, through the service worker where there is one.
+export async function notify(title: string, body: string, tag: string) {
+  const worker = await navigator.serviceWorker
+    ?.getRegistration()
+    .catch(() => undefined);
+  const options = { body, tag, icon: "/icon-192.png" };
+  try {
+    if (worker) return await worker.showNotification(title, options);
+    const n = new Notification(title, options);
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+  } catch {}
+}
+
 // Desktop notifications for chats that start waiting, kept per browser.
 // Only a card that newly enters WAITING notifies, and only while the board
 // isn't the focused window, since there the card is already in view.
@@ -50,26 +66,8 @@ export function useWaitingNotifications(cards: Card[]) {
     const fresh = waiting.filter((c) => !before.has(c.sessionId));
     if (fresh.length === 0) return;
     void (async () => {
-      const worker = await navigator.serviceWorker
-        ?.getRegistration()
-        .catch(() => undefined);
       for (const card of fresh) {
-        const options = {
-          body: describe(card),
-          tag: `seamux:${card.sessionId}`,
-          icon: "/icon-192.png",
-        };
-        try {
-          if (worker) {
-            await worker.showNotification(card.name, options);
-            continue;
-          }
-          const n = new Notification(card.name, options);
-          n.onclick = () => {
-            window.focus();
-            n.close();
-          };
-        } catch {}
+        await notify(card.name, describe(card), `seamux:${card.sessionId}`);
       }
     })();
   }, [cards, active]);

@@ -133,11 +133,59 @@ export interface Card {
   pinned: boolean;
   // Set when the chat itself is blocked on a dialog.
   waiting: Waiting | null;
+  // Set when the chat's last turn ended on an error from the API rather
+  // than a reply, such as an expired login or an overloaded server.
+  apiError: ApiError | null;
   // Set while the board is closing it through the close-session macro, or
   // when such a close was held and left the chat open.
   closing: { state: "cleaning" | "held"; note: string | null } | null;
   background: BackgroundSession[];
   subagents: Subagent[];
+}
+
+// An error Claude Code wrote into the transcript in place of a reply.
+export interface ApiError {
+  // Claude Code's own kind: "authentication_failed", "server_error", ...
+  kind: string;
+  text: string;
+  at: number;
+}
+
+// A sign-in seamux runs for a service, without a terminal, so it can be
+// finished from any device: Claude Code takes back a pasted code, Codex a
+// device code entered on its site.
+export interface ServiceLogin {
+  state: "running" | "failed" | "done";
+  url: string | null;
+  // Codex's one-time device code, entered on its site.
+  deviceCode: string | null;
+  // Claude Code's sign-in page can show a code to paste back.
+  takesCode: boolean;
+  message: string | null;
+  startedAt: number;
+}
+
+// Something wrong with a service rather than a chat, for the Attention
+// column. Shown only while there is something to see.
+export interface ServiceNotice {
+  service: Engine;
+  // By the tool's own status; null when it could not be asked.
+  signedIn: boolean | null;
+  // Signed out, or a chat hit an expired login since seamux last signed in.
+  needsLogin: boolean;
+  // Live chats whose last turn ended on an expired login.
+  stopped: { sessionId: string; name: string }[];
+  login: ServiceLogin | null;
+  // Live chats whose last turn ended on a server-side error, recently.
+  outage: { text: string; sessions: { sessionId: string; name: string }[] } | null;
+}
+
+// Whether the notice asks something of Jakob, so it counts like a waiting
+// chat. An outage alone is only news.
+export function needsAction(n: ServiceNotice): boolean {
+  return (
+    n.needsLogin || n.stopped.length > 0 || n.login?.state === "running"
+  );
 }
 
 export interface QueuedMessage {
@@ -167,6 +215,8 @@ export interface Board {
   // Background sessions not matched to an open chat. Every one `claude
   // agents` still lists can be brought back with `claude attach`.
   orphans: (BackgroundSession & { cwd: string; sessionId: string })[];
+  // Service problems, for the Attention column; empty when all is well.
+  attention: ServiceNotice[];
   warnings: string[];
 }
 

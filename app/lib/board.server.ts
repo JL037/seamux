@@ -22,6 +22,7 @@ import {
   type Card,
   type ChatMessage,
   type Column,
+  type ApiError,
   type ContextUsage,
   type DispatchSet,
   type Question,
@@ -47,6 +48,7 @@ import {
   type Surface,
 } from "./drive.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
+import { serviceNotices } from "./service.server";
 import {
   clip,
   endingQuestionIn,
@@ -101,6 +103,8 @@ interface TranscriptSummary {
   context: ContextUsage | null;
   // Prompts Jakob typed while a turn ran, not yet taken up by the chat.
   queued: string[];
+  // The error the last message is, when the API answered with one.
+  apiError: ApiError | null;
 }
 
 async function readJson<T>(cmd: string, args: string[]): Promise<T> {
@@ -297,6 +301,17 @@ function contextUsage(o: any): ContextUsage | null {
   return { used, window: large ? LARGE_WINDOW : WINDOW };
 }
 
+// Claude Code writes an API failure as an assistant message of its own,
+// such as "Login expired · Please run /login".
+function apiErrorOf(o: any): ApiError | null {
+  if (o.type !== "assistant" || !o.isApiErrorMessage) return null;
+  return {
+    kind: o.error ?? "unknown",
+    text: textOf(o.message?.content) ?? "",
+    at: Date.parse(o.timestamp) || 0,
+  };
+}
+
 async function summarize(path: string): Promise<TranscriptSummary> {
   const summary: TranscriptSummary = {
     name: null,
@@ -309,6 +324,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     question: null,
     context: null,
     queued: [],
+    apiError: null,
   };
   // Settled by the last response, or by a compaction after it, which leaves
   // the window's size unknown until the next response.
@@ -339,6 +355,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       summary.turnActive = turnActive(o);
       summary.pendingTool = pendingTool(o);
       summary.question = endingQuestion(o);
+      summary.apiError = apiErrorOf(o);
     }
     if (!contextKnown && !o.isSidechain) {
       if (o.isCompactSummary) contextKnown = true;
@@ -726,6 +743,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         turnRunning: busy,
         pinned: false,
         waiting,
+        apiError: summary?.apiError ?? null,
         closing: closingState(row.sessionId, {
           lastPrompt: summary?.lastPrompt ?? null,
         }),
@@ -796,6 +814,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         turnRunning: false,
         pinned: false,
         waiting: null,
+        apiError: null,
         closing: null,
         background: [],
         subagents: [],
@@ -880,6 +899,10 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     cards,
     dispatches,
     orphans,
+    attention: await serviceNotices(cards, now).catch((err) => {
+      warnings.push(`Service status unavailable: ${err.message}`);
+      return [];
+    }),
     warnings,
   };
 }
@@ -908,6 +931,8 @@ function codexFields(
     worker: null,
     drivable: false,
     pinned: false,
+    // Codex records no API errors the board reads.
+    apiError: null,
     closing: null,
     background: [],
     subagents: [],

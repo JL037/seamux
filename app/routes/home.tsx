@@ -34,6 +34,12 @@ import {
 
 import type { Route } from "./+types/home";
 import type { ActionResult } from "./session-action";
+import {
+  ATTENTION_ACCENT,
+  AttentionCards,
+  attentionCount,
+  useServiceAlerts,
+} from "~/components/attention";
 import { ChatModal } from "~/components/chat-modal";
 import { useSlashMenu } from "~/components/slash-menu";
 import { ConfigDialog } from "~/components/config-dialog";
@@ -104,7 +110,11 @@ import { cn } from "~/lib/utils";
 const POLL_MS = 3000;
 
 export function meta({ matches, loaderData }: Route.MetaArgs) {
-  const waiting = loaderData ? waitingCards(loaderData.board.cards).length : 0;
+  // Chats waiting, and services that need Jakob, such as a sign-in.
+  const waiting = loaderData
+    ? waitingCards(loaderData.board.cards).length +
+      attentionCount(loaderData.board.attention)
+    : 0;
   return [{ title: titleWithCount(productNameFromMatches(matches), waiting) }];
 }
 
@@ -782,7 +792,7 @@ const CARD_EDGE: Partial<Record<Column, string>> = {
 // orange for Claude Code, OpenAI's teal for Codex.
 const ENGINE_CORNER: Record<Engine, string> = {
   claude: "after:border-[#d97757]",
-  codex: "after:border-[#10a37f]",
+  codex: "after:border-[#4ba281]",
 };
 
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
@@ -1077,7 +1087,8 @@ function DropLine({ edge }: { edge: "top" | "bottom" }) {
 }
 
 // Pinned sits left of the state columns; its cards show their state as a dot.
-type BoardColumnKey = Column | "pinned";
+// Attention sits left of Pinned, while a service needs looking at.
+type BoardColumnKey = Column | "pinned" | "attention";
 
 const PINNED_ACCENT = "bg-violet-500";
 
@@ -1086,24 +1097,34 @@ const XL_GRID_COLS: Record<number, string> = {
   3: "xl:grid-cols-3",
   4: "xl:grid-cols-4",
   5: "xl:grid-cols-5",
+  6: "xl:grid-cols-6",
 };
 
 function columnLabel(column: BoardColumnKey): string {
+  if (column === "attention") return "Attention";
   return column === "pinned" ? "Pinned" : COLUMN_LABELS[column];
+}
+
+function columnAccent(column: BoardColumnKey): string {
+  if (column === "attention") return ATTENTION_ACCENT;
+  return column === "pinned" ? PINNED_ACCENT : COLUMN_ACCENT[column];
 }
 
 function BoardColumn({
   column,
   cards,
+  notices = [],
   now,
   className,
 }: {
   column: BoardColumnKey;
   cards: BoardCard[];
+  notices?: Board["attention"];
   now: number;
   className?: string;
 }) {
   const label = columnLabel(column);
+  const count = column === "attention" ? notices.length : cards.length;
   return (
     <section
       data-column={column}
@@ -1121,13 +1142,13 @@ function BoardColumn({
         <span
           className={cn(
             "size-2 rounded-full",
-            column === "pinned" ? PINNED_ACCENT : COLUMN_ACCENT[column],
+            columnAccent(column),
             column === "working" && cards.length > 0 && "animate-pulse",
           )}
         />
         <span className="text-foreground">{label}</span>
         <span className="rounded-full bg-muted px-1.5 py-px text-[0.7rem] tabular-nums">
-          {cards.length}
+          {count}
         </span>
         {column === "done" && (
           <span className="font-normal normal-case tracking-normal">
@@ -1135,14 +1156,16 @@ function BoardColumn({
           </span>
         )}
       </h2>
-      {column === "pinned" ? (
+      {column === "attention" ? (
+        <AttentionCards notices={notices} />
+      ) : column === "pinned" ? (
         <PinnedCards cards={cards} now={now} />
       ) : (
         cards.map((card) => (
           <SessionCard key={card.sessionId} card={card} now={now} />
         ))
       )}
-      {cards.length === 0 && (
+      {count === 0 && (
         <p className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
           Nothing {label.toLowerCase()}
         </p>
@@ -1270,16 +1293,18 @@ function Warnings({ warnings }: { warnings: string[] }) {
 
 // Below md the columns are a carousel, and this strip of tabs sits above it:
 // each tab names a column and its count, follows the swipe, and scrolls to
-// its column when tapped. Waiting's count turns amber, to be seen from any
-// column.
+// its column when tapped. Waiting's count turns amber, and Attention's red
+// while a service needs Jakob, to be seen from any column.
 function ColumnTabs({
   columns,
   counts,
+  actions,
   active,
   onPick,
 }: {
   columns: BoardColumnKey[];
   counts: Record<BoardColumnKey, number>;
+  actions: number;
   active: BoardColumnKey | null;
   onPick: (column: BoardColumnKey) => void;
 }) {
@@ -1303,7 +1328,8 @@ function ColumnTabs({
     >
       {columns.map((column) => {
         const count = counts[column];
-        const alert = column === "waiting" && count > 0;
+        const alert =
+          column === "attention" ? actions > 0 : column === "waiting" && count > 0;
         return (
           <button
             key={column}
@@ -1317,17 +1343,17 @@ function ColumnTabs({
               column === active && "border-foreground/30 bg-muted text-foreground",
             )}
           >
-            <span
-              className={cn(
-                "size-2 rounded-full",
-                column === "pinned" ? PINNED_ACCENT : COLUMN_ACCENT[column],
-              )}
-            />
+            <span className={cn("size-2 rounded-full", columnAccent(column))} />
             {columnLabel(column)}
             <span
               className={cn(
                 "rounded-full px-1.5 py-px text-[0.7rem] tabular-nums",
-                alert ? "bg-amber-500 font-medium text-white" : "bg-muted",
+                alert
+                  ? cn(
+                      "font-medium text-white",
+                      column === "attention" ? ATTENTION_ACCENT : "bg-amber-500",
+                    )
+                  : "bg-muted",
               )}
             >
               {count}
@@ -1342,8 +1368,13 @@ function ColumnTabs({
 const MOBILE_COLUMN_KEY = "seamux:mobile-column";
 
 // The carousel's current column: the one most in view, remembered for the
-// tab. A fresh tab opens on Waiting when anything waits, else on Working.
-function useCarousel(columns: BoardColumnKey[], waiting: number) {
+// tab. A fresh tab opens on Attention when a service needs Jakob, else on
+// Waiting when anything waits, else on Working.
+function useCarousel(
+  columns: BoardColumnKey[],
+  waiting: number,
+  attention: number,
+) {
   const carousel = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<BoardColumnKey | null>(null);
   const scrollTo = useCallback(
@@ -1395,10 +1426,11 @@ function useCarousel(columns: BoardColumnKey[], waiting: number) {
       stored = sessionStorage.getItem(MOBILE_COLUMN_KEY);
     } catch {}
     const start =
+      (attention > 0 ? "attention" : null) ??
       columns.find((c) => c === stored) ??
       (waiting > 0 ? "waiting" : "working");
     scrollTo(start, "instant");
-  }, [columns, waiting, scrollTo]);
+  }, [columns, waiting, attention, scrollTo]);
 
   return {
     carousel,
@@ -1417,26 +1449,37 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const diagnostics = useDiagnostics(board.version?.hash);
   const notifications = useWaitingNotifications(board.cards);
   useDoneToasts(board.cards);
-  // Pinned only takes a column while something is pinned.
+  useServiceAlerts(board.attention, notifications.enabled);
+  // Attention only takes a column while a service needs looking at, and
+  // Pinned only while something is pinned.
+  const attention = board.attention;
   const pinned = board.cards.filter((c) => c.pinned);
   // Done is hidden until asked for, and the choice outlives the tab.
   const [showDone, setShowDone] = useLocalStorage("seamux:show-done", false);
   const columns = COLUMNS.filter((c) => showDone || c !== "done");
-  const columnCount = columns.length + (pinned.length > 0 ? 1 : 0);
+  const columnCount =
+    columns.length +
+    (pinned.length > 0 ? 1 : 0) +
+    (attention.length > 0 ? 1 : 0);
   const byColumn = (column: Column) =>
     board.cards.filter((c) => !c.pinned && c.column === column);
   // Below md every column shows, Done included: each has a screen of its own.
   const mobileColumns: BoardColumnKey[] = [
+    ...(attention.length > 0 ? (["attention"] as const) : []),
     ...(pinned.length > 0 ? (["pinned"] as const) : []),
     ...COLUMNS,
   ];
   const counts = {
+    attention: attention.length,
     pinned: pinned.length,
     ...Object.fromEntries(COLUMNS.map((c) => [c, byColumn(c).length])),
   } as Record<BoardColumnKey, number>;
+  // Only what asks something of Jakob; an outage alone is news.
+  const actions = attentionCount(attention);
   const { carousel, active, pick } = useCarousel(
     mobileColumns,
     counts.waiting,
+    actions,
   );
   // Below md the dispatch bar is a sheet over the board, opened from the
   // header; Esc closes it, as does a dispatch that starts, and the board
@@ -1605,6 +1648,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <ColumnTabs
               columns={mobileColumns}
               counts={counts}
+              actions={actions}
               active={active}
               onPick={pick}
             />
@@ -1616,6 +1660,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 XL_GRID_COLS[columnCount],
               )}
             >
+              {attention.length > 0 && (
+                <BoardColumn
+                  column="attention"
+                  cards={[]}
+                  notices={attention}
+                  now={now}
+                />
+              )}
               {pinned.length > 0 && (
                 <BoardColumn column="pinned" cards={pinned} now={now} />
               )}

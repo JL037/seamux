@@ -31,6 +31,16 @@ Several documented or assumed behaviours of Claude Code and cmux turned out wron
 - **AskUserQuestion's "Type something" takes typed text too.** On a single-select question its digit puts the cursor in the field, and typed text needs an Enter to submit. On a multi-select question the digit only ticks the row and leaves the cursor where it was, so text typed or pasted after it is lost; walking the cursor down to the row with arrow keys puts it in the field. Typed there, the answer needs a Tab down to "Next" and an Enter; pasted, it moves on by itself. Keys sent too fast while the dialog redraws are dropped. Measured on Claude Code 2.1.282.
 - **A question with previews is a different dialog.** When its options carry a `preview`, Claude Code shows the one under the cursor beside the list, drops the "Type something" row, and a digit only moves the cursor, so Enter is what picks. `n` opens a one-line note on that option, typed text fills it, and Enter picks the option with the note, which the model gets as `notes: …` after the answer. A question without previews offers no note. Measured on Claude Code 2.1.282.
 
+## Signing in
+
+Measured against Claude Code 2.1.283 and codex-cli 0.156.1, each signed in and out under a throwaway `CLAUDE_CONFIG_DIR` or `CODEX_HOME` so the real login was untouched.
+
+- **An expired login is in the transcript.** Claude Code writes it as an assistant message of its own: `"isApiErrorMessage": true, "error": "authentication_failed"`, model `<synthetic>`, text "Login expired · Please run /login". Server errors take the same form with `"error": "server_error"`, such as "API Error: 529 Overloaded. ..." and "API Error: Can't reach the API server ...". So do a few that are not the service's fault: "Your computer went to sleep mid-response" and "Could not refresh your login because another Claude Code process is refreshing it".
+- **`claude auth status --json` exits 1 when signed out**, with the same JSON and `"loggedIn": false`. `codex login status` exits 1 with "Not logged in". Each takes about 0.1s. Whether `loggedIn` stays `true` once a token has expired on the server is unmeasured, so the transcript is what says a login expired.
+- **`claude auth login` needs no terminal.** With a pipe for stdin it prints "Opening browser to sign in…" and a URL wrapped in a terminal hyperlink escape. The URL's `redirect_uri` is `platform.claude.com/oauth/code/callback`, the page that shows a code to copy. It then prints `Paste code here if prompted >` and reads the code from stdin. At the same time it opens a browser on the Mac and listens on a localhost port, and that route finishes with nothing pasted. It prints "Login successful." and exits 0, or "Login failed: Request failed with status code 400" for a bad code and exits 1.
+- **`codex login --device-auth` needs no input.** It prints `https://auth.openai.com/codex/device` and a one-time code such as `YHY2-A3R06`, which expires in 15 minutes, and waits for the code to be entered there.
+- **React Router refuses a cross-origin POST before any action runs**, with a 400 rather than `assertFromBoard`'s 403.
+
 ## Cloudflare Tunnel
 
 Measured against cloudflared 2026.9.3, with a tunnel managed from the dashboard.

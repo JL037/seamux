@@ -609,7 +609,7 @@ const CLAUDE_BIN_DIR = join(homedir(), ".local/bin");
 // Node, for bin/seamux and the subagent hook inside the new session: the
 // same one this server runs on. A Codex installed with npm or pnpm is here.
 const NODE_BIN_DIR = dirname(process.execPath);
-const BIN_DIRS = [CLAUDE_BIN_DIR, NODE_BIN_DIR, "/opt/homebrew/bin"];
+export const BIN_DIRS = [CLAUDE_BIN_DIR, NODE_BIN_DIR, "/opt/homebrew/bin"];
 
 interface EngineSpec {
   bin: string;

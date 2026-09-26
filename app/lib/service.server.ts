@@ -1,0 +1,285 @@
+// The services behind the chats: whether each is signed in, a sign-in the
+// board runs for it, and outages the chats ran into. Nothing is scraped
+// from a status page: sign-in comes from the tools' own status commands,
+// and errors from the transcripts, where Claude Code writes each failed
+// request in place of a reply.
+//
+// A sign-in runs without a terminal, so it can be finished from any device.
+// Measured against Claude Code 2.1.283 and Codex 0.156.1, in docs/findings.md:
+// - `claude auth login` with a pipe for stdin prints a sign-in URL whose
+//   page shows a code, then reads that code from stdin; it also opens a
+//   browser on this Mac, which finishes through a localhost callback with
+//   nothing to paste. Either way it prints "Login successful." and exits 0,
+//   or "Login failed: ..." and exits 1.
+// - `codex login --device-auth` prints a URL and a one-time code to enter
+//   there, and needs no input.
+
+import { spawn, type ChildProcess, execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+import type { Card, ServiceLogin, ServiceNotice } from "./board.ts";
+import type { Engine } from "./config.ts";
+import { BIN_DIRS, installedEngines, sendMessage } from "./drive.server";
+
+const run = promisify(execFile);
+
+// Status is asked on every poll, so hold an answer this long.
+const STATUS_TTL_MS = 15_000;
+// Codex's device code expires after 15 minutes; give up with it.
+const LOGIN_TIMEOUT_MS = 15 * 60 * 1000;
+// A finished sign-in stays on its card long enough for every board polling,
+// a hidden one included, to see how it went.
+const DONE_VISIBLE_MS = 20_000;
+const FAILED_VISIBLE_MS = 10 * 60 * 1000;
+// A server error this recent still counts as an outage.
+const OUTAGE_WINDOW_MS = 15 * 60 * 1000;
+// What each chat stopped on an expired login is sent once signed in again.
+const RESUME_PROMPT = "continue";
+
+const env = () => ({
+  ...process.env,
+  PATH: [...BIN_DIRS, process.env.PATH ?? ""].join(":"),
+});
+
+interface Login {
+  child: ChildProcess;
+  output: string;
+  startedAt: number;
+  endedAt: number | null;
+  ok: boolean | null;
+  message: string | null;
+}
+
+// Kept on globalThis so a hot reload keeps a sign-in in progress.
+const state = ((globalThis as any).__seamuxServices ??= {
+  status: new Map(),
+  logins: new Map(),
+  signedInAt: new Map(),
+}) as {
+  status: Map<Engine, { at: number; signedIn: boolean | null }>;
+  logins: Map<Engine, Login>;
+  // When a sign-in the board ran last succeeded. A chat's expired login
+  // from before then is settled; one from after means it expired again.
+  signedInAt: Map<Engine, number>;
+};
+
+// `claude auth status` exits 1 when signed out, with the same JSON.
+async function askClaude(): Promise<boolean | null> {
+  const parse = (stdout: string) => JSON.parse(stdout).loggedIn === true;
+  try {
+    const { stdout } = await run("claude", ["auth", "status", "--json"], {
+      env: env(),
+      timeout: 10_000,
+    });
+    return parse(stdout);
+  } catch (err: any) {
+    try {
+      return typeof err.stdout === "string" ? parse(err.stdout) : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+// `codex login status` exits 1 with "Not logged in".
+async function askCodex(): Promise<boolean | null> {
+  try {
+    await run("codex", ["login", "status"], { env: env(), timeout: 10_000 });
+    return true;
+  } catch (err: any) {
+    return typeof err.code === "number" ? false : null;
+  }
+}
+
+async function signedIn(service: Engine, now: number): Promise<boolean | null> {
+  const held = state.status.get(service);
+  if (held && now - held.at < STATUS_TTL_MS) return held.signedIn;
+  const answer = await (service === "claude" ? askClaude() : askCodex());
+  state.status.set(service, { at: now, signedIn: answer });
+  return answer;
+}
+
+const ESCAPES = /\x1b\[[0-9;?]*[A-Za-z]/g;
+
+// The first URL printed. Claude Code wraps it in a terminal hyperlink, an
+// escape sequence that ends where the URL does.
+function urlIn(output: string): string | null {
+  return /https:\/\/[^\s\x1b\x07]+/.exec(output)?.[0] ?? null;
+}
+
+function viewOf(service: Engine, login: Login): ServiceLogin {
+  const output = login.output.replace(ESCAPES, "");
+  return {
+    state: login.ok == null ? "running" : login.ok ? "done" : "failed",
+    url: urlIn(login.output),
+    deviceCode:
+      service === "codex"
+        ? (/\b[A-Z0-9]{4}-[A-Z0-9]{4,6}\b/.exec(output)?.[0] ?? null)
+        : null,
+    takesCode: service === "claude",
+    message: login.message,
+    startedAt: login.startedAt,
+  };
+}
+
+// The sign-in to show, if any: one running, or one that just ended.
+function currentLogin(service: Engine, now: number): ServiceLogin | null {
+  const login = state.logins.get(service);
+  if (!login) return null;
+  if (login.endedAt != null) {
+    const keep = login.ok ? DONE_VISIBLE_MS : FAILED_VISIBLE_MS;
+    if (now - login.endedAt > keep) {
+      state.logins.delete(service);
+      return null;
+    }
+  }
+  return viewOf(service, login);
+}
+
+// The last line a finished sign-in printed, which says how it went.
+function lastLine(output: string): string | null {
+  const lines = output
+    .replace(ESCAPES, "")
+    .split(/[\r\n]+/)
+    .map((l) => l.replace(/^Paste code here if prompted >\s*/, "").trim())
+    .filter(Boolean);
+  return lines.at(-1) ?? null;
+}
+
+export function startLogin(service: Engine) {
+  const current = state.logins.get(service);
+  if (current && current.ok == null) return;
+  const [cmd, args] =
+    service === "claude"
+      ? ["claude", ["auth", "login"]]
+      : ["codex", ["login", "--device-auth"]];
+  const child = spawn(cmd, args, {
+    env: env(),
+    stdio: [service === "claude" ? "pipe" : "ignore", "pipe", "pipe"],
+  });
+  const login: Login = {
+    child,
+    output: "",
+    startedAt: Date.now(),
+    endedAt: null,
+    ok: null,
+    message: null,
+  };
+  state.logins.set(service, login);
+  const take = (chunk: Buffer) => {
+    login.output = (login.output + chunk.toString()).slice(-16_000);
+  };
+  child.stdout?.on("data", take);
+  child.stderr?.on("data", take);
+  const timer = setTimeout(() => {
+    login.message = "The sign-in timed out.";
+    child.kill();
+  }, LOGIN_TIMEOUT_MS);
+  const end = (ok: boolean, message: string | null) => {
+    clearTimeout(timer);
+    if (login.endedAt != null) return;
+    login.endedAt = Date.now();
+    login.ok = ok;
+    login.message ??= message;
+    state.status.delete(service);
+    if (ok) state.signedInAt.set(service, login.endedAt);
+  };
+  child.on("error", (err) => end(false, err.message));
+  child.on("exit", (code) => end(code === 0, lastLine(login.output)));
+}
+
+// Claude Code's sign-in page shows a code to paste back.
+export function submitLoginCode(service: Engine, code: string) {
+  const login = state.logins.get(service);
+  if (!login || login.ok != null || !login.child.stdin)
+    throw new Error("No sign-in is waiting for a code");
+  login.child.stdin.write(`${code.trim()}\n`);
+}
+
+// Stops a sign-in the board started, and forgets it.
+export function cancelLogin(service: Engine) {
+  const login = state.logins.get(service);
+  if (!login) return;
+  state.logins.delete(service);
+  if (login.ok == null) login.child.kill();
+}
+
+const live = (c: Card) => c.column !== "done" && c.engine === "claude";
+const named = (c: Card) => ({ sessionId: c.sessionId, name: c.name });
+
+// Live chats whose last turn ended on an expired login.
+function stoppedOnLogin(cards: Card[]): Card[] {
+  return cards.filter(
+    (c) => live(c) && c.apiError?.kind === "authentication_failed",
+  );
+}
+
+// A request that failed on Anthropic's side, or never reached it: an
+// overloaded or failing server, or no route to the API.
+const SERVER_ERROR = /^API Error: (5\d\d|Can't reach)/;
+
+function outageOf(cards: Card[], now: number): ServiceNotice["outage"] {
+  const hit = cards.filter(
+    (c) =>
+      live(c) &&
+      c.apiError != null &&
+      SERVER_ERROR.test(c.apiError.text) &&
+      now - c.apiError.at < OUTAGE_WINDOW_MS,
+  );
+  if (hit.length === 0) return null;
+  const latest = hit.reduce((a, b) =>
+    (a.apiError?.at ?? 0) >= (b.apiError?.at ?? 0) ? a : b,
+  );
+  // Its first sentence: "API Error: 529 Overloaded."
+  const text = latest.apiError!.text.replace(/(\.)\s.*$/s, "$1");
+  return { text, sessions: hit.map(named) };
+}
+
+// Each installed service with something to show. Codex writes no errors
+// the board reads, so only its own status speaks for it.
+export async function serviceNotices(
+  cards: Card[],
+  now: number,
+): Promise<ServiceNotice[]> {
+  const installed = installedEngines();
+  const services = (Object.keys(installed) as Engine[]).filter(
+    (s) => installed[s],
+  );
+  const notices = await Promise.all(
+    services.map(async (service): Promise<ServiceNotice> => {
+      const stopped = service === "claude" ? stoppedOnLogin(cards) : [];
+      const since = state.signedInAt.get(service) ?? 0;
+      const status = await signedIn(service, now);
+      return {
+        service,
+        signedIn: status,
+        needsLogin:
+          status === false || stopped.some((c) => c.apiError!.at > since),
+        stopped: stopped.map(named),
+        login: currentLogin(service, now),
+        outage: service === "claude" ? outageOf(cards, now) : null,
+      };
+    }),
+  );
+  return notices.filter(
+    (n) => n.needsLogin || n.stopped.length > 0 || n.login || n.outage,
+  );
+}
+
+// Sends each chat stopped on an expired login on its way again. Returns the
+// ones that could not be reached.
+export async function resumeStopped(cards: Card[]): Promise<string[]> {
+  const failed: string[] = [];
+  for (const card of stoppedOnLogin(cards)) {
+    if (!card.drivable) {
+      failed.push(card.name);
+      continue;
+    }
+    try {
+      await sendMessage(card.sessionId, RESUME_PROMPT);
+    } catch {
+      failed.push(card.name);
+    }
+  }
+  return failed;
+}
