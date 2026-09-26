@@ -1090,11 +1090,11 @@ function BoardColumn({
       data-column={column}
       className={cn(
         "flex min-w-0 flex-col gap-3",
-        // One slide of the carousel below md: a little narrower than the
-        // screen, so the next column's edge shows there is more.
+        // One slide of the carousel below md, the full width of the screen;
+        // the tab strip above shows there is more.
         // Its cards keep their height and the column scrolls, rather than
         // squeezing them and clipping what's at their foot.
-        "max-md:h-full max-md:w-[92%] max-md:shrink-0 max-md:*:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        "max-md:h-full max-md:w-full max-md:shrink-0 max-md:*:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]",
         className,
       )}
     >
