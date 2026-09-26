@@ -1275,7 +1275,7 @@ function ColumnTabs({
     <div
       ref={strip}
       role="tablist"
-      className="sticky top-[env(safe-area-inset-top)] z-10 -mx-4 flex h-12 items-center gap-1.5 overflow-x-auto bg-background px-4 [scrollbar-width:none] md:hidden"
+      className="sticky top-[calc(env(safe-area-inset-top)+3.5rem)] z-10 -mx-4 flex h-12 items-center gap-1.5 overflow-x-auto bg-background px-4 [scrollbar-width:none] md:hidden"
     >
       {columns.map((column) => {
         const count = counts[column];
@@ -1451,7 +1451,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     <DraftsContext.Provider value={{ drafts, setDraft }}>
       <ProjectColorsContext.Provider value={{ colors, setColor }}>
         <main className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4 md:gap-6 md:p-6">
-          <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+          {/* Below md the header stays put while the page scrolls, with a
+              band above it covering the notch so nothing shows through. */}
+          <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground max-md:sticky max-md:top-[env(safe-area-inset-top)] max-md:z-20 max-md:-mx-4 max-md:-mt-4 max-md:h-14 max-md:bg-background max-md:px-4 max-md:before:absolute max-md:before:inset-x-0 max-md:before:bottom-full max-md:before:h-[env(safe-area-inset-top)] max-md:before:bg-background">
             <span className="flex min-w-0 items-center gap-1">
               <span className="flex min-w-0 items-center gap-2.5">
                 <span className="shrink-0">
@@ -1564,7 +1566,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <DispatchStrip sets={board.dispatches} />
           <Warnings warnings={board.warnings} />
 
-          {/* Below md, a carousel of columns under a sticky strip of tabs,
+          {/* Below md, a carousel of columns under the header and a sticky strip of tabs,
               filling the screen once scrolled to, each column scrolling on
               its own; from md, the grid. */}
           <div className="flex flex-col">
@@ -1577,7 +1579,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <div
               ref={carousel}
               className={cn(
-                "relative max-md:-mx-4 max-md:flex max-md:h-[calc(100dvh-3rem-env(safe-area-inset-top))] max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:scroll-px-4 max-md:px-4 max-md:[scrollbar-width:none]",
+                "relative max-md:-mx-4 max-md:flex max-md:h-[calc(100dvh-6.5rem-env(safe-area-inset-top))] max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:scroll-px-4 max-md:px-4 max-md:[scrollbar-width:none]",
                 "md:grid md:grid-cols-2 md:gap-4",
                 XL_GRID_COLS[columnCount],
               )}
