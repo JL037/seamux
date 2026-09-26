@@ -77,55 +77,7 @@ export default function App() {
   return <Outlet />;
 }
 
-const HEALED_KEY = "seamux:healed-at";
-
-// Fetch every module the page loaded again, past the browser's cache, then
-// reload. A page that came back after the board restarted can hold modules
-// its browser cached as immutable beside newer ones, and fail on every
-// render (two copies of React, most often); a plain reload keeps them.
-async function reloadFresh() {
-  const urls = new Set(
-    performance
-      .getEntriesByType("resource")
-      .map((e) => e.name)
-      .concat(
-        [...document.querySelectorAll<HTMLLinkElement>("link[rel=modulepreload]")].map(
-          (l) => l.href,
-        ),
-      )
-      .filter((u) => {
-        const url = new URL(u, location.href);
-        return (
-          url.origin === location.origin &&
-          /^\/(node_modules|app|@)/.test(url.pathname)
-        );
-      }),
-  );
-  await Promise.allSettled(
-    [...urls].map((u) => fetch(u, { cache: "reload" })),
-  );
-  location.reload();
-}
-
-// Once a minute at most, so a failure the cache didn't cause can't loop.
-let healing = false;
-function healOnce() {
-  if (healing) return;
-  healing = true;
-  try {
-    const last = Number(sessionStorage.getItem(HEALED_KEY) ?? 0);
-    if (Date.now() - last < 60_000) return;
-    sessionStorage.setItem(HEALED_KEY, String(Date.now()));
-  } catch {
-    return;
-  }
-  void reloadFresh();
-}
-
-// No hooks here: when React is what broke, the boundary still has to work.
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  const thrown = !isRouteErrorResponse(error);
-  if (thrown && typeof window !== "undefined") healOnce();
   let message = "Oops!";
   let details = "An unexpected error occurred.";
   let stack: string | undefined;
@@ -145,15 +97,6 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="pt-16 p-4 container mx-auto">
       <h1>{message}</h1>
       <p>{details}</p>
-      {thrown && (
-        <button
-          type="button"
-          onClick={() => void reloadFresh()}
-          className="my-4 cursor-pointer rounded-lg border px-3 py-1.5"
-        >
-          Reload, fetching everything fresh
-        </button>
-      )}
       {stack && (
         <pre className="w-full p-4 overflow-x-auto">
           <code>{stack}</code>
