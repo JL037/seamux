@@ -73,9 +73,14 @@ Macros are prompts seamux sends into a session for you. `{{name}}` variables are
 
 Switches on remote connections: mDNS for your own network, and a Cloudflare tunnel for anywhere else. See [Remote connections](remote-connections.md).
 
+### Debug
+
+- **Diagnostics**: sends a snapshot of how this browser lays out the board to the Mac, for triage from a phone. It records the screen size, the media queries that match, the safe areas, which stylesheets are loaded and whether they carry the phone layout's rules, and every column's and card's size and computed style. It also records the service worker's state and recent script errors. A snapshot is sent when the board loads, a second after the window is resized or turned, and when you press **Send now**. The tab shows the last one, and the Mac keeps it in `data/diagnostics/latest.json`, with the last 50 in `data/diagnostics/log.jsonl`.
+- **Clear autocomplete cache**: forgets every folder's slash commands, so each is listed again the next time you type `/`.
+
 ### In the browser
 
-Some choices are kept in the browser rather than the store: light or dark theme, whether DONE is shown, project colours, and whether to send desktop notifications.
+Some choices are kept in the browser rather than the store: light or dark theme, whether DONE is shown, project colours, whether to send desktop notifications, and whether to send diagnostics.
 
 ## `.seamux.json`
 

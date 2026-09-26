@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
-import { ChevronRight, Plus, RotateCcw, Save, Settings, X } from "lucide-react";
+import {
+  ChevronRight,
+  Plus,
+  RotateCcw,
+  Save,
+  Send,
+  Settings,
+  X,
+} from "lucide-react";
 
 import { DirectoryPicker } from "~/components/directory-picker";
 import { Button } from "~/components/ui/button";
@@ -25,6 +33,7 @@ import {
 } from "~/lib/config";
 import type { RemoteStatus } from "~/lib/remote.server";
 import type { Notifications } from "~/components/waiting-alerts";
+import type { Diagnostics } from "~/lib/use-diagnostics";
 import { cn } from "~/lib/utils";
 import type { ConfigResult } from "~/routes/config";
 
@@ -58,12 +67,14 @@ export function ConfigDialog({
   engines,
   remote,
   notifications,
+  diagnostics,
 }: {
   config: Config;
   // Which agents this Mac can launch.
   engines: Record<Engine, boolean>;
   remote: RemoteStatus;
   notifications: Notifications;
+  diagnostics: Diagnostics;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("general");
@@ -120,7 +131,7 @@ export function ConfigDialog({
             ) : tab === "remote" ? (
               <RemoteTab remote={remote} />
             ) : (
-              <DebugTab />
+              <DebugTab diagnostics={diagnostics} />
             )}
           </div>
         </DialogContent>
@@ -328,10 +339,11 @@ function NotificationSetting({ enabled, permission, toggle }: Notifications) {
   );
 }
 
-function DebugTab() {
+function DebugTab({ diagnostics }: { diagnostics: Diagnostics }) {
   const action = useConfigAction();
   return (
     <div className="flex flex-col gap-6">
+      <DiagnosticsSetting {...diagnostics} />
       <section className="flex flex-col gap-2">
         <h3 className="font-medium">Autocomplete</h3>
         <p className="text-muted-foreground">
@@ -355,6 +367,48 @@ function DebugTab() {
         {action.error && <p className="text-destructive">{action.error}</p>}
       </section>
     </div>
+  );
+}
+
+// Kept in this browser: it is this browser's layout that is being looked at.
+function DiagnosticsSetting({ enabled, setEnabled, send, last }: Diagnostics) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-medium">Diagnostics</h3>
+      <SwitchRow
+        checked={enabled}
+        disabled={false}
+        onCheckedChange={setEnabled}
+        label="Send layout diagnostics from this browser"
+      >
+        A snapshot of the screen size, media queries, stylesheets, and every
+        column's and card's size and computed style, sent when the board loads,
+        when the window is resized or turned, and on demand. Saved on the Mac
+        in <code>data/diagnostics/</code>, for triage from a phone.
+      </SwitchRow>
+      {enabled && (
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={send}>
+            <Send />
+            Send now
+          </Button>
+          {last && (
+            <span
+              className={last.error ? "text-destructive" : "text-muted-foreground"}
+            >
+              {last.error
+                ? `Failed at ${last.at}: ${last.error}`
+                : `Sent at ${last.at}`}
+            </span>
+          )}
+        </div>
+      )}
+      {enabled && last && (
+        <pre className="max-h-64 overflow-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px] leading-snug">
+          {JSON.stringify(last.snapshot, null, 2)}
+        </pre>
+      )}
+    </section>
   );
 }
 

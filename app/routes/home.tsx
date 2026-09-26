@@ -91,6 +91,7 @@ import { startQueue } from "~/lib/queue.server";
 import { remoteStatus, type RemoteStatus } from "~/lib/remote.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useCoarsePointer } from "~/lib/use-pointer";
+import { useDiagnostics } from "~/lib/use-diagnostics";
 import { useSessionAction } from "~/lib/use-session-action";
 import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
 import {
@@ -1427,6 +1428,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const { config, engines, remote } = loaderData;
   const now = board.generatedAt;
   useReloadOnLanding(board.version?.hash);
+  const diagnostics = useDiagnostics(board.version?.hash);
   const notifications = useWaitingNotifications(board.cards);
   // Pinned only takes a column while something is pinned.
   const pinned = board.cards.filter((c) => c.pinned);
@@ -1505,6 +1507,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 engines={engines}
                 remote={remote}
                 notifications={notifications}
+                diagnostics={diagnostics}
               />
               <ThemeToggle />
             </span>

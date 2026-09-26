@@ -8,6 +8,7 @@ export default [
   route("dispatch", "routes/dispatch.ts"),
   route("directories", "routes/directories.ts"),
   route("config", "routes/config.ts"),
+  route("diagnostics", "routes/diagnostics.ts"),
   route("file", "routes/file.tsx"),
   route("file/stat", "routes/file-stat.ts"),
   route("file/raw/*", "routes/file-raw.ts", { id: "file-raw" }),
