@@ -132,7 +132,7 @@ function QuestionForm({
               );
             })}
             {shown != null && (
-              <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px] leading-snug">
+              <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px] leading-snug max-md:text-xs">
                 {shown}
               </pre>
             )}

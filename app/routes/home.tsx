@@ -16,6 +16,7 @@ import {
   Layers,
   LoaderCircle,
   Maximize2,
+  MessageSquare,
   Pencil,
   Eye,
   EyeOff,
@@ -301,7 +302,20 @@ function ChatInput({
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1">
+      {/* A phone's card has no room to write in, so it opens the chat. */}
+      <Button
+        variant="secondary"
+        size="lg"
+        className="w-full md:hidden"
+        onClick={() => setOpen(true)}
+      >
+        <MessageSquare />
+        Open chat
+        {draft.trim() && (
+          <span className="font-normal text-muted-foreground">· draft</span>
+        )}
+      </Button>
+      <div className="flex items-center gap-1 max-md:hidden">
         <div className="min-w-0 flex-1">
           <form
             ref={form}
@@ -723,8 +737,8 @@ function ReplyExcerpt({ text, cwd }: { text: string; cwd: string }) {
     <Faded
       from="end"
       className={cn(
-        "prose prose-sm max-h-40 max-w-none break-words text-xs dark:prose-invert",
-        "prose-headings:my-1 prose-headings:text-xs prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-2",
+        "prose prose-sm max-h-40 max-w-none break-words text-xs dark:prose-invert max-md:max-h-52 max-md:text-sm",
+        "prose-headings:my-1 prose-headings:text-xs max-md:prose-headings:text-sm prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-2",
         "prose-pre:my-1 prose-pre:bg-muted prose-pre:p-2 prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
         "prose-table:my-1 [&>:first-child]:mt-0 [&>:last-child]:mb-0",
       )}
@@ -768,7 +782,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
         {/* A bounded column, so a long path truncates rather than widening the
             header and pushing the title's buttons off the card. */}
         <CardHeader className="grid-cols-[minmax(0,1fr)]">
-          <CardTitle className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center justify-between gap-2 max-md:text-base">
             <span className="flex min-w-0 items-center gap-2">
               {card.pinned && (
                 <span
@@ -786,7 +800,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
               <CardControl card={card} />
             </span>
           </CardTitle>
-          <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs max-md:text-sm">
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <PathSwatch cwd={card.cwd} />
               <span className="truncate font-mono">{shortPath(card.cwd)}</span>
@@ -805,7 +819,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             )}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2 text-xs">
+        <CardContent className="flex flex-col gap-2 text-xs max-md:text-sm">
           {errors.map((e) => (
             <ActionError key={e} error={e} />
           ))}
@@ -1073,7 +1087,9 @@ function BoardColumn({
         "flex min-w-0 flex-col gap-3",
         // One slide of the carousel below md: a little narrower than the
         // screen, so the next column's edge shows there is more.
-        "max-md:h-full max-md:w-[92%] max-md:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        // Its cards keep their height and the column scrolls, rather than
+        // squeezing them and clipping what's at their foot.
+        "max-md:h-full max-md:w-[92%] max-md:shrink-0 max-md:*:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]",
         className,
       )}
     >
