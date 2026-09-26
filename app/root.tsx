@@ -135,6 +135,12 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="pt-16 p-4 container mx-auto">
       <h1>{message}</h1>
       <p>{details}</p>
+      {/* A plain link, not a handler: it has to work when React doesn't. */}
+      <p className="my-4">
+        <a href="/reset" className="underline">
+          Clear this browser's cache for the board, and reload
+        </a>
+      </p>
       {stack && (
         <pre className="w-full p-4 overflow-x-auto">
           <code>{stack}</code>

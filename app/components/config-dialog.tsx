@@ -403,6 +403,13 @@ function DiagnosticsSetting({ enabled, setEnabled, send, last }: Diagnostics) {
           )}
         </div>
       )}
+      <p className="text-muted-foreground">
+        Stuck on old code, or an error page after a restart?{" "}
+        <a href="/reset" className="underline hover:text-foreground">
+          Clear this browser's cache for the board
+        </a>
+        . Drafts and settings are kept.
+      </p>
       {enabled && last && (
         <pre className="max-h-64 overflow-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px] leading-snug">
           {JSON.stringify(last.snapshot, null, 2)}

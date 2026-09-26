@@ -52,6 +52,7 @@ Measured on macOS 26.5.1 with Vite 8.3.0 and React Router 7.18.4.
 - **Vite's `host: true` listens on `*` over IPv6, dual-stack.** An IPv4 peer shows up as `::ffff:192.168.1.151`, and IPv4 loopback as `::ffff:127.0.0.1`, so the loopback check matches both forms.
 - **`scutil --get LocalHostName` is the name Bonjour answers for.** It's `Osmium` here, where `hostname` gives `Osmium.local`. macOS already answers for it on every network it joins, so seamux has nothing to advertise.
 - **Vite serves its pre-bundled dependencies as `Cache-Control: max-age=31536000,immutable`.** Safari on an iPhone keeps them and doesn't ask for them again on a reload. After the board restarted and re-bundled, the phone's page failed on every render with `null is not an object (evaluating 'dispatcher.useContext')`, two copies of React, and reloading a dozen times didn't clear it. The `revalidateDeps` plugin in `vite.config.ts` sends `no-cache` in place of `immutable`, and Vite answers the revalidation with a 304.
+- **Safari honours `Clear-Site-Data: "cache"`, and Chrome ignored it on `127.0.0.1`.** Tested with Playwright's WebKit and Chromium. An immutable script came from the cache on reload, and after a page answering with the header, WebKit fetched it again and Chromium didn't. Only clearing all browsing data got the iPhone off the duplicate React. `/reset` sends the header, and the error page links to it.
 
 ## Codex
 
