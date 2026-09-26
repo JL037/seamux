@@ -77,7 +77,45 @@ export default function App() {
   return <Outlet />;
 }
 
+// A page that fails as it starts has no Debug tab to send diagnostics from,
+// so the error page reports itself: the error, and every script this page
+// loaded, by the exact URL it was loaded from. Once per page, and it only
+// sends: nothing is reloaded.
+let reported = false;
+function reportError(error: unknown) {
+  if (reported) return;
+  reported = true;
+  const same = (u: string) => new URL(u, location.href).origin === location.origin;
+  const snapshot = {
+    reason: "error",
+    at: new Date().toISOString(),
+    url: location.href,
+    userAgent: navigator.userAgent,
+    error:
+      error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : String(error),
+    scripts: performance
+      .getEntriesByType("resource")
+      .map((e) => e.name)
+      .filter((u) => same(u) && !u.includes("/diagnostics")),
+    modulepreloads: [
+      ...document.querySelectorAll<HTMLLinkElement>("link[rel=modulepreload]"),
+    ].map((l) => l.href),
+  };
+  void fetch("/diagnostics", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(snapshot),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+// No hooks here: when React is what broke, the boundary still has to render.
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  if (!isRouteErrorResponse(error) && typeof window !== "undefined") {
+    reportError(error);
+  }
   let message = "Oops!";
   let details = "An unexpected error occurred.";
   let stack: string | undefined;
