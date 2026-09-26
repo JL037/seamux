@@ -16,10 +16,10 @@ import {
   renameClosed,
   renameLive,
   resume,
-  sendMessage,
 } from "~/lib/drive.server";
 import { assertFromBoard, SESSION_ID } from "~/lib/guard.server";
 import { startQueue } from "~/lib/queue.server";
+import { sendOrSignIn } from "~/lib/service.server";
 import {
   editQueued,
   movePin,
@@ -120,7 +120,7 @@ function queuedId(form: FormData): number {
 
 async function perform(sessionId: string, intent: string, form: FormData) {
   if (intent === "send") {
-    await sendMessage(sessionId, messageText(form));
+    await sendOrSignIn(sessionId, messageText(form));
   } else if (intent === "queue") {
     queueMessage(sessionId, messageText(form));
     startQueue();
@@ -133,7 +133,7 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     const row = takeQueued(queuedId(form), sessionId);
     if (!row) throw new Error("Already sent");
     try {
-      await sendMessage(sessionId, row.text);
+      await sendOrSignIn(sessionId, row.text);
     } catch (err) {
       restoreQueued(row);
       throw err;

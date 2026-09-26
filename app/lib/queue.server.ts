@@ -5,7 +5,7 @@
 
 import type { Card } from "./board.ts";
 import { loadBoard } from "./board.server";
-import { sendMessage } from "./drive.server";
+import { sendOrSignIn } from "./service.server";
 import {
   queuedFor,
   queuedSessions,
@@ -85,8 +85,10 @@ async function drain() {
     const row = next && takeQueued(next.id, sessionId);
     if (!row) continue;
     try {
-      await sendMessage(sessionId, row.text);
-      state.sent.set(sessionId, { at: Date.now(), seenBusy: false });
+      // A `/login` starts no turn, so the next message needn't wait on one.
+      if (await sendOrSignIn(sessionId, row.text)) {
+        state.sent.set(sessionId, { at: Date.now(), seenBusy: false });
+      }
     } catch (err) {
       restoreQueued(row);
       console.error(`seamux queue: ${sessionId}:`, (err as Error).message);

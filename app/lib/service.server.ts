@@ -25,7 +25,12 @@ import { promisify } from "node:util";
 
 import type { Card, ServiceLogin, ServiceNotice } from "./board.ts";
 import type { Engine } from "./config.ts";
-import { BIN_DIRS, installedEngines, sendMessage } from "./drive.server";
+import {
+  BIN_DIRS,
+  installedEngines,
+  listLive,
+  sendMessage,
+} from "./drive.server";
 
 const run = promisify(execFile);
 
@@ -232,6 +237,27 @@ export function cancelLogin(service: Engine) {
   if (!login) return;
   state.logins.delete(service);
   if (login.ok == null) login.child.kill();
+}
+
+// `/login` typed into a chat signs in through that chat's terminal, in a
+// dialog the board doesn't drive, with a browser opened on this Mac.
+const LOGIN_COMMAND = /^\/login\s*$/;
+
+// What the board sends a chat, except `/login`: that runs the board's own
+// sign-in for the chat's service instead, finished from its Attention card
+// on any device. Returns whether the text went to the chat.
+export async function sendOrSignIn(
+  sessionId: string,
+  text: string,
+): Promise<boolean> {
+  if (!LOGIN_COMMAND.test(text.trim())) {
+    await sendMessage(sessionId, text);
+    return true;
+  }
+  const live = (await listLive()).get(sessionId);
+  if (!live) throw new Error("This session is not running in a cmux surface");
+  startLogin(live.engine);
+  return false;
 }
 
 const live = (c: Card) => c.column !== "done" && c.engine === "claude";
