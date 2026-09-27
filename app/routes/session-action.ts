@@ -55,6 +55,8 @@ const MAX_MESSAGE = 100_000;
 export interface ActionResult {
   ok: boolean;
   error: string | null;
+  // The new session, for a fork.
+  sessionId?: string;
 }
 
 // Answers from the board, checked against the questions actually open.
@@ -118,7 +120,11 @@ function queuedId(form: FormData): number {
   return id;
 }
 
-async function perform(sessionId: string, intent: string, form: FormData) {
+async function perform(
+  sessionId: string,
+  intent: string,
+  form: FormData,
+): Promise<string | void> {
   if (intent === "send") {
     await sendOrSignIn(sessionId, messageText(form));
   } else if (intent === "queue") {
@@ -210,7 +216,7 @@ async function perform(sessionId: string, intent: string, form: FormData) {
     if (!info) throw new Error("No transcript to fork from");
     if (info.engine !== "claude")
       throw new Error("Only Claude Code chats can be forked");
-    await fork(sessionId, info.cwd, String(form.get("text") ?? ""));
+    return fork(sessionId, info.cwd, String(form.get("text") ?? ""));
   } else if (intent === "pin" || intent === "unpin") {
     setPinned(sessionId, intent === "pin");
   } else if (intent === "rename") {
@@ -248,8 +254,8 @@ export async function action({
   if (!INTENTS.has(intent)) throw data("Unknown intent", { status: 400 });
 
   try {
-    await perform(params.sessionId, intent, form);
-    return { ok: true, error: null };
+    const created = await perform(params.sessionId, intent, form);
+    return { ok: true, error: null, ...(created ? { sessionId: created } : {}) };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }

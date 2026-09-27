@@ -9,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { ENGINE_LABELS, ENGINES, type Engine } from "~/lib/config";
+import { useOptimistic } from "~/lib/optimistic";
 import { releaseFocus } from "~/lib/use-focus-restore";
 import { useSessionStorage } from "~/lib/use-session-storage";
 import type { DispatchResult } from "~/routes/dispatch";
@@ -85,6 +86,9 @@ export function DispatchBar({
   // The prompt is cleared, from state and storage, as it is sent, so a
   // reload mid-dispatch can't bring it back; a failure puts it back.
   const sent = useRef("");
+  // The new chat shows in Working as it is sent, until the board lists it.
+  const { spawn, started } = useOptimistic();
+  const spawning = useRef("");
 
   // An unsent directory from before a reload wins over the last one used.
   useEffect(() => {
@@ -99,10 +103,11 @@ export function DispatchBar({
   useEffect(() => {
     if (pending || !result || handled.current === result) return;
     handled.current = result;
+    started(spawning.current, result.ok ? result.sessionId : null);
     if (result.ok) {
       toast.success(
         `Started “${sent.current.trim().split("\n")[0].slice(0, 80)}”`,
-        { description: "It will appear on the board in a few seconds." },
+        { description: "It is in Working, and fills in once it is up." },
       );
       releaseFocus("dispatch:prompt");
       writeLastDir(cwd);
@@ -110,7 +115,7 @@ export function DispatchBar({
     } else {
       setPrompt((p) => p || sent.current);
     }
-  }, [pending, result, cwd, setPrompt, onDispatched]);
+  }, [pending, result, cwd, setPrompt, onDispatched, started]);
 
   const loadDirs = () => {
     if (directories.length === 0 && dirs.state === "idle" && !dirs.data)
@@ -124,6 +129,13 @@ export function DispatchBar({
     if (!canDispatch) return;
     sent.current = prompt;
     setPrompt("");
+    spawning.current = spawn({
+      name: prompt.trim(),
+      cwd: cwd.trim(),
+      intent: prompt.trim(),
+      engine: chosen,
+      forked: false,
+    });
     dispatcher.submit(
       {
         prompt,

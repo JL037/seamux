@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 
+import type { Column } from "~/lib/board";
+import { useOptimistic } from "~/lib/optimistic";
 import type { ActionResult } from "~/routes/session-action";
 
 type Intent =
@@ -24,31 +26,53 @@ type Intent =
   | "queue-send"
   | "queue-drop";
 
+// Where each verb puts the card, shown as it is sent, ahead of the poll.
+// Answering a question or approving a tool sets the turn going again.
+const MOVES: Partial<Record<Intent, Column>> = {
+  send: "working",
+  "queue-send": "working",
+  answer: "working",
+  approve: "working",
+  interrupt: "idle",
+  resume: "idle",
+  close: "done",
+};
+
 // Posts one of the board's write verbs for a session. `onSuccess` runs once
-// per successful submission, `onFailure` once per failed one, e.g. to put
-// back a draft cleared when it was sent.
+// per successful submission, with its result, `onFailure` once per failed
+// one, e.g. to put back a draft cleared when it was sent.
 export function useSessionAction(
   sessionId: string,
-  onSuccess?: () => void,
+  onSuccess?: (result: ActionResult) => void,
   onFailure?: () => void,
 ) {
   const fetcher = useFetcher<ActionResult>();
   const handled = useRef<ActionResult | undefined>(undefined);
+  const { expect, drop } = useOptimistic();
+  // Whether the verb in flight moved the card, to put back if it fails.
+  const moved = useRef(false);
 
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
     if (handled.current === fetcher.data) return;
     handled.current = fetcher.data;
-    if (fetcher.data.ok) onSuccess?.();
-    else onFailure?.();
-  }, [fetcher.state, fetcher.data, onSuccess, onFailure]);
+    if (fetcher.data.ok) onSuccess?.(fetcher.data);
+    else {
+      if (moved.current) drop(sessionId);
+      onFailure?.();
+    }
+  }, [fetcher.state, fetcher.data, onSuccess, onFailure, drop, sessionId]);
 
   return {
-    submit: (intent: Intent, fields: Record<string, string> = {}) =>
-      fetcher.submit(
+    submit: (intent: Intent, fields: Record<string, string> = {}) => {
+      const column = MOVES[intent];
+      moved.current = column != null;
+      if (column) expect(sessionId, column);
+      return fetcher.submit(
         { intent, ...fields },
         { method: "post", action: `/sessions/${sessionId}/action` },
-      ),
+      );
+    },
     pending: fetcher.state !== "idle",
     error: fetcher.state === "idle" ? (fetcher.data?.error ?? null) : null,
   };

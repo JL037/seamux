@@ -100,6 +100,12 @@ import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useDiagnostics } from "~/lib/use-diagnostics";
 import { useSessionAction } from "~/lib/use-session-action";
+import {
+  OptimisticContext,
+  useOptimistic,
+  useOptimisticBoard,
+  type Spawning,
+} from "~/lib/optimistic";
 import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
 import {
   useLocalStorage,
@@ -296,7 +302,33 @@ function ChatInput({
     released,
     restore,
   );
-  const forker = useSessionAction(card.sessionId, released, restore);
+  // A fork shows in Working as it is sent, until the board lists it.
+  const { spawn, started } = useOptimistic();
+  const forking = useRef("");
+  const forked = useCallback(
+    (result: ActionResult) => {
+      started(forking.current, result.sessionId ?? null);
+      released();
+    },
+    [started, released],
+  );
+  const forkFailed = useCallback(() => {
+    started(forking.current, null);
+    restore();
+  }, [started, restore]);
+  const forker = useSessionAction(card.sessionId, forked, forkFailed);
+  const fork = () => {
+    if (!draft.trim()) return;
+    const text = takeDraft();
+    forking.current = spawn({
+      name: text,
+      cwd: card.cwd,
+      intent: text,
+      engine: card.engine,
+      forked: true,
+    });
+    forker.submit("fork", { text });
+  };
   const canSend = card.drivable && !pending && draft.trim().length > 0;
   const queueing = card.column === "working" || card.boardQueue.length > 0;
   const send = () =>
@@ -422,7 +454,7 @@ function ChatInput({
         error={error ?? forker.error}
         onFork={
           card.engine === "claude"
-            ? () => draft.trim() && forker.submit("fork", { text: takeDraft() })
+            ? fork
             : null
         }
         forking={forker.pending}
@@ -477,6 +509,7 @@ function stopBlocked(card: BoardCard): string | null {
 // Stop on a WORKING card (Esc into the session), resume on a DONE one.
 function CardControl({ card }: { card: BoardCard }) {
   const { submit, pending, error } = useSessionAction(card.sessionId);
+  const { expected } = useOptimistic();
   useReportError("control", error);
   if (card.column === "working") {
     const blocked = stopBlocked(card);
@@ -518,12 +551,17 @@ function CardControl({ card }: { card: BoardCard }) {
     );
   }
   if (card.column === "done") {
+    // Not while the board still expects a close it just asked for: the chat
+    // may be live yet.
+    const closing = expected(card.sessionId);
     return (
       <Button
         size="icon-xs"
         variant="outline"
-        disabled={pending}
-        title={error ?? "Resume in a new cmux workspace"}
+        disabled={pending || closing}
+        title={
+          error ?? (closing ? "Closing" : "Resume in a new cmux workspace")
+        }
         onClick={() => submit("resume")}
       >
         <Play />
@@ -924,6 +962,42 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   );
 }
 
+// A chat being dispatched or forked, in Working until the board lists it.
+function StartingCard({ spawn }: { spawn: Spawning }) {
+  return (
+    <Card
+      size="sm"
+      className={cn(
+        "relative opacity-80 shadow-sm before:absolute before:inset-x-0 before:top-0 before:h-0.5 after:pointer-events-none after:absolute after:top-0 after:right-0 after:size-5 after:rounded-tr-xl after:border-t-2 after:border-r-2 dark:shadow-black/20",
+        CARD_EDGE.working,
+        ENGINE_CORNER[spawn.engine],
+      )}
+    >
+      <CardHeader className="grid-cols-[minmax(0,1fr)]">
+        <CardTitle className="truncate max-md:text-base">
+          {firstWords(spawn.name.split("\n")[0], 8)}
+        </CardTitle>
+        <CardDescription className="flex items-center gap-1.5 text-xs max-md:text-sm">
+          <PathSwatch cwd={spawn.cwd} />
+          <span className="truncate font-mono">{shortPath(spawn.cwd)}</span>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 text-xs max-md:text-sm">
+        <p className="line-clamp-2 rounded-md bg-muted px-2 py-1">
+          <span className="font-medium">
+            {spawn.forked ? "Tangent: " : "Goal: "}
+          </span>
+          {spawn.intent}
+        </p>
+        <span className="flex items-center gap-1.5 text-brand-cyan">
+          <LoaderCircle className="size-3.5 animate-spin" />
+          starting
+        </span>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Waiting shows no state here: the card already carries the prompt or tool
 // that is waiting, and done cards are over. Anything queued shows as +N, and
 // the line then opens the chat, where the queue is listed.
@@ -1113,18 +1187,21 @@ function columnAccent(column: BoardColumnKey): string {
 function BoardColumn({
   column,
   cards,
+  starting = [],
   notices = [],
   now,
   className,
 }: {
   column: BoardColumnKey;
   cards: BoardCard[];
+  starting?: Spawning[];
   notices?: Board["attention"];
   now: number;
   className?: string;
 }) {
   const label = columnLabel(column);
-  const count = column === "attention" ? notices.length : cards.length;
+  const count =
+    column === "attention" ? notices.length : cards.length + starting.length;
   return (
     <section
       data-column={column}
@@ -1161,9 +1238,14 @@ function BoardColumn({
       ) : column === "pinned" ? (
         <PinnedCards cards={cards} now={now} />
       ) : (
-        cards.map((card) => (
-          <SessionCard key={card.sessionId} card={card} now={now} />
-        ))
+        <>
+          {starting.map((s) => (
+            <StartingCard key={s.key} spawn={s} />
+          ))}
+          {cards.map((card) => (
+            <SessionCard key={card.sessionId} card={card} now={now} />
+          ))}
+        </>
       )}
       {count === 0 && (
         <p className="rounded-xl border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
@@ -1448,12 +1530,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const now = board.generatedAt;
   const diagnostics = useDiagnostics(board.version?.hash);
   const notifications = useWaitingNotifications(board.cards);
-  useDoneToasts(board.cards);
+  // Cards moved ahead of the poll by what was just sent, and chats still
+  // starting.
+  const optimistic = useOptimisticBoard(board.cards);
+  const { cards, starting } = optimistic;
+  useDoneToasts(cards);
   useServiceAlerts(board.attention, notifications.enabled);
   // Attention only takes a column while a service needs looking at, and
   // Pinned only while something is pinned.
   const attention = board.attention;
-  const pinned = board.cards.filter((c) => c.pinned);
+  const pinned = cards.filter((c) => c.pinned);
   // Done is hidden until asked for, and the choice outlives the tab.
   const [showDone, setShowDone] = useLocalStorage("seamux:show-done", false);
   const columns = COLUMNS.filter((c) => showDone || c !== "done");
@@ -1462,7 +1548,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     (pinned.length > 0 ? 1 : 0) +
     (attention.length > 0 ? 1 : 0);
   const byColumn = (column: Column) =>
-    board.cards.filter((c) => !c.pinned && c.column === column);
+    cards.filter((c) => !c.pinned && c.column === column);
   // Below md every column shows, Done included: each has a screen of its own.
   const mobileColumns: BoardColumnKey[] = [
     ...(attention.length > 0 ? (["attention"] as const) : []),
@@ -1473,6 +1559,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     attention: attention.length,
     pinned: pinned.length,
     ...Object.fromEntries(COLUMNS.map((c) => [c, byColumn(c).length])),
+    working: byColumn("working").length + starting.length,
   } as Record<BoardColumnKey, number>;
   // Only what asks something of Jakob; an outage alone is news.
   const actions = attentionCount(attention);
@@ -1518,185 +1605,188 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     });
 
   return (
-    <DraftsContext.Provider value={{ drafts, setDraft }}>
-      <ProjectColorsContext.Provider value={{ colors, setColor }}>
-        {/* No bottom padding below md: the carousel is sized to end at the
-            screen's foot, and any page left below it lets the page scroll
-            on, pushing the first card's top under the tab strip. */}
-        <main className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4 max-md:pb-0 md:gap-6 md:p-6">
-          {/* Below md the header stays put while the page scrolls, with a
-              band above it covering the notch so nothing shows through. */}
-          <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground max-md:sticky max-md:top-[env(safe-area-inset-top)] max-md:z-20 max-md:-mx-4 max-md:-mt-4 max-md:h-14 max-md:bg-background max-md:px-4 max-md:before:absolute max-md:before:inset-x-0 max-md:before:bottom-full max-md:before:h-[env(safe-area-inset-top)] max-md:before:bg-background">
-            <span className="flex min-w-0 items-center gap-1">
-              <span className="flex min-w-0 items-center gap-2.5">
-                <span className="shrink-0">
-                  <SeamuxMark size={32} />
+    <OptimisticContext.Provider value={optimistic.context}>
+      <DraftsContext.Provider value={{ drafts, setDraft }}>
+        <ProjectColorsContext.Provider value={{ colors, setColor }}>
+          {/* No bottom padding below md: the carousel is sized to end at the
+              screen's foot, and any page left below it lets the page scroll
+              on, pushing the first card's top under the tab strip. */}
+          <main className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4 max-md:pb-0 md:gap-6 md:p-6">
+            {/* Below md the header stays put while the page scrolls, with a
+                band above it covering the notch so nothing shows through. */}
+            <header className="flex items-center justify-between gap-4 text-sm text-muted-foreground max-md:sticky max-md:top-[env(safe-area-inset-top)] max-md:z-20 max-md:-mx-4 max-md:-mt-4 max-md:h-14 max-md:bg-background max-md:px-4 max-md:before:absolute max-md:before:inset-x-0 max-md:before:bottom-full max-md:before:h-[env(safe-area-inset-top)] max-md:before:bg-background">
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="shrink-0">
+                    <SeamuxMark size={32} />
+                  </span>
+                  <span className="truncate text-xl font-bold tracking-tight text-foreground">
+                    {name}
+                  </span>
                 </span>
-                <span className="truncate text-xl font-bold tracking-tight text-foreground">
-                  {name}
+                <ConfigDialog
+                  config={config}
+                  engines={engines}
+                  remote={remote}
+                  notifications={notifications}
+                  diagnostics={diagnostics}
+                />
+                <ThemeToggle />
+              </span>
+              <span className="flex shrink-0 items-center gap-1 md:hidden">
+                <Button
+                  size="sm"
+                  onClick={() => setDispatchOpen(true)}
+                  className="bg-brand-ramp text-white shadow-sm hover:opacity-90"
+                >
+                  <Plus />
+                  New
+                </Button>
+                <BoardMenu
+                  remote={remote}
+                  orphans={board.orphans}
+                  version={board.version}
+                  now={now}
+                />
+              </span>
+              <span className="flex min-w-0 items-center gap-3 max-md:hidden">
+                {remote.enabled && remote.mdns.listening && (
+                  <a
+                    href={remote.mdns.url}
+                    className="flex shrink-0 items-center gap-1 text-xs text-foreground"
+                    title={`mDNS is on: the board answers the network at ${remote.mdns.url}`}
+                  >
+                    <Wifi className="size-3.5" />
+                    LAN
+                  </a>
+                )}
+                {remote.pid && remote.domain && (
+                  <a
+                    href={`https://${remote.domain}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex shrink-0 items-center gap-1 text-xs text-foreground"
+                    title={`Remote access is on: the tunnel serves this board at ${remote.domain}`}
+                  >
+                    <Globe className="size-3.5" />
+                    Remote
+                  </a>
+                )}
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="max-md:hidden"
+                  onClick={() => setShowDone(!showDone)}
+                  title={
+                    showDone
+                      ? "Hide chats closed in the last 30m"
+                      : "Show chats closed in the last 30m"
+                  }
+                >
+                  {showDone ? <EyeOff /> : <Eye />}
+                  {showDone ? "Hide done" : `Show done (${counts.done})`}
+                </Button>
+                {board.version && (
+                  <span
+                    className="truncate font-mono text-xs opacity-70"
+                    title={firstWords(board.version.subject, 12)}
+                  >
+                    {board.version.hash}
+                  </span>
+                )}
+                <span className="shrink-0 text-xs tabular-nums">
+                  updated {new Date(now).toLocaleTimeString()}
                 </span>
               </span>
-              <ConfigDialog
-                config={config}
-                engines={engines}
-                remote={remote}
-                notifications={notifications}
-                diagnostics={diagnostics}
-              />
-              <ThemeToggle />
-            </span>
-            <span className="flex shrink-0 items-center gap-1 md:hidden">
-              <Button
-                size="sm"
-                onClick={() => setDispatchOpen(true)}
-                className="bg-brand-ramp text-white shadow-sm hover:opacity-90"
-              >
-                <Plus />
-                New
-              </Button>
-              <BoardMenu
-                remote={remote}
-                orphans={board.orphans}
-                version={board.version}
-                now={now}
-              />
-            </span>
-            <span className="flex min-w-0 items-center gap-3 max-md:hidden">
-              {remote.enabled && remote.mdns.listening && (
-                <a
-                  href={remote.mdns.url}
-                  className="flex shrink-0 items-center gap-1 text-xs text-foreground"
-                  title={`mDNS is on: the board answers the network at ${remote.mdns.url}`}
-                >
-                  <Wifi className="size-3.5" />
-                  LAN
-                </a>
-              )}
-              {remote.pid && remote.domain && (
-                <a
-                  href={`https://${remote.domain}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex shrink-0 items-center gap-1 text-xs text-foreground"
-                  title={`Remote access is on: the tunnel serves this board at ${remote.domain}`}
-                >
-                  <Globe className="size-3.5" />
-                  Remote
-                </a>
-              )}
-              <Button
-                size="xs"
-                variant="ghost"
-                className="max-md:hidden"
-                onClick={() => setShowDone(!showDone)}
-                title={
-                  showDone
-                    ? "Hide chats closed in the last 30m"
-                    : "Show chats closed in the last 30m"
-                }
-              >
-                {showDone ? <EyeOff /> : <Eye />}
-                {showDone ? "Hide done" : `Show done (${counts.done})`}
-              </Button>
-              {board.version && (
-                <span
-                  className="truncate font-mono text-xs opacity-70"
-                  title={firstWords(board.version.subject, 12)}
-                >
-                  {board.version.hash}
-                </span>
-              )}
-              <span className="shrink-0 text-xs tabular-nums">
-                updated {new Date(now).toLocaleTimeString()}
-              </span>
-            </span>
-          </header>
+            </header>
 
-          <div
-            className={cn(
-              dispatchOpen
-                ? "max-md:fixed max-md:inset-0 max-md:z-40 max-md:flex max-md:flex-col max-md:gap-3 max-md:overflow-y-auto max-md:bg-background max-md:p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))]"
-                : "max-md:hidden",
-            )}
-          >
-            <div className="flex items-center justify-between md:hidden">
-              <h2 className="text-base font-medium">Dispatch new work</h2>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Close"
-                onClick={() => setDispatchOpen(false)}
-              >
-                <X />
-              </Button>
-            </div>
-            <DispatchBar
-              directories={config.directories}
-              worktreeByDefault={config.worktreeByDefault}
-              defaultEngine={config.defaultEngine}
-              engines={engines}
-              onDispatched={() => setDispatchOpen(false)}
-            />
-          </div>
-          <DispatchStrip sets={board.dispatches} />
-          <Warnings warnings={board.warnings} />
-
-          {/* Below md, a carousel of columns under the header and a sticky strip of tabs,
-              filling the screen once scrolled to, each column scrolling on
-              its own; from md, the grid. */}
-          <div className="flex flex-col">
-            <ColumnTabs
-              columns={mobileColumns}
-              counts={counts}
-              actions={actions}
-              active={active}
-              onPick={pick}
-            />
             <div
-              ref={carousel}
               className={cn(
-                "relative max-md:-mx-4 max-md:flex max-md:h-[calc(100dvh-6.5rem-env(safe-area-inset-top))] max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:scroll-px-4 max-md:px-4 max-md:[scrollbar-width:none]",
-                "md:grid md:grid-cols-2 md:gap-4",
-                XL_GRID_COLS[columnCount],
+                dispatchOpen
+                  ? "max-md:fixed max-md:inset-0 max-md:z-40 max-md:flex max-md:flex-col max-md:gap-3 max-md:overflow-y-auto max-md:bg-background max-md:p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))]"
+                  : "max-md:hidden",
               )}
             >
-              {attention.length > 0 && (
-                <BoardColumn
-                  column="attention"
-                  cards={[]}
-                  notices={attention}
-                  now={now}
-                />
-              )}
-              {pinned.length > 0 && (
-                <BoardColumn column="pinned" cards={pinned} now={now} />
-              )}
-              {COLUMNS.map((column) => (
-                <BoardColumn
-                  key={column}
-                  column={column}
-                  cards={byColumn(column)}
-                  now={now}
-                  className={cn(!columns.includes(column) && "md:hidden")}
-                />
-              ))}
+              <div className="flex items-center justify-between md:hidden">
+                <h2 className="text-base font-medium">Dispatch new work</h2>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Close"
+                  onClick={() => setDispatchOpen(false)}
+                >
+                  <X />
+                </Button>
+              </div>
+              <DispatchBar
+                directories={config.directories}
+                worktreeByDefault={config.worktreeByDefault}
+                defaultEngine={config.defaultEngine}
+                engines={engines}
+                onDispatched={() => setDispatchOpen(false)}
+              />
             </div>
-          </div>
+            <DispatchStrip sets={board.dispatches} />
+            <Warnings warnings={board.warnings} />
 
-          {board.orphans.length > 0 && (
-            <footer className="flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground max-md:hidden">
-              <span title={ORPHANS_NOTE}>
-                Background sessions not matched to an open chat
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {board.orphans.map((b) => (
-                  <OrphanBadge key={b.id} orphan={b} />
+            {/* Below md, a carousel of columns under the header and a sticky strip of tabs,
+                filling the screen once scrolled to, each column scrolling on
+                its own; from md, the grid. */}
+            <div className="flex flex-col">
+              <ColumnTabs
+                columns={mobileColumns}
+                counts={counts}
+                actions={actions}
+                active={active}
+                onPick={pick}
+              />
+              <div
+                ref={carousel}
+                className={cn(
+                  "relative max-md:-mx-4 max-md:flex max-md:h-[calc(100dvh-6.5rem-env(safe-area-inset-top))] max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:scroll-px-4 max-md:px-4 max-md:[scrollbar-width:none]",
+                  "md:grid md:grid-cols-2 md:gap-4",
+                  XL_GRID_COLS[columnCount],
+                )}
+              >
+                {attention.length > 0 && (
+                  <BoardColumn
+                    column="attention"
+                    cards={[]}
+                    notices={attention}
+                    now={now}
+                  />
+                )}
+                {pinned.length > 0 && (
+                  <BoardColumn column="pinned" cards={pinned} now={now} />
+                )}
+                {COLUMNS.map((column) => (
+                  <BoardColumn
+                    key={column}
+                    column={column}
+                    cards={byColumn(column)}
+                    starting={column === "working" ? starting : []}
+                    now={now}
+                    className={cn(!columns.includes(column) && "md:hidden")}
+                  />
                 ))}
               </div>
-            </footer>
-          )}
-        </main>
-      </ProjectColorsContext.Provider>
-    </DraftsContext.Provider>
+            </div>
+
+            {board.orphans.length > 0 && (
+              <footer className="flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground max-md:hidden">
+                <span title={ORPHANS_NOTE}>
+                  Background sessions not matched to an open chat
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {board.orphans.map((b) => (
+                    <OrphanBadge key={b.id} orphan={b} />
+                  ))}
+                </div>
+              </footer>
+            )}
+          </main>
+        </ProjectColorsContext.Provider>
+      </DraftsContext.Provider>
+    </OptimisticContext.Provider>
   );
 }
