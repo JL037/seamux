@@ -187,17 +187,23 @@ html[data-unsecured].dark {
 
 /* A card's top edge, easing into its engine's corner (--corner) so the
    corner reads as the end of the edge: the ramp over its last tenth, the
-   fade from nothing over the last fifth, which is all it has to show. */
+   fade from nothing over the last fifth, which is all it has to show. Both
+   arrive where the corner begins, 1.25rem in, since the corner covers the
+   rest of the edge. */
 @utility bg-edge-working {
   background-image: linear-gradient(
     90deg,
     var(--brand-cyan),
-    var(--brand-indigo) 90%,
-    var(--corner)
+    var(--brand-indigo) calc(90% - 1.25rem),
+    var(--corner) calc(100% - 1.25rem)
   );
 }
 @utility bg-edge-fade {
-  background-image: linear-gradient(90deg, transparent 80%, var(--corner));
+  background-image: linear-gradient(
+    90deg,
+    transparent calc(80% - 1.25rem),
+    var(--corner) calc(100% - 1.25rem)
+  );
 }
 
 /* The corner's right side runs on down the card, fading out over the next
