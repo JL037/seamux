@@ -185,8 +185,9 @@ html[data-unsecured].dark {
   );
 }
 
-/* A card's top edge, easing into its engine's corner (--corner) over the
-   last tenth, so the corner reads as the end of the edge. */
+/* A card's top edge, easing into its engine's corner (--corner) so the
+   corner reads as the end of the edge: the ramp over its last tenth, the
+   fade from nothing over the last fifth, which is all it has to show. */
 @utility bg-edge-working {
   background-image: linear-gradient(
     90deg,
@@ -196,7 +197,7 @@ html[data-unsecured].dark {
   );
 }
 @utility bg-edge-fade {
-  background-image: linear-gradient(90deg, transparent 90%, var(--corner));
+  background-image: linear-gradient(90deg, transparent 80%, var(--corner));
 }
 
 /* The corner's right side runs on down the card, fading out over the next
