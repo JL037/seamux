@@ -77,7 +77,15 @@ export function useWaitingNotifications(cards: Card[]) {
     let p = currentPermission();
     if (p === "default") p = await Notification.requestPermission();
     setPermission(p);
-    if (p === "granted") setEnabled(true);
+    if (p !== "granted") return;
+    setEnabled(true);
+    // A first notification on the spot, so turning it on shows what one
+    // looks like and that the browser lets them through.
+    await notify(
+      "Desktop Notifications are Enabled",
+      "seamux will notify you when a chat starts waiting.",
+      "seamux:enabled",
+    );
   };
 
   return { enabled: active, permission, toggle };
