@@ -8,7 +8,8 @@ export async function loader({ params }: Route.LoaderArgs) {
   if (!SESSION_ID.test(params.sessionId)) {
     throw data("Bad session id", { status: 400 });
   }
-  const messages = await loadMessages(params.sessionId);
-  if (!messages) throw data("No transcript", { status: 404 });
+  // A chat writes no transcript until its first prompt: no messages yet,
+  // not an error, which would take the whole board down with it.
+  const messages = (await loadMessages(params.sessionId)) ?? [];
   return { messages };
 }
