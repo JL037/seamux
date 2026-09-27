@@ -1029,7 +1029,7 @@ export async function dispatch(input: DispatchInput): Promise<string> {
   const cwd = await checkDirectory(input.cwd);
   const prompt = input.prompt.trim();
   if (!prompt) throw new Error("Say what the new session should do");
-  const name = input.name?.trim() || nameFrom(prompt);
+  let name = input.name?.trim() || nameFrom(prompt);
   const worktree = input.worktree?.trim() || null;
   if (worktree && !WORKTREE_NAME.test(worktree)) {
     throw new Error("Worktree names are lowercase letters, digits, - . _ /");
@@ -1037,6 +1037,9 @@ export async function dispatch(input: DispatchInput): Promise<string> {
 
   const engine = input.engine ?? "claude";
   const wt = worktree ? await createWorktree(cwd, worktree) : null;
+  // A worktree numbered to avoid a taken name numbers the session too, so
+  // the chat, its cmux workspace and its worktree all read the same.
+  if (wt && wt.name !== worktree) name += wt.name.slice(worktree!.length);
   const where = wt?.path ?? cwd;
   // The session gets the prompt inside the new-session macro; the card
   // shows what was typed.
