@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { EDGE, EDGE_FRAME, ENGINE_CORNER } from "~/components/card-edge";
 import { ContextBar } from "~/components/context-bar";
 import { Markdown } from "~/components/markdown";
 import { useSlashMenu } from "~/components/slash-menu";
@@ -146,7 +147,14 @@ export function ChatModal({
         // On a phone, open on the conversation rather than raising the
         // keyboard over it.
         initialFocus={coarse ? true : input}
-        className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-4 sm:max-w-5xl max-md:h-dvh! max-md:w-screen! max-md:max-w-none! max-md:rounded-none max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:ring-0"
+        // Framed like its card, so the chat keeps its status and engine; clipped
+        // like it too, so the edge follows the rounded corners.
+        className={cn(
+          EDGE_FRAME,
+          EDGE[card.column],
+          ENGINE_CORNER[card.engine],
+          "flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-4 overflow-hidden sm:max-w-5xl max-md:h-dvh! max-md:w-screen! max-md:max-w-none! max-md:rounded-none max-md:after:rounded-none max-md:pt-[max(1rem,env(safe-area-inset-top))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:ring-0",
+        )}
       >
         <DialogHeader>
           <DialogTitle className="flex min-w-0 items-center gap-1 pr-8">

@@ -40,6 +40,7 @@ import {
   attentionCount,
   useServiceAlerts,
 } from "~/components/attention";
+import { EDGE, EDGE_FRAME, ENGINE_CORNER } from "~/components/card-edge";
 import { ChatModal } from "~/components/chat-modal";
 import { useSlashMenu } from "~/components/slash-menu";
 import { ConfigDialog } from "~/components/config-dialog";
@@ -820,21 +821,6 @@ function ReplyExcerpt({ text, cwd }: { text: string; cwd: string }) {
   );
 }
 
-// A hairline along a card's top edge, running into its corner: the ramp for
-// a working card, a fade in from nothing for one idle or waiting.
-const CARD_EDGE: Partial<Record<Column, string>> = {
-  idle: "before:bg-edge-fade",
-  waiting: "before:bg-edge-fade",
-  working: "before:bg-edge-working",
-};
-
-// Which agent runs the chat, as its card's top-right corner: Anthropic's
-// orange for Claude Code, OpenAI's teal for Codex.
-const ENGINE_CORNER: Record<Engine, string> = {
-  claude: "[--corner:#d97757]",
-  codex: "[--corner:#4ba281]",
-};
-
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   // Kept across a reload, like the draft, so an open chat stays open.
   const [chatOpen, setChatOpen] = useSessionStorage(
@@ -847,8 +833,9 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
       <Card
         size="sm"
         className={cn(
-          "relative shadow-sm transition-shadow before:absolute before:inset-x-0 before:top-0 before:h-0.5 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-5 after:rounded-tr-xl after:border-t-2 after:border-r-2 after:border-(--corner) after:mask-corner-fade hover:shadow-md dark:shadow-black/20",
-          CARD_EDGE[card.column],
+          EDGE_FRAME,
+          "relative shadow-sm transition-shadow hover:shadow-md dark:shadow-black/20",
+          EDGE[card.column],
           ENGINE_CORNER[card.engine],
           card.column === "done" && "opacity-70",
         )}
@@ -970,8 +957,9 @@ function StartingCard({ spawn }: { spawn: Spawning }) {
     <Card
       size="sm"
       className={cn(
-        "relative opacity-80 shadow-sm before:absolute before:inset-x-0 before:top-0 before:h-0.5 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-5 after:rounded-tr-xl after:border-t-2 after:border-r-2 after:border-(--corner) after:mask-corner-fade dark:shadow-black/20",
-        CARD_EDGE.working,
+        EDGE_FRAME,
+        "relative opacity-80 shadow-sm dark:shadow-black/20",
+        EDGE.working,
         ENGINE_CORNER[spawn.engine],
       )}
     >
