@@ -923,6 +923,8 @@ export function nameFrom(prompt: string): string {
 const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
 
 interface NewWorktree {
+  // The name asked for, with -2, -3, ... on the end when that was taken.
+  name: string;
   path: string;
   branch: string;
   // The repo's main checkout, which holds every worktree.
@@ -941,6 +943,9 @@ interface NewWorktree {
 // itself a worktree, so worktrees never nest: under .claude/worktrees if
 // that exists, else worktrees/. A repo with neither that directory nor
 // worktrees/ in its ignores has no convention yet, and gets worktrees/.
+//
+// The same prompt gives the same name, so a name whose worktree or branch
+// already exists gets the next free number on the end.
 async function createWorktree(cwd: string, name: string): Promise<NewWorktree> {
   let list: string;
   try {
@@ -957,19 +962,33 @@ async function createWorktree(cwd: string, name: string): Promise<NewWorktree> {
   // The main checkout is the first entry git lists, from any worktree.
   const repo = list.split("\n")[0].replace(/^worktree /, "");
   const claudeHome = existsSync(join(repo, ".claude/worktrees"));
-  const path = join(repo, claudeHome ? ".claude/worktrees" : "worktrees", name);
+  const home = join(repo, claudeHome ? ".claude/worktrees" : "worktrees");
   const convention =
     claudeHome ||
     (await run("git", ["-C", repo, "check-ignore", "-q", "worktrees/"]).then(
       () => true,
       () => false,
     ));
-  if (existsSync(path))
-    throw new Error(`A worktree named ${name} already exists`);
-  const branch = `worktree-${name}`;
+  const taken = async (candidate: string) =>
+    existsSync(join(home, candidate)) ||
+    (await run("git", [
+      "-C",
+      repo,
+      "show-ref",
+      "--verify",
+      "--quiet",
+      `refs/heads/worktree-${candidate}`,
+    ]).then(
+      () => true,
+      () => false,
+    ));
+  let unique = name;
+  for (let n = 2; await taken(unique); n++) unique = `${name}-${n}`;
+  const path = join(home, unique);
+  const branch = `worktree-${unique}`;
   // HEAD as the chosen checkout sees it, not the main checkout's.
   await run("git", ["-C", cwd, "worktree", "add", path, "-b", branch, "HEAD"]);
-  return { path, branch, repo, convention };
+  return { name: unique, path, branch, repo, convention };
 }
 
 // The first prompt of a dispatched session: the new-session macro around
@@ -1028,7 +1047,7 @@ export async function dispatch(input: DispatchInput): Promise<string> {
       cwd: where,
       prompt,
       name,
-      worktree,
+      worktree: wt?.name ?? null,
       forked_from: null,
       dispatch_id: input.dispatchId ?? null,
       worker: input.worker ?? null,
