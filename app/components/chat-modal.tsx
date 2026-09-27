@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
-import { Check, GitFork, Pencil, SendHorizontal, X } from "lucide-react";
+import {
+  Check,
+  GitFork,
+  Paperclip,
+  Pencil,
+  SendHorizontal,
+  X,
+} from "lucide-react";
 
 import { AttachmentChips, MessageText } from "~/components/attachments";
 import { Button } from "~/components/ui/button";
@@ -139,6 +146,7 @@ export function ChatModal({
   }, [open, scroller, count]);
 
   const input = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
   const slash = useSlashMenu({
     sessionId: card.sessionId,
     enabled: open && card.drivable && card.engine === "claude",
@@ -314,6 +322,28 @@ export function ChatModal({
             <ContextBar context={card.context} className="border-input" />
           </div>
           <div className="flex justify-end gap-2 md:flex-col">
+            {/* The file dialog, for what can't be pasted or dropped: on a
+                phone, nothing can. */}
+            <input
+              ref={picker}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                const files = [...(e.target.files ?? [])];
+                e.target.value = "";
+                if (files.length > 0) attach(files);
+              }}
+            />
+            <Button
+              variant="outline"
+              disabled={!card.drivable || attachments.length >= MAX_ATTACHMENTS}
+              onClick={() => picker.current?.click()}
+              title="Attach files or images"
+            >
+              <Paperclip />
+              Attach
+            </Button>
             {onFork && (
               <Button
                 variant="outline"
