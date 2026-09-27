@@ -906,6 +906,35 @@ export async function checkDirectory(path: string): Promise<string> {
   return real;
 }
 
+// Every name a session or a cmux workspace goes by now. A new session
+// takes a name outside it, so no two chats or workspaces share one.
+async function namesInUse(): Promise<Set<string>> {
+  const [agents, { workspaces }] = await Promise.all([
+    run("claude", ["agents", "--json", "--all"], {
+      maxBuffer: 32 * 1024 * 1024,
+      timeout: 10_000,
+    }).then(
+      ({ stdout }) => JSON.parse(stdout) as { name?: string | null }[],
+      () => [],
+    ),
+    rpc<{ workspaces: { title?: string | null }[] }>("workspace.list", {}),
+  ]);
+  return new Set(
+    [...agents.map((a) => a.name), ...workspaces.map((w) => w.title)].filter(
+      (n): n is string => !!n,
+    ),
+  );
+}
+
+// What goes on the end of a name to make it free: nothing, else -2, -3, ...
+async function freeSuffix(
+  taken: (suffix: string) => boolean | Promise<boolean>,
+): Promise<string> {
+  let suffix = "";
+  for (let n = 2; await taken(suffix); n++) suffix = `-${n}`;
+  return suffix;
+}
+
 // A short, readable name from the first words of a prompt.
 export function nameFrom(prompt: string): string {
   return (
@@ -923,8 +952,8 @@ export function nameFrom(prompt: string): string {
 const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
 
 interface NewWorktree {
-  // The name asked for, with -2, -3, ... on the end when that was taken.
-  name: string;
+  // What went on the end of the name asked for to make it free.
+  suffix: string;
   path: string;
   branch: string;
   // The repo's main checkout, which holds every worktree.
@@ -945,8 +974,13 @@ interface NewWorktree {
 // worktrees/ in its ignores has no convention yet, and gets worktrees/.
 //
 // The same prompt gives the same name, so a name whose worktree or branch
-// already exists gets the next free number on the end.
-async function createWorktree(cwd: string, name: string): Promise<NewWorktree> {
+// already exists, or that nameTaken says is taken elsewhere, gets the next
+// free number on the end.
+async function createWorktree(
+  cwd: string,
+  name: string,
+  nameTaken: (suffix: string) => boolean,
+): Promise<NewWorktree> {
   let list: string;
   try {
     ({ stdout: list } = await run("git", [
@@ -982,13 +1016,14 @@ async function createWorktree(cwd: string, name: string): Promise<NewWorktree> {
       () => true,
       () => false,
     ));
-  let unique = name;
-  for (let n = 2; await taken(unique); n++) unique = `${name}-${n}`;
-  const path = join(home, unique);
-  const branch = `worktree-${unique}`;
+  const suffix = await freeSuffix(
+    async (s) => nameTaken(s) || (await taken(name + s)),
+  );
+  const path = join(home, name + suffix);
+  const branch = `worktree-${name}${suffix}`;
   // HEAD as the chosen checkout sees it, not the main checkout's.
   await run("git", ["-C", cwd, "worktree", "add", path, "-b", branch, "HEAD"]);
-  return { name: unique, path, branch, repo, convention };
+  return { suffix, path, branch, repo, convention };
 }
 
 // The first prompt of a dispatched session: the new-session macro around
@@ -1029,17 +1064,20 @@ export async function dispatch(input: DispatchInput): Promise<string> {
   const cwd = await checkDirectory(input.cwd);
   const prompt = input.prompt.trim();
   if (!prompt) throw new Error("Say what the new session should do");
-  let name = input.name?.trim() || nameFrom(prompt);
+  const asked = input.name?.trim() || nameFrom(prompt);
   const worktree = input.worktree?.trim() || null;
   if (worktree && !WORKTREE_NAME.test(worktree)) {
     throw new Error("Worktree names are lowercase letters, digits, - . _ /");
   }
 
   const engine = input.engine ?? "claude";
-  const wt = worktree ? await createWorktree(cwd, worktree) : null;
-  // A worktree numbered to avoid a taken name numbers the session too, so
-  // the chat, its cmux workspace and its worktree all read the same.
-  if (wt && wt.name !== worktree) name += wt.name.slice(worktree!.length);
+  // One number makes the session's name, its cmux workspace's and its
+  // worktree's all free, so they read the same.
+  const inUse = await namesInUse();
+  const nameTaken = (suffix: string) => inUse.has(asked + suffix);
+  const wt = worktree ? await createWorktree(cwd, worktree, nameTaken) : null;
+  const suffix = wt ? wt.suffix : await freeSuffix(nameTaken);
+  const name = asked + suffix;
   const where = wt?.path ?? cwd;
   // The session gets the prompt inside the new-session macro; the card
   // shows what was typed.
@@ -1050,7 +1088,7 @@ export async function dispatch(input: DispatchInput): Promise<string> {
       cwd: where,
       prompt,
       name,
-      worktree: wt?.name ?? null,
+      worktree: wt ? worktree + wt.suffix : null,
       forked_from: null,
       dispatch_id: input.dispatchId ?? null,
       worker: input.worker ?? null,
@@ -1086,7 +1124,9 @@ export async function fork(
   const text = prompt.trim();
   if (!text) throw new Error("Say what the tangent is");
   const sessionId = randomUUID();
-  const name = nameFrom(text);
+  const inUse = await namesInUse();
+  const base = nameFrom(text);
+  const name = base + (await freeSuffix((s) => inUse.has(base + s)));
   recordDispatch({
     session_id: sessionId,
     cwd,
