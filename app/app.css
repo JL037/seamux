@@ -185,6 +185,30 @@ html[data-unsecured].dark {
   );
 }
 
+/* A card's top edge, easing into its engine's corner (--corner) over the
+   last tenth, so the corner reads as the end of the edge. */
+@utility bg-edge-working {
+  background-image: linear-gradient(
+    90deg,
+    var(--brand-cyan),
+    var(--brand-indigo) 90%,
+    var(--corner)
+  );
+}
+@utility bg-edge-fade {
+  background-image: linear-gradient(90deg, transparent 90%, var(--corner));
+}
+
+/* The corner's right side runs on down the card, fading out over the next
+   tenth of its height once past the corner's curve. */
+@utility mask-corner-fade {
+  mask-image: linear-gradient(
+    to bottom,
+    black 1.25rem,
+    transparent calc(1.25rem + 10%)
+  );
+}
+
 /* Syntax highlighting, from highlight.js's classes: GitHub's palette in
    light, GitHub Dark's in dark. */
 :root {
