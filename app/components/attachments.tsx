@@ -80,7 +80,7 @@ export function MessageText({ text }: { text: string }) {
             href={fileViewerUrl(p.path)}
             target="_blank"
             rel="noopener noreferrer"
-            title={attachmentLabel(p.kind, p.n)}
+            title={p.name ?? attachmentLabel(p.kind, p.n)}
             className={cn(
               "block overflow-hidden rounded border border-current/20",
               p.kind === "File" &&
@@ -90,14 +90,16 @@ export function MessageText({ text }: { text: string }) {
             {p.kind === "Image" ? (
               <img
                 src={fileRawUrl(p.path)}
-                alt={attachmentLabel(p.kind, p.n)}
+                alt={p.name ?? attachmentLabel(p.kind, p.n)}
                 loading="lazy"
                 className="max-h-40 max-w-60 object-contain"
               />
             ) : (
               <>
-                <FileText className="size-3.5" />
-                {attachmentLabel(p.kind, p.n)}
+                <FileText className="size-3.5 shrink-0" />
+                <span className="max-w-60 truncate">
+                  {p.name ?? attachmentLabel(p.kind, p.n)}
+                </span>
               </>
             )}
           </a>

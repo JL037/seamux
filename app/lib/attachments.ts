@@ -40,25 +40,40 @@ export interface Attachment {
 
 export const LABEL = /^\[(Image|File) #(\d{1,3})\]$/;
 
-// The label as sent. Codex answered "I can't access the image from that
-// path" to a bare path, and opened it once told to: docs/findings.md.
+// The file's name as the browser gave it, kept to characters that can't
+// end the label or read as part of the message around it.
+export function attachmentName(name: string): string {
+  return name
+    .replace(/[^\p{L}\p{N} ._()+,&'-]+/gu, "_")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
+// The label as sent, with the file's own name, since the path is a random
+// one. Codex answered "I can't access the image from that path" to a bare
+// path, and opened it once told to: docs/findings.md.
 export function sentAttachment(
   kind: AttachmentKind,
   n: number,
+  name: string,
   path: string,
 ): string {
   const how =
     kind === "Image"
       ? "open it with your image viewing tool"
       : "open it from disk";
-  return `[${kind} #${n}: ${path}, ${how}]`;
+  const named = name ? ` "${name}"` : "";
+  return `[${kind} #${n}${named}: ${path}, ${how}]`;
 }
 
-// A sent label, found again in the transcript or the queue.
-const SENT = String.raw`\[(Image|File) #(\d+): (/tmp/seamux/[0-9a-f-]{36}/[0-9a-f-]{36}(?:\.[a-z0-9]{1,10})?), open it (?:with your image viewing tool|from disk)\]`;
+// A sent label, found again in the transcript or the queue. Labels sent
+// before names were added have none.
+const SENT = String.raw`\[(Image|File) #(\d+)(?: "([^"\]\n]{1,100})")?: (/tmp/seamux/[0-9a-f-]{36}/[0-9a-f-]{36}(?:\.[a-z0-9]{1,10})?), open it (?:with your image viewing tool|from disk)\]`;
 
 export type MessagePart =
-  { text: string } | { kind: AttachmentKind; n: number; path: string };
+  | { text: string }
+  | { kind: AttachmentKind; n: number; name?: string; path: string };
 
 // A message split into its text and the attachments sent with it.
 export function messageParts(text: string): MessagePart[] {
@@ -66,7 +81,12 @@ export function messageParts(text: string): MessagePart[] {
   let at = 0;
   for (const m of text.matchAll(new RegExp(SENT, "g"))) {
     if (m.index > at) parts.push({ text: text.slice(at, m.index) });
-    parts.push({ kind: m[1] as AttachmentKind, n: Number(m[2]), path: m[3] });
+    parts.push({
+      kind: m[1] as AttachmentKind,
+      n: Number(m[2]),
+      name: m[3],
+      path: m[4],
+    });
     at = m.index + m[0].length;
   }
   if (at < text.length) parts.push({ text: text.slice(at) });

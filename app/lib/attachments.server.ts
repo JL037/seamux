@@ -8,6 +8,7 @@ import { lstat, mkdir, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 
 import {
+  attachmentName,
   ATTACHMENT_ROOT,
   IMAGE_TYPES,
   kindOf,
@@ -88,7 +89,9 @@ export async function withAttachments(
       mode: 0o600,
       flag: "wx",
     });
-    text = text.split(label).join(sentAttachment(kind, n, path));
+    text = text
+      .split(label)
+      .join(sentAttachment(kind, n, attachmentName(file.name), path));
   }
   return text;
 }
