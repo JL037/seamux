@@ -42,6 +42,12 @@ import {
 } from "~/components/attention";
 import { EDGE, EDGE_FRAME, ENGINE_CORNER } from "~/components/card-edge";
 import { ChatModal } from "~/components/chat-modal";
+import {
+  attachmentLabel,
+  kindOf,
+  shortenAttachments,
+  type Attachment,
+} from "~/lib/attachments";
 import { useSlashMenu } from "~/components/slash-menu";
 import { ConfigDialog } from "~/components/config-dialog";
 import { ContextBar } from "~/components/context-bar";
@@ -259,11 +265,23 @@ function PathSwatch({ cwd }: { cwd: string }) {
 }
 
 // Unsent drafts by session, held above the columns so a draft survives its
-// card moving between them.
+// card moving between them, with the files each holds. Files can't go into
+// session storage, so after a reload a draft's labels are only text.
+const NO_ATTACHMENTS: Attachment[] = [];
 const DraftsContext = createContext<{
   drafts: Record<string, string>;
   setDraft: (sessionId: string, draft: string) => void;
-}>({ drafts: {}, setDraft: () => {} });
+  attachments: Record<string, Attachment[]>;
+  updateAttachments: (
+    sessionId: string,
+    update: (list: Attachment[]) => Attachment[],
+  ) => void;
+}>({
+  drafts: {},
+  setDraft: () => {},
+  attachments: {},
+  updateAttachments: () => {},
+});
 
 // The card's next chat line, with a popout into the full-size modal for
 // longer messages. Both send through cmux into the session's surface, or,
@@ -294,13 +312,50 @@ function ChatInput({
   }, [card.sessionId]);
   const current = useRef(draft);
   current.current = draft;
+
+  // Only the attachments whose label is still in the draft go with it.
+  const { attachments: held, updateAttachments } = useContext(DraftsContext);
+  const mine = held[card.sessionId] ?? NO_ATTACHMENTS;
+  const attachments = mine.filter((a) => draft.includes(a.label));
+  const attach = (files: File[]) => {
+    let n = mine.reduce((max, a) => Math.max(max, a.n), 0);
+    const added = files.map((file) => {
+      const kind = kindOf(file.type);
+      n += 1;
+      const label = attachmentLabel(kind, n);
+      return { label, n, kind, file, url: URL.createObjectURL(file) };
+    });
+    updateAttachments(card.sessionId, (list) => [...list, ...added]);
+    return added.map((a) => a.label);
+  };
+  const detach = (label: string) => {
+    onDraftChange(draft.replace(`${label} `, "").replace(label, ""));
+    updateAttachments(card.sessionId, (list) =>
+      list.filter((a) => {
+        if (a.label !== label) return true;
+        URL.revokeObjectURL(a.url);
+        return false;
+      }),
+    );
+  };
+  // Once sent, keep only what the draft written since still holds.
+  const sentOk = useCallback(() => {
+    released();
+    updateAttachments(card.sessionId, (list) =>
+      list.filter((a) => {
+        if (current.current.includes(a.label)) return true;
+        URL.revokeObjectURL(a.url);
+        return false;
+      }),
+    );
+  }, [released, updateAttachments, card.sessionId]);
   const restore = useCallback(
     () => setDraft(card.sessionId, current.current || sent.current),
     [card.sessionId, setDraft],
   );
   const { submit, pending, error } = useSessionAction(
     card.sessionId,
-    released,
+    sentOk,
     restore,
   );
   // A fork shows in Working as it is sent, until the board lists it.
@@ -333,7 +388,12 @@ function ChatInput({
   const canSend = card.drivable && !pending && draft.trim().length > 0;
   const queueing = card.column === "working" || card.boardQueue.length > 0;
   const send = () =>
-    canSend && submit(queueing ? "queue" : "send", { text: takeDraft() });
+    canSend &&
+    submit(
+      queueing ? "queue" : "send",
+      { text: takeDraft() },
+      attachments.map(({ label, file }) => ({ label, file })),
+    );
 
   // A single-line input would flatten a multiline draft, and editing it there
   // would drop the line breaks for good. So a multiline draft is shown, read
@@ -448,6 +508,9 @@ function ChatInput({
         onOpenChange={setOpen}
         draft={draft}
         onDraftChange={onDraftChange}
+        attachments={attachments}
+        onAttach={attach}
+        onDetach={detach}
         onSend={send}
         canSend={canSend}
         queueing={queueing}
@@ -901,7 +964,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           {card.lastPrompt && card.lastPrompt !== card.intent && (
             <Faded from="start" className="max-h-12 text-muted-foreground">
               <span className="font-medium text-foreground">You: </span>
-              {card.lastPrompt}
+              {shortenAttachments(card.lastPrompt)}
             </Faded>
           )}
           {card.lastReply && <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />}
@@ -1584,6 +1647,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       const { [sessionId]: _, ...rest } = d;
       return draft ? { ...rest, [sessionId]: draft } : rest;
     });
+  const [attachments, setAttachments] = useState<
+    Record<string, Attachment[]>
+  >({});
+  const updateAttachments = useCallback(
+    (sessionId: string, update: (list: Attachment[]) => Attachment[]) =>
+      setAttachments((all) => {
+        const { [sessionId]: list = [], ...rest } = all;
+        const next = update(list);
+        return next.length > 0 ? { ...rest, [sessionId]: next } : rest;
+      }),
+    [],
+  );
   const [colors, setColors] = useLocalStorage<Record<string, string>>(
     "seamux:project-colors",
     {},
@@ -1596,7 +1671,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <OptimisticContext.Provider value={optimistic.context}>
-      <DraftsContext.Provider value={{ drafts, setDraft }}>
+      <DraftsContext.Provider
+        value={{ drafts, setDraft, attachments, updateAttachments }}
+      >
         <ProjectColorsContext.Provider value={{ colors, setColor }}>
           {/* No bottom padding below md: the carousel is sized to end at the
               screen's foot, and any page left below it lets the page scroll

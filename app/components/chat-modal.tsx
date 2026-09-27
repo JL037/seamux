@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
 import { Check, GitFork, Pencil, SendHorizontal, X } from "lucide-react";
 
+import { AttachmentChips, MessageText } from "~/components/attachments";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -16,6 +17,11 @@ import { Markdown } from "~/components/markdown";
 import { useSlashMenu } from "~/components/slash-menu";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS,
+  type Attachment,
+} from "~/lib/attachments";
 import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useSessionAction } from "~/lib/use-session-action";
@@ -37,6 +43,9 @@ export function ChatModal({
   onOpenChange,
   draft,
   onDraftChange,
+  attachments,
+  onAttach,
+  onDetach,
   onSend,
   canSend,
   queueing,
@@ -51,6 +60,11 @@ export function ChatModal({
   onOpenChange: (open: boolean) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
+  // Files pasted or dropped in, held until the message is sent. `onAttach`
+  // returns the label each one takes in the text.
+  attachments: Attachment[];
+  onAttach: (files: File[]) => string[];
+  onDetach: (label: string) => void;
   onSend: () => void;
   canSend: boolean;
   queueing: boolean;
@@ -133,6 +147,33 @@ export function ChatModal({
     anchor: input,
   });
 
+  // A pasted or dropped file goes in as a label where the cursor is.
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const attach = (files: File[]) => {
+    const tooBig = files.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
+    const room = MAX_ATTACHMENTS - attachments.length;
+    const fit = files.filter((f) => !tooBig.includes(f)).slice(0, room);
+    setAttachError(
+      tooBig.length > 0
+        ? `Over ${MAX_ATTACHMENT_BYTES >> 20} MB: ${tooBig.map((f) => f.name).join(", ")}`
+        : fit.length < files.length
+          ? `At most ${MAX_ATTACHMENTS} attachments`
+          : null,
+    );
+    if (fit.length === 0) return;
+    const el = input.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    const before = draft.slice(0, start);
+    const inserted =
+      (before && !/\s$/.test(before) ? " " : "") +
+      onAttach(fit).join(" ") +
+      " ";
+    onDraftChange(before + inserted + draft.slice(end));
+    const caret = before.length + inserted.length;
+    requestAnimationFrame(() => el?.setSelectionRange(caret, caret));
+  };
+
   // Sending returns to the board; a failed send shows on the card, with the
   // draft put back.
   const send = () => {
@@ -188,7 +229,11 @@ export function ChatModal({
                       : "prose prose-sm max-md:prose-base self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
                   )}
                 >
-                  {m.role === "user" ? m.text : <Markdown base={card.cwd}>{m.text}</Markdown>}
+                  {m.role === "user" ? (
+                    <MessageText text={m.text} />
+                  ) : (
+                    <Markdown base={card.cwd}>{m.text}</Markdown>
+                  )}
                 </div>
               ))}
             </div>
@@ -217,6 +262,8 @@ export function ChatModal({
 
         <QueuedList card={card} />
 
+        <AttachmentChips attachments={attachments} onDetach={onDetach} />
+
         <div className="flex flex-col gap-2 md:flex-row md:items-end">
           <div className="relative flex min-w-0 flex-1 flex-col">
             {slash.menu}
@@ -225,6 +272,23 @@ export function ChatModal({
               data-focus-key={`chat:${card.sessionId}`}
               value={draft}
               onChange={(e) => onDraftChange(e.target.value)}
+              // Files on the clipboard or dropped in are attached; a paste
+              // of anything else is text as usual.
+              onPaste={(e) => {
+                const files = [...e.clipboardData.files];
+                if (files.length === 0 || !card.drivable) return;
+                e.preventDefault();
+                attach(files);
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+              }}
+              onDrop={(e) => {
+                const files = [...e.dataTransfer.files];
+                if (files.length === 0 || !card.drivable) return;
+                e.preventDefault();
+                attach(files);
+              }}
               onKeyDown={(e) => {
                 if (slash.onKeyDown(e)) return;
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -253,9 +317,13 @@ export function ChatModal({
             {onFork && (
               <Button
                 variant="outline"
-                disabled={forking || !draft.trim()}
+                disabled={forking || !draft.trim() || attachments.length > 0}
                 onClick={onFork}
-                title="Start a new session with this chat's context and this message"
+                title={
+                  attachments.length > 0
+                    ? "A fork can't take attachments yet"
+                    : "Start a new session with this chat's context and this message"
+                }
               >
                 <GitFork />
                 {forking ? "Forking…" : "Fork"}
@@ -279,7 +347,9 @@ export function ChatModal({
             </Button>
           </div>
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {(error ?? attachError) && (
+          <p className="text-sm text-destructive">{error ?? attachError}</p>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -304,7 +374,7 @@ function QueuedList({ card }: { card: Card }) {
           title="Typed in the terminal, so Claude Code holds it"
         >
           <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-            {text}
+            <MessageText text={text} />
           </p>
           <span className="shrink-0 text-xs">in the terminal</span>
         </div>
@@ -348,7 +418,7 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
           />
         ) : (
           <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-            {message.text}
+            <MessageText text={message.text} />
           </p>
         )}
         <div className="flex shrink-0 gap-1">

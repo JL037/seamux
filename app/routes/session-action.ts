@@ -1,6 +1,8 @@
 import { data } from "react-router";
 
 import type { Route } from "./+types/session-action";
+import { MAX_ATTACHMENTS_BYTES } from "~/lib/attachments";
+import { withAttachments } from "~/lib/attachments.server";
 import { closable, hasPreviews, type Answer, type Question } from "~/lib/board";
 import { closedSession, loadBoard, sessionInfo } from "~/lib/board.server";
 import {
@@ -126,9 +128,14 @@ async function perform(
   form: FormData,
 ): Promise<string | void> {
   if (intent === "send") {
-    await sendOrSignIn(sessionId, messageText(form));
+    const text = await withAttachments(sessionId, messageText(form), form);
+    await sendOrSignIn(sessionId, text);
   } else if (intent === "queue") {
-    queueMessage(sessionId, messageText(form));
+    // Written now, so the queue holds the paths, not the files.
+    queueMessage(
+      sessionId,
+      await withAttachments(sessionId, messageText(form), form),
+    );
     startQueue();
   } else if (intent === "queue-edit") {
     if (!editQueued(queuedId(form), sessionId, messageText(form))) {
@@ -248,6 +255,11 @@ export async function action({
   assertFromBoard(request);
   if (!SESSION_ID.test(params.sessionId)) {
     throw data("Bad session id", { status: 400 });
+  }
+  // Room for the most a message's attachments may add up to, and its text.
+  const length = Number(request.headers.get("content-length") ?? 0);
+  if (length > MAX_ATTACHMENTS_BYTES + (1 << 20)) {
+    throw data("Too large", { status: 413 });
   }
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "");

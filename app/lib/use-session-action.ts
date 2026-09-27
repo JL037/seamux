@@ -64,14 +64,34 @@ export function useSessionAction(
   }, [fetcher.state, fetcher.data, onSuccess, onFailure, drop, sessionId]);
 
   return {
-    submit: (intent: Intent, fields: Record<string, string> = {}) => {
+    // Attachments go as files, each with the label it has in the text.
+    submit: (
+      intent: Intent,
+      fields: Record<string, string> = {},
+      attachments: { label: string; file: File }[] = [],
+    ) => {
       const column = MOVES[intent];
       moved.current = column != null;
       if (column) expect(sessionId, column);
-      return fetcher.submit(
-        { intent, ...fields },
-        { method: "post", action: `/sessions/${sessionId}/action` },
-      );
+      const action = `/sessions/${sessionId}/action`;
+      if (attachments.length === 0) {
+        return fetcher.submit(
+          { intent, ...fields },
+          { method: "post", action },
+        );
+      }
+      const form = new FormData();
+      form.set("intent", intent);
+      for (const [k, v] of Object.entries(fields)) form.set(k, v);
+      for (const a of attachments) {
+        form.append("attachment", a.file);
+        form.append("attachmentLabel", a.label);
+      }
+      return fetcher.submit(form, {
+        method: "post",
+        action,
+        encType: "multipart/form-data",
+      });
     },
     pending: fetcher.state !== "idle",
     error: fetcher.state === "idle" ? (fetcher.data?.error ?? null) : null,
