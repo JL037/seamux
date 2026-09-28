@@ -55,6 +55,7 @@ import {
   excerpt,
   readTail,
   replyExcerpt,
+  unwrapPasted,
 } from "./transcript.server";
 import {
   dispatchesFor,
@@ -380,7 +381,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       !summary.lastPrompt &&
       !SYNTHETIC_PROMPT.test(text.trimStart())
     ) {
-      summary.lastPrompt = excerpt(text);
+      summary.lastPrompt = excerpt(unwrapPasted(text));
     }
     if (
       summary.lastPrompt &&
@@ -485,7 +486,7 @@ export async function loadMessages(
     if (o.type === "user" && SYNTHETIC_PROMPT.test(text)) continue;
     messages.push({
       role: o.type,
-      text: clip(text),
+      text: clip(o.type === "user" ? unwrapPasted(text) : text),
       at: o.timestamp ?? null,
     });
   }

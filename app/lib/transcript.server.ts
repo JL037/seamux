@@ -23,6 +23,15 @@ export async function readTail(path: string): Promise<string[]> {
   }
 }
 
+// Claude Code wraps text pasted into a prompt in
+// <pasted_content id="N">…</pasted_content id="N"> for the model. Jakob sees
+// the paste, not the tags.
+export function unwrapPasted(text: string): string {
+  return text
+    .replace(/<\/?pasted_content(?:\s+id="[^"]*")?>\n?/g, "")
+    .trim();
+}
+
 export function excerpt(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > EXCERPT_CHARS
