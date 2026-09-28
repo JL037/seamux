@@ -170,3 +170,32 @@ export async function loadFile(raw: string): Promise<FileEntry | null> {
     mtime: stats.mtimeMs,
   };
 }
+
+// The directories on disk a partly typed absolute path could go on to name,
+// for the directory picker's Tab: /Users/me/code/se lists every directory
+// in /Users/me/code whose name starts with "se". Hidden ones only once the
+// typed name starts with a dot, as in a shell.
+export async function completeDirectory(typed: string): Promise<string[]> {
+  if (!typed.startsWith("/")) return [];
+  const cut = typed.lastIndexOf("/") + 1;
+  const parent = typed.slice(0, cut);
+  const stem = typed.slice(cut).toLowerCase();
+  const dirents = await readdir(parent, { withFileTypes: true }).catch(
+    () => [],
+  );
+  const names: string[] = [];
+  for (const d of dirents) {
+    if (!d.name.toLowerCase().startsWith(stem)) continue;
+    if (d.name.startsWith(".") && !stem.startsWith(".")) continue;
+    // A symlink counts when it leads to a directory.
+    const isDir =
+      d.isDirectory() ||
+      (d.isSymbolicLink() &&
+        (await stat(join(parent, d.name)).then(
+          (s) => s.isDirectory(),
+          () => false,
+        )));
+    if (isDir) names.push(parent + d.name);
+  }
+  return names.sort().slice(0, 200);
+}
