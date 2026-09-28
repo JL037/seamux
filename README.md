@@ -39,7 +39,7 @@ The store at `data/seamux.db` holds only what those don't record: subagent lifec
 | WORKING | A turn is running, or one of its subagents is |
 | DONE | Closed by you. Hidden until you click **Show done**. A card stays for 30 minutes with a resume button, then drops off the board |
 
-Each column lists its oldest card first, so the work that's been waiting longest is at the top.
+Each column lists cards by when you last sent them a prompt, oldest first, so the chat you've left longest is at the top. A working chat keeps its place while its turn runs instead of jumping to the bottom each time it writes.
 
 A card moves the moment you act on it, without waiting for the next rebuild. A message you send, a question you answer, or a tool you approve puts it in WORKING. Stop and resume put it in IDLE, and close puts it in DONE. A dispatch or a fork shows as a starting card in WORKING until its chat is listed. The board keeps the card where you put it until a rebuild agrees, or for 12 seconds, after which the rebuild's state wins. A card that finished its turn before any rebuild saw it working goes back to where it was. A close holds for as long as the close-session macro runs. If an action fails, the card goes back at once.
 

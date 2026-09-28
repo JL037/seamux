@@ -124,6 +124,7 @@ export async function renameCodexSession(sessionId: string, name: string) {
 export interface CodexSummary {
   cwd: string | null;
   lastPrompt: string | null;
+  lastPromptAt: number | null;
   lastReply: string | null;
   // Whether a turn is in progress: its task_started with no task_complete
   // or turn_aborted after it. null when the tail holds neither.
@@ -154,6 +155,7 @@ export async function summarizeCodex(path: string): Promise<CodexSummary> {
   const s: CodexSummary = {
     cwd: null,
     lastPrompt: null,
+    lastPromptAt: null,
     lastReply: null,
     turnActive: null,
     pendingTool: null,
@@ -193,8 +195,10 @@ export async function summarizeCodex(path: string): Promise<CodexSummary> {
       if (p.type === "item_completed") {
         const item = p.item;
         const text = itemText(item)?.trim();
-        if (text && item?.type === "UserMessage" && !s.lastPrompt)
+        if (text && item?.type === "UserMessage" && !s.lastPrompt) {
           s.lastPrompt = excerpt(text);
+          s.lastPromptAt = Date.parse(o.timestamp) || null;
+        }
         if (text && item?.type === "AgentMessage") {
           if (!s.lastReply) s.lastReply = replyExcerpt(text);
           if (finalReply == null && item.phase === "final_answer")

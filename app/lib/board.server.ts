@@ -97,6 +97,8 @@ interface TranscriptSummary {
   cwd: string | null;
   branch: string | null;
   lastPrompt: string | null;
+  // When Jakob sent it. null when it lies beyond the tail read.
+  lastPromptAt: number | null;
   lastReply: string | null;
   // From the last message: is a turn in progress? null when unknown.
   turnActive: boolean | null;
@@ -323,6 +325,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     cwd: null,
     branch: null,
     lastPrompt: null,
+    lastPromptAt: null,
     lastReply: null,
     turnActive: null,
     pendingTool: null,
@@ -382,6 +385,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       !SYNTHETIC_PROMPT.test(text.trimStart())
     ) {
       summary.lastPrompt = excerpt(unwrapPasted(text));
+      summary.lastPromptAt = Date.parse(o.timestamp) || null;
     }
     if (
       summary.lastPrompt &&
@@ -773,6 +777,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         branch: summary?.branch ?? null,
         lastActivityAt: transcript?.mtimeMs ?? null,
         lastPrompt: summary?.lastPrompt ?? null,
+        lastPromptAt: summary?.lastPromptAt ?? null,
         lastReply: summary?.lastReply ?? null,
         context: summary?.context ?? null,
         terminalQueue: summary?.queued ?? [],
@@ -845,6 +850,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         branch: s.branch,
         lastActivityAt: t.mtimeMs,
         lastPrompt: s.lastPrompt,
+        lastPromptAt: s.lastPromptAt,
         lastReply: s.lastReply,
         context: s.context,
         terminalQueue: [],
@@ -923,10 +929,11 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   } catch (err) {
     warnings.push(`Dispatch store unavailable: ${(err as Error).message}`);
   }
-  // Oldest first, so the stalest card in each column is on top and a card
-  // keeps its place as newer work moves between columns. Pinned cards keep
-  // the order Jakob dragged them into instead.
-  cards.sort((a, b) => (a.lastActivityAt ?? 0) - (b.lastActivityAt ?? 0));
+  // Oldest prompt first, so the card Jakob last turned to is at the bottom
+  // of its column. Only Jakob sends a prompt, so a working card keeps its
+  // place while its turn writes to the transcript. Pinned cards keep the
+  // order Jakob dragged them into instead.
+  cards.sort((a, b) => (a.lastPromptAt ?? 0) - (b.lastPromptAt ?? 0));
   const pinRank = new Map(pinRows.map((p, i) => [p.session_id, i]));
   const rank = (c: Card) => pinRank.get(c.sessionId) ?? pinRows.length;
   cards.sort((a, b) => rank(a) - rank(b));
@@ -970,6 +977,7 @@ function codexFields(
     cwd: s.cwd ?? "",
     lastActivityAt: t?.mtimeMs ?? null,
     lastPrompt: s.lastPrompt,
+    lastPromptAt: s.lastPromptAt,
     lastReply: s.lastReply,
     context: s.context,
     terminalQueue: [],
@@ -1010,6 +1018,7 @@ async function codexCard(
     : {
         cwd: live.cwd,
         lastPrompt: null,
+        lastPromptAt: null,
         lastReply: null,
         turnActive: null,
         pendingTool: null,

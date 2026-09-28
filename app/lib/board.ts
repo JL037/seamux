@@ -106,6 +106,8 @@ export interface Card {
   branch: string | null;
   lastActivityAt: number | null;
   lastPrompt: string | null;
+  // When Jakob sent the last prompt, which orders each column.
+  lastPromptAt: number | null;
   lastReply: string | null;
   // null until the chat's first response, and again just after a compaction.
   context: ContextUsage | null;
