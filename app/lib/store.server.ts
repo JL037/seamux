@@ -41,11 +41,16 @@ const SCHEMA = `
   );
 
   -- Sessions Jakob pinned, because they are meant to run for a long time,
-  -- in the order he dragged them into; a new pin goes last.
+  -- in the order he dragged them into; a new pin goes last. The Claude Code
+  -- process a pinned chat last ran in, which \`/clear\` keeps under a new
+  -- session id, and the chat a pin was carried from by one.
   CREATE TABLE IF NOT EXISTS pins (
-    session_id TEXT PRIMARY KEY,
-    pinned_at  INTEGER NOT NULL,
-    position   INTEGER NOT NULL DEFAULT 0
+    session_id   TEXT PRIMARY KEY,
+    pinned_at    INTEGER NOT NULL,
+    position     INTEGER NOT NULL DEFAULT 0,
+    pid          INTEGER,
+    started_at   INTEGER,
+    cleared_from TEXT
   );
 
   -- Messages Jakob wrote while a chat was working, held here instead of in
@@ -81,6 +86,13 @@ function migrate(store: DatabaseSync): void {
       ALTER TABLE pins ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
       UPDATE pins SET position =
         (SELECT COUNT(*) FROM pins p WHERE p.pinned_at < pins.pinned_at);
+    `);
+  }
+  if (!pinColumns.some((c) => c.name === "pid")) {
+    store.exec(`
+      ALTER TABLE pins ADD COLUMN pid INTEGER;
+      ALTER TABLE pins ADD COLUMN started_at INTEGER;
+      ALTER TABLE pins ADD COLUMN cleared_from TEXT;
     `);
   }
 }
@@ -240,6 +252,54 @@ export function pinnedSessions(): string[] {
       .prepare(`SELECT session_id FROM pins ORDER BY position, pinned_at`)
       .all() as unknown as { session_id: string }[]
   ).map((r) => r.session_id);
+}
+
+export interface PinRow {
+  session_id: string;
+  pid: number | null;
+  started_at: number | null;
+  cleared_from: string | null;
+}
+
+export function pins(): PinRow[] {
+  return openStore()
+    .prepare(
+      `SELECT session_id, pid, started_at, cleared_from FROM pins
+       ORDER BY position, pinned_at`,
+    )
+    .all() as unknown as PinRow[];
+}
+
+// Notes the process a pinned chat runs in, when it has changed.
+export function notePinProcess(
+  sessionId: string,
+  pid: number,
+  startedAt: number,
+): void {
+  openStore()
+    .prepare(
+      `UPDATE pins SET pid = ?, started_at = ?
+       WHERE session_id = ? AND (pid IS NOT ? OR started_at IS NOT ?)`,
+    )
+    .run(pid, startedAt, sessionId, pid, startedAt);
+}
+
+// Moves a pin, in its place, to the session `/clear` carried its chat on
+// under. If that session is pinned already, the old pin just goes.
+export function carryPin(from: string, to: string): void {
+  const store = openStore();
+  const taken = store
+    .prepare(`SELECT 1 FROM pins WHERE session_id = ?`)
+    .get(to);
+  if (taken) {
+    store.prepare(`DELETE FROM pins WHERE session_id = ?`).run(from);
+  } else {
+    store
+      .prepare(
+        `UPDATE pins SET session_id = ?, cleared_from = ? WHERE session_id = ?`,
+      )
+      .run(to, from, from);
+  }
 }
 
 export function setPinned(

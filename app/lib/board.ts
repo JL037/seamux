@@ -128,9 +128,11 @@ export interface Card {
   // The chat's own turn is running, so Esc has something to stop. A card can
   // be WORKING without one, while only its subagents run.
   turnRunning: boolean;
-  // Pinned from the board: shown in its own column whatever its state, and
-  // kept on the board after it closes, however long ago.
+  // Pinned from the board: shown in its own column whatever its state, until
+  // it closes.
   pinned: boolean;
+  // The pinned chat whose pin `/clear` carried to this one.
+  clearedFrom: string | null;
   // Set when the chat itself is blocked on a dialog.
   waiting: Waiting | null;
   // Set when the chat's last turn ended on an error from the API rather

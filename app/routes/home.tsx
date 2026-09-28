@@ -883,12 +883,40 @@ function ReplyExcerpt({ text, cwd }: { text: string; cwd: string }) {
   );
 }
 
+// Names the chat whose open full view a `/clear` carried to another card.
+const CHAT_CARRIED = "seamux:chat-carried";
+
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   // Kept across a reload, like the draft, so an open chat stays open.
   const [chatOpen, setChatOpen] = useSessionStorage(
     `seamux:chat-open:${card.sessionId}`,
     false,
   );
+  // A chat `/clear` carried on under this session opens here, in place of
+  // the old one, if it was open in this tab.
+  useEffect(() => {
+    if (!card.clearedFrom) return;
+    const key = `seamux:chat-open:${card.clearedFrom}`;
+    try {
+      if (sessionStorage.getItem(key) !== "true") return;
+      sessionStorage.removeItem(key);
+    } catch {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent(CHAT_CARRIED, { detail: card.clearedFrom }),
+    );
+    setChatOpen(true);
+  }, [card.clearedFrom, setChatOpen]);
+  useEffect(() => {
+    const onCarried = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === card.sessionId) {
+        setChatOpen(false);
+      }
+    };
+    window.addEventListener(CHAT_CARRIED, onCarried);
+    return () => window.removeEventListener(CHAT_CARRIED, onCarried);
+  }, [card.sessionId, setChatOpen]);
   const { errors, report } = useCardErrors();
   return (
     <CardErrorsContext.Provider value={report}>

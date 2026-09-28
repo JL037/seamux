@@ -58,11 +58,14 @@ import {
 } from "./transcript.server";
 import {
   dispatchesFor,
-  pinnedSessions,
+  carryPin,
+  notePinProcess,
+  pins,
   queuedFor,
   recentDispatchCwds,
   setPinned,
   subagentsFor,
+  type PinRow,
   type SubagentRow,
 } from "./store.server";
 
@@ -622,6 +625,41 @@ function liveColumn(
   return "idle";
 }
 
+// A pin lasts as long as its chat. `/clear` carries a chat on under a new
+// session id in the same Claude Code process, so a pin whose chat closed
+// moves, in its place, to the live chat in that process; any other closed
+// chat's pin goes. Without cmux a live Codex chat looks closed, so pins wait
+// for a poll that has it. Returns the pins left, in order.
+function settlePins(
+  agents: AgentRow[],
+  closed: (id: string) => boolean,
+  liveKnown: boolean,
+): PinRow[] {
+  const processKey = (pid: number, startedAt: number) => `${pid}:${startedAt}`;
+  const inProcess = new Map(
+    agents
+      .filter((a) => a.kind === "interactive" && a.pid != null)
+      .map((a) => [processKey(a.pid!, a.startedAt), a.sessionId]),
+  );
+  const rows = pins();
+  let changed = false;
+  for (const pin of rows) {
+    const row = agents.find((a) => a.sessionId === pin.session_id);
+    if (row?.pid != null) {
+      notePinProcess(pin.session_id, row.pid, row.startedAt);
+    } else if (liveKnown && closed(pin.session_id)) {
+      const next =
+        pin.pid != null && pin.started_at != null
+          ? inProcess.get(processKey(pin.pid, pin.started_at))
+          : undefined;
+      if (next) carryPin(pin.session_id, next);
+      else setPinned(pin.session_id, false);
+      changed = true;
+    }
+  }
+  return changed ? pins() : rows;
+}
+
 export async function loadBoard(now = Date.now()): Promise<Board> {
   const warnings: string[] = [];
 
@@ -745,6 +783,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         drivable: surfaces.has(row.sessionId),
         turnRunning: busy,
         pinned: false,
+        clearedFrom: null,
         waiting,
         apiError: summary?.apiError ?? null,
         closing: closingState(row.sessionId, {
@@ -764,15 +803,6 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   );
   liveCards.push(...codexCards);
 
-  // In the order Jakob dragged them into.
-  let pinOrder: string[] = [];
-  try {
-    pinOrder = pinnedSessions();
-  } catch (err) {
-    warnings.push(`Pin store unavailable: ${(err as Error).message}`);
-  }
-  const pinned = new Set(pinOrder);
-
   // A chat is closed once it is no longer live and is not a background job.
   // A chat moved to the background keeps its first transcript under the
   // job's short id while the job runs on under a new session id; that
@@ -781,20 +811,14 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const jobIds = new Set(agents.map((a) => a.id).filter((id) => id != null));
   const closed = (id: string) => !known.has(id) && !jobIds.has(id.slice(0, 8));
 
-  // A pin lasts as long as its chat: closing it, or `/clear`, which carries
-  // on under a new session id, unpins it. Without cmux a live Codex chat
-  // looks closed, so pins wait for the next poll that has it.
-  if (liveKnown) {
-    for (const id of pinOrder.filter(closed)) {
-      try {
-        setPinned(id, false);
-        pinned.delete(id);
-      } catch (err) {
-        warnings.push(`Pin store unavailable: ${(err as Error).message}`);
-        break;
-      }
-    }
+  // In the order Jakob dragged them into.
+  let pinRows: PinRow[] = [];
+  try {
+    pinRows = settlePins(agents, closed, liveKnown);
+  } catch (err) {
+    warnings.push(`Pin store unavailable: ${(err as Error).message}`);
   }
+  const pinned = new Set(pinRows.map((p) => p.session_id));
 
   // DONE: a chat Jakob closed recently, its transcript written within the
   // window.
@@ -831,6 +855,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         drivable: false,
         turnRunning: false,
         pinned: false,
+        clearedFrom: null,
         waiting: null,
         apiError: null,
         closing: null,
@@ -854,7 +879,12 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   );
 
   const cards = [...liveCards, ...doneCards, ...codexDone];
-  for (const card of cards) card.pinned = pinned.has(card.sessionId);
+  for (const card of cards) {
+    card.pinned = pinned.has(card.sessionId);
+    card.clearedFrom =
+      pinRows.find((p) => p.session_id === card.sessionId)?.cleared_from ??
+      null;
+  }
   try {
     for (const row of queuedFor(cards.map((c) => c.sessionId))) {
       cards
@@ -896,8 +926,8 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   // keeps its place as newer work moves between columns. Pinned cards keep
   // the order Jakob dragged them into instead.
   cards.sort((a, b) => (a.lastActivityAt ?? 0) - (b.lastActivityAt ?? 0));
-  const pinRank = new Map(pinOrder.map((id, i) => [id, i]));
-  const rank = (c: Card) => pinRank.get(c.sessionId) ?? pinOrder.length;
+  const pinRank = new Map(pinRows.map((p, i) => [p.session_id, i]));
+  const rank = (c: Card) => pinRank.get(c.sessionId) ?? pinRows.length;
   cards.sort((a, b) => rank(a) - rank(b));
   const dispatches = loadDispatchSets(now, warnings);
   const reported = new Map(
@@ -949,6 +979,7 @@ function codexFields(
     worker: null,
     drivable: false,
     pinned: false,
+    clearedFrom: null,
     // Codex records no API errors the board reads.
     apiError: null,
     closing: null,
