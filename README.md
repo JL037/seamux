@@ -33,7 +33,7 @@ The store at `data/seamux.db` holds only what those don't record: subagent lifec
 | Column | Means |
 | --- | --- |
 | ATTENTION | A service, not a chat, that needs you: Claude Code or Codex signed out, chats stopped on an expired login, or chats that hit an outage. Left of everything, and only there while something is wrong. It can't be pinned |
-| PINNED | Sessions you've pinned as long-running. It keeps your order, which you change by dragging a card's name (with a mouse, not on a touch screen), and only appears while something is pinned |
+| PINNED | Sessions you've pinned as long-running. It keeps your order, which you change by dragging a card's name (with a mouse, not on a touch screen), and only appears while something is pinned. Closing a pinned session, or running `/clear` in it, which carries on under a new session, unpins it |
 | IDLE | Alive, nothing to do |
 | WAITING | Stopped until you answer: a permission prompt, a question, any other dialog, or a turn that ended on a question, or that a background session reports left it blocked on you |
 | WORKING | A turn is running, or one of its subagents is |

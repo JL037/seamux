@@ -799,12 +799,11 @@ function SessionName({
 }
 
 // Pins a long-running chat into its own column, or takes it back out. A
-// closed chat can't be pinned; one pinned before it closed can still be
-// unpinned.
+// closed chat can't be pinned, and closing one unpins it.
 function PinToggle({ card }: { card: BoardCard }) {
   const { submit, pending, error } = useSessionAction(card.sessionId);
   useReportError("pin", error);
-  if (card.column === "done" && !card.pinned) return null;
+  if (card.column === "done") return null;
   return (
     <Button
       size="icon-xs"
@@ -814,7 +813,7 @@ function PinToggle({ card }: { card: BoardCard }) {
         error ??
         (card.pinned
           ? "Unpin: back to its column, and off the board 30m after it closes"
-          : "Pin: keep it in Pinned, whatever its state, for as long as it exists")
+          : "Pin: keep it in Pinned, whatever its state, until it closes")
       }
       onClick={() => submit(card.pinned ? "unpin" : "pin")}
     >

@@ -61,6 +61,7 @@ import {
   pinnedSessions,
   queuedFor,
   recentDispatchCwds,
+  setPinned,
   subagentsFor,
   type SubagentRow,
 } from "./store.server";
@@ -641,7 +642,9 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       indexCodexTranscripts(),
       codexNames().catch(() => new Map<string, string>()),
     ]);
+  let liveKnown = true;
   const live = await listLive().catch((err) => {
+    liveKnown = false;
     warnings.push(
       `cmux sessions unavailable, replies disabled: ${err.message}`,
     );
@@ -770,18 +773,33 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   }
   const pinned = new Set(pinOrder);
 
-  // DONE: a chat Jakob closed recently, or a pinned one closed at any time.
-  // It is no longer live, is not a background job, and its transcript was
-  // written within the window unless it is pinned.
+  // A chat is closed once it is no longer live and is not a background job.
   // A chat moved to the background keeps its first transcript under the
   // job's short id while the job runs on under a new session id; that
   // transcript is the same conversation, not a closed chat.
   const known = new Set([...agents.map((a) => a.sessionId), ...live.keys()]);
   const jobIds = new Set(agents.map((a) => a.id).filter((id) => id != null));
+  const closed = (id: string) => !known.has(id) && !jobIds.has(id.slice(0, 8));
+
+  // A pin lasts as long as its chat: closing it, or `/clear`, which carries
+  // on under a new session id, unpins it. Without cmux a live Codex chat
+  // looks closed, so pins wait for the next poll that has it.
+  if (liveKnown) {
+    for (const id of pinOrder.filter(closed)) {
+      try {
+        setPinned(id, false);
+        pinned.delete(id);
+      } catch (err) {
+        warnings.push(`Pin store unavailable: ${(err as Error).message}`);
+        break;
+      }
+    }
+  }
+
+  // DONE: a chat Jakob closed recently, its transcript written within the
+  // window.
   const shown = (id: string, t: { mtimeMs: number }) =>
-    !known.has(id) &&
-    !jobIds.has(id.slice(0, 8)) &&
-    (pinned.has(id) || now - t.mtimeMs < DONE_VISIBLE_MS);
+    closed(id) && now - t.mtimeMs < DONE_VISIBLE_MS;
   const recent = [...transcripts.entries()].filter(([id, t]) => shown(id, t));
   const recentCodex = (
     await Promise.all(
