@@ -1,12 +1,12 @@
-# Security
+# Security Policy
 
-seamux can type into every Claude Code and Codex session on the Mac it runs on, and those sessions can run commands. A way past its checks is a way into that Mac, so please report one privately.
+It's a webpage to your terminal. We're gonna do all we can to help you lock it
+down, but it's also not perfect. We're going to do our best to keep things
+secure.
 
-## Reporting a vulnerability
+## Reporting a Vulnerability
 
-Use GitHub's private vulnerability reporting: the **Report a vulnerability** button under this repository's **Security** tab. Please don't open a public issue for it.
-
-Say what you found, how to reproduce it, and which ways in it affects: the board on `127.0.0.1`, mDNS on the local network, or the Cloudflare tunnel. You should hear back within a week.
+Report directly to oss+seamux@codedrift.com
 
 ## What counts
 
