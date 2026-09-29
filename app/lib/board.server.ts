@@ -54,6 +54,7 @@ import {
   clip,
   endingQuestionIn,
   excerpt,
+  MESSAGE_CHARS,
   readTail,
   replyExcerpt,
   unwrapPasted,
@@ -490,6 +491,21 @@ export async function loadMessages(
     if (o.isSidechain || o.isMeta || o.isCompactSummary) continue;
     const text = textOf(o.message?.content)?.trim();
     if (!text) continue;
+    if (o.type === "user" && text.startsWith("<bash-input>")) {
+      messages.push({
+        role: "shell",
+        command: clip((tagged(text, "bash-input") ?? "").trim()),
+        output: null,
+        at: o.timestamp ?? null,
+      });
+      continue;
+    }
+    if (o.type === "user" && text.startsWith("<bash-stdout>")) {
+      const ran = messages.at(-1);
+      if (ran?.role === "shell" && ran.output === null)
+        ran.output = await shellOutput(text);
+      continue;
+    }
     if (o.type === "user" && SYNTHETIC_PROMPT.test(text)) continue;
     messages.push({
       role: o.type,
@@ -498,6 +514,33 @@ export async function loadMessages(
     });
   }
   return messages.slice(-limit);
+}
+
+function tagged(text: string, tag: string): string | null {
+  const m = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(text);
+  return m ? m[1] : null;
+}
+
+const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
+
+// A `!` command that outlives Claude Code's timeout moves to the
+// background, and the transcript records only where its output goes. That
+// output is what the user needs, such as a login's URL and code, so it is
+// read from the file, which Claude Code keeps under its tasks directory.
+const BACKGROUNDED =
+  /moved to the background \(ID: \w+\)\. Output is being written to: (\/\S+\/tasks\/[\w-]+\.output)/;
+
+async function shellOutput(text: string): Promise<string> {
+  const stdout = tagged(text, "bash-stdout") ?? "";
+  const stderr = tagged(text, "bash-stderr") ?? "";
+  let output = [stdout, stderr].filter((s) => s.trim()).join("\n");
+  const file = BACKGROUNDED.exec(stdout)?.[1];
+  if (file) {
+    const written = await readFile(file, "utf8").catch(() => null);
+    if (written?.trim())
+      output = `${output}\n\n${written.slice(-MESSAGE_CHARS)}`;
+  }
+  return clip(output.replace(ANSI, "").trim());
 }
 
 // Claude Code keeps each subagent's transcript and metadata next to the

@@ -227,23 +227,27 @@ export function ChatModal({
               <p className="text-muted-foreground">No messages yet.</p>
             )}
             <div className="flex flex-col gap-3">
-              {messages?.map((m, i) => (
-                <div
-                  key={`${m.at}-${i}`}
-                  className={cn(
-                    "sensitive max-w-[85%] rounded-lg px-3 py-2 text-sm max-md:text-base",
-                    m.role === "user"
-                      ? "self-end whitespace-pre-wrap break-words bg-primary text-primary-foreground"
-                      : "prose prose-sm max-md:prose-base self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
-                  )}
-                >
-                  {m.role === "user" ? (
-                    <MessageText text={m.text} />
-                  ) : (
-                    <Markdown base={card.cwd}>{m.text}</Markdown>
-                  )}
-                </div>
-              ))}
+              {messages?.map((m, i) =>
+                m.role === "shell" ? (
+                  <ShellRun key={`${m.at}-${i}`} run={m} />
+                ) : (
+                  <div
+                    key={`${m.at}-${i}`}
+                    className={cn(
+                      "sensitive max-w-[85%] rounded-lg px-3 py-2 text-sm max-md:text-base",
+                      m.role === "user"
+                        ? "self-end whitespace-pre-wrap break-words bg-primary text-primary-foreground"
+                        : "prose prose-sm max-md:prose-base self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
+                    )}
+                  >
+                    {m.role === "user" ? (
+                      <MessageText text={m.text} />
+                    ) : (
+                      <Markdown base={card.cwd}>{m.text}</Markdown>
+                    )}
+                  </div>
+                ),
+              )}
             </div>
           </div>
           {card.subagents.length > 0 && (
@@ -507,6 +511,29 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
         </div>
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+// A command the user ran with `!`, and what it printed. One still running
+// may be waiting on the user, as a login waits for its URL to be opened,
+// so it says so rather than showing nothing.
+function ShellRun({ run }: { run: Extract<ChatMessage, { role: "shell" }> }) {
+  return (
+    <div className="sensitive w-full max-w-[85%] self-end overflow-hidden rounded-lg border font-mono text-xs max-md:text-sm">
+      <div className="whitespace-pre-wrap break-words bg-muted px-3 py-2">
+        <span className="select-none text-muted-foreground">! </span>
+        {run.command}
+      </div>
+      {run.output === null ? (
+        <p className="px-3 py-2 font-sans text-muted-foreground">
+          Running. Its output shows in the terminal until it finishes.
+        </p>
+      ) : run.output ? (
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words px-3 py-2">
+          {run.output}
+        </pre>
+      ) : null}
     </div>
   );
 }

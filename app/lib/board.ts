@@ -227,11 +227,16 @@ export interface Board {
   warnings: string[];
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant";
-  text: string;
-  at: string | null;
-}
+export type ChatMessage =
+  | { role: "user" | "assistant"; text: string; at: string | null }
+  // A command the user ran in the chat with `!`. output is null while it
+  // runs.
+  | {
+      role: "shell";
+      command: string;
+      output: string | null;
+      at: string | null;
+    };
 
 // A slash command a Claude Code chat accepts, for the inputs' autocomplete.
 export interface SlashCommand {
