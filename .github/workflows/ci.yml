@@ -1,0 +1,45 @@
+# Checks every pull request, and every push to main, the way `npm run land`
+# checks a landing: it typechecks, then builds the compiled board and the
+# bundled scripts that the npm package ships, so a change that would break
+# `npx seamux` fails here rather than on release.
+#
+# seamux runs on macOS only, but neither the typecheck nor the build touches
+# cmux, Claude Code or anything else platform-bound, so this runs on Linux.
+#
+# Taskless isn't wired in yet: the repo has no rules, and a check with none
+# is always green. Add it (`npx @taskless/cli agent ci`) with the first rule.
+#
+# Action refs are pinned to commit SHAs; the trailing comment records the tag.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a pull request supersedes the run still checking the last
+# one. Runs on main each finish, so every commit there gets its result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      # No dependency's install scripts run: nothing here needs them.
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run build
