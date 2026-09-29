@@ -20,7 +20,7 @@ macOS already answers for its Bonjour name on every network it joins. The name i
 Before you turn it on:
 
 1. [Set a password](getting-started.md#set-a-password). mDNS won't turn on without `SEAMUX_USER` and `SEAMUX_PASS`, and a request from the network is refused while either is unset.
-2. Run the board under `npm run seamux`. The dev server picks the address it listens on at startup, so the supervisor restarts it when mDNS is switched on or off. Without the supervisor, restart the board yourself.
+2. Run the board under its supervisor (`npx seamux`, or `npm run seamux` in a clone). The server picks the address it listens on at startup, so the supervisor restarts it when mDNS is switched on or off. Without the supervisor, restart the board yourself.
 
 Then turn on **Enable remote connections** and **Enable mDNS**. The board restarts, listening on every interface rather than only loopback, and the header shows "LAN". The first time, macOS may ask whether to accept incoming connections to `node`; allow it, or the firewall blocks the network.
 
@@ -47,9 +47,9 @@ The Remote tab's **Enable Cloudflare Tunnel** section starts collapsed, and open
 2. **Tunnel.** In the Cloudflare dashboard, open Zero Trust → Networks → Tunnels and mesh (`https://dash.cloudflare.com/<account>/one/networks/connectors`) and create a tunnel. Give it a public hostname on a domain Cloudflare serves, such as `seamux.example.com`, pointing at `http://localhost:54321` (the board's port). Put the tunnel's token in `SEAMUX_CF_TOKEN` and the hostname in `SEAMUX_CF_DOMAIN`.
 3. **Access application.** Open Access Controls → Applications (`https://dash.cloudflare.com/<account>/one/access-controls/apps`) and add a self-hosted application with a policy that allows only you. A self-hosted application defaults to a private IP: switch its destination to a public hostname and fill in both the subdomain and the domain. Left without the subdomain, it protects only the bare domain, and the board answers every request with a 403. Put the application's AUD tag, from its Additional settings tab, in `SEAMUX_CF_AUD`.
 4. **Team.** Your team name is on the right of Zero Trust's Get started page (`https://dash.cloudflare.com/<account>/one/overview/get-started`). Put it in `SEAMUX_CF_TEAM`, as the name or as `<team>.cloudflareaccess.com`.
-5. Restart `npm run seamux`, since Vite and React Router read the hostname once at startup.
+5. Restart the board, since the server reads the hostname once at startup.
 
-All four variables go in the checkout's `.env` or the environment. `SEAMUX_CF_TUNNEL`, the tunnel's id, is optional and only shown in the Remote tab.
+All four variables go in seamux's `.env` (`~/.seamux/.env`, or the clone's) or the environment. `SEAMUX_CF_TUNNEL`, the tunnel's id, is optional and only shown in the Remote tab.
 
 To check Access covers the hostname, run `curl -sI https://seamux.example.com`. It should redirect (302) to `<team>.cloudflareaccess.com`. A 403 `Forbidden` without that redirect means requests reach the board without an Access token, so fix the application's hostname.
 

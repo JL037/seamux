@@ -157,3 +157,6 @@ vite.config.ts.timestamp-*
 
 # How this checkout runs the board, written by npm run seamux
 /.seamux.json
+
+# Bundled plain-Node scripts, from npm run build
+/dist/

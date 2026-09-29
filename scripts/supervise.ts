@@ -2,22 +2,27 @@
 //
 //   npm run seamux    (or `seamux` with no command)
 //
-// It starts the dev server and keeps it up:
+// From a git checkout it runs the dev server, so changes go live by hot
+// reload. Installed from npm, or with SEAMUX_COMPILED=1, it runs the compiled
+// server (server/serve.ts) on what `npm run build` made. Either way it keeps
+// it up:
 // - restarts it when it exits, backing off to 30s while it keeps failing;
 // - restarts it when it stops answering HTTP, even if the process lives;
 // - restarts it when asked: `npm run land` touches data/board.restart after
 //   reinstalling dependencies. Other changes go live by hot reload;
-// - on start, stops a dev server orphaned by a supervisor that was killed;
+// - on start, stops a board server orphaned by a supervisor that was killed;
 // - refuses to run twice.
 //
 // It also runs the Cloudflare tunnel while the board's Remote switches are on
 // (app/lib/remote.server.ts), restarting it with the same backoff when it exits,
 // and stops it when a switch goes off or its settings go missing. When mDNS
-// is switched on or off, it restarts the dev server, which picks the address
+// is switched on or off, it restarts the board server, which picks the address
 // it listens on at startup.
 //
 // The port comes from SEAMUX_PORT, else .seamux.json, else 54321, and is
 // written back to .seamux.json so `npm run land` checks the right board.
+// .seamux.json and data/ are in SEAMUX_HOME (app/lib/paths.server.ts): the
+// checkout, or ~/.seamux for an installed package.
 //
 // Portable to Linux and WSL: Node APIs, POSIX process groups, and polling
 // rather than file events, which WSL does not deliver for /mnt drives.
@@ -25,6 +30,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import {
   closeSync,
+  existsSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -32,10 +38,15 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { basicAuthHeader, readCredentials } from "../app/lib/credentials.ts";
+import {
+  IS_CHECKOUT,
+  packagePath,
+  SEAMUX_HOME,
+} from "../app/lib/paths.server.ts";
 import {
   lanWanted,
   readRemoteSettings,
@@ -44,9 +55,13 @@ import {
   tunnelPidFile,
   updateRunFile,
 } from "../app/lib/remote.server.ts";
+import { installRuntime } from "./runtime.ts";
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Where .seamux.json and data/ live. `npm run land` passes the main
+// checkout's own instead, since it runs from a worktree.
+const REPO = SEAMUX_HOME;
 const DATA = join(REPO, "data");
+const COMPILED = !IS_CHECKOUT || process.env.SEAMUX_COMPILED === "1";
 export const RESTART_FILE = join(DATA, "board.restart");
 const SUPERVISOR_PID = join(DATA, "serve.pid");
 const CHILD_PID = join(DATA, "board.pid");
@@ -105,7 +120,7 @@ export function boardHeaders(repo = REPO): Record<string, string> {
   return credentials ? { authorization: basicAuthHeader(credentials) } : {};
 }
 
-// The pid of the dev server the supervisor serving `repo` last started.
+// The pid of the server the supervisor serving `repo` last started.
 export function boardPid(repo = REPO): string | null {
   try {
     return readFileSync(join(repo, "data", "board.pid"), "utf8").trim();
@@ -144,7 +159,7 @@ function mtime(path: string): number {
   }
 }
 
-// Signal a whole process group: the dev server and everything it spawned.
+// Signal a whole process group: the board server and everything it spawned.
 function signalGroup(pid: number, signal: NodeJS.Signals) {
   try {
     process.kill(-pid, signal);
@@ -182,6 +197,13 @@ async function supervise() {
   }
   writeFileSync(SUPERVISOR_PID, `${process.pid}\n`);
 
+  const server = COMPILED ? packagePath("dist/serve.js") : null;
+  if (server && !existsSync(packagePath("build/server/index.js"))) {
+    log("no compiled board: run `npm run build` first");
+    process.exit(1);
+  }
+  installRuntime();
+
   const port = Number(process.env.SEAMUX_PORT ?? readRunConfig().port);
   if (!Number.isInteger(port) || port <= 0) {
     log(`not a port: ${process.env.SEAMUX_PORT}`);
@@ -190,11 +212,11 @@ async function supervise() {
   writeRunConfig({ port });
   const url = boardUrl();
 
-  // A supervisor killed with SIGKILL leaves its dev server holding the port,
+  // A supervisor killed with SIGKILL leaves its board server holding the port,
   // and its tunnel running.
   const orphan = readPid(CHILD_PID);
   if (orphan && alive(orphan)) {
-    log(`stopping orphaned dev server, pid ${orphan}`);
+    log(`stopping orphaned board server, pid ${orphan}`);
     await stopGroup(orphan);
   }
   const orphanTunnel = readPid(TUNNEL_PID);
@@ -212,7 +234,7 @@ async function supervise() {
   let restartStamp = mtime(RESTART_FILE);
   let pendingStart: NodeJS.Timeout | null = null;
   let restarting = false;
-  // Whether the running dev server was started listening on the network.
+  // Whether the running board server was started listening on the network.
   let listeningLan = false;
 
   const start = () => {
@@ -221,29 +243,35 @@ async function supervise() {
     startedAt = Date.now();
     listeningLan = lanWanted(REPO);
     failures = 0;
-    const c = spawn("npx", ["react-router", "dev", "--port", String(port)], {
-      cwd: REPO,
+    const [command, args] = server
+      ? [process.execPath, ["--no-warnings", server, "--port", String(port)]]
+      : ["npx", ["react-router", "dev", "--port", String(port)]];
+    const c = spawn(command, args, {
+      cwd: server ? REPO : packagePath(),
+      env: server ? { ...process.env, NODE_ENV: "production" } : process.env,
       stdio: "inherit",
       detached: true, // its own process group, so restarts stop its children too
     });
     child = c;
     if (c.pid) writeFileSync(CHILD_PID, `${c.pid}\n`);
-    log(`started dev server, pid ${c.pid}, ${url}`);
-    c.on("error", (err) => log(`could not start dev server: ${err.message}`));
+    log(
+      `started ${server ? "compiled board" : "dev server"}, pid ${c.pid}, ${url}`,
+    );
+    c.on("error", (err) => log(`could not start the board server: ${err.message}`));
     c.on("exit", (code, signal) => {
       if (child === c) child = null;
       rmSync(CHILD_PID, { force: true });
       if (stopping) return;
       if (Date.now() - startedAt > HEALTHY_MS) backoff = 1000;
       log(
-        `dev server exited (${signal ?? `code ${code}`}); restarting in ${backoff / 1000}s`,
+        `board server exited (${signal ?? `code ${code}`}); restarting in ${backoff / 1000}s`,
       );
       pendingStart = setTimeout(start, backoff);
       backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
     });
   };
 
-  // Stop the current dev server and start a fresh one straight away.
+  // Stop the current board server and start a fresh one straight away.
   const restart = async (reason: string) => {
     if (restarting || stopping) return;
     restarting = true;

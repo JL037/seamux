@@ -636,7 +636,7 @@ function MdnsSetting({
   const host = new URL(mdns.url).hostname;
   let state: string;
   if (!mdns.secured) {
-    state = "Set SEAMUX_USER and SEAMUX_PASS in the checkout's .env first.";
+    state = `Set SEAMUX_USER and SEAMUX_PASS in ${remote.home}/.env first.`;
   } else if (!mdns.wanted) state = "Off.";
   else if (mdns.listening) state = "On: listening on the network.";
   else if (remote.supervised)
@@ -741,8 +741,8 @@ function TunnelSetting({
         {action.error && <p className="text-destructive">{action.error}</p>}
         <div className="flex flex-col gap-2">
           <p className="text-muted-foreground">
-            Read from the checkout's <code>.env</code> or the environment.
-            cloudflared writes its log to <code>data/tunnel.log</code>.
+            Read from <code>{remote.home}/.env</code> or the environment.
+            cloudflared writes its log to <code>data/tunnel.log</code> there.
           </p>
           <ul className="flex flex-col divide-y rounded-lg border text-xs">
             {REMOTE_VARIABLES.map((v) => {

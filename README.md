@@ -15,14 +15,16 @@ You need:
 - **[Claude Code](https://claude.com/claude-code)**, and optionally Codex.
 - **Node 24** or later.
 
-Then, from a clone of this repo:
+Then:
 
 ```bash
-npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
-npm run seamux   # run the board on http://127.0.0.1:54321 and keep it running
+npx seamux setup   # install the subagent hooks and the dispatch skill
+npx seamux         # run the board on http://127.0.0.1:54321 and keep it running
 ```
 
-- **[Getting started](docs/getting-started.md)**: requirements, what `setup` changes outside the repo, setting a password, and every setting and environment variable.
+Or, from a clone of this repo, `npm run setup` and then `npm run seamux`, which runs the dev server so a change goes live as soon as it's saved.
+
+- **[Getting started](docs/getting-started.md)**: requirements, installing from npm or a clone, what `setup` changes outside seamux, setting a password, and every setting and environment variable.
 - **[Remote connections](docs/remote-connections.md)**: reaching the board from your phone or another computer, over your own network with mDNS, or from anywhere through a Cloudflare tunnel behind Cloudflare Access.
 
 ## How it works
@@ -35,7 +37,7 @@ The board is rebuilt every 3 seconds while the tab is visible, from:
 - `cmux sessions list`, which finds each session's terminal (its cmux surface) so seamux can type into it. It is also the only list of live Codex sessions, which is why seamux sees a Codex session only if it runs in cmux.
 - The transcripts in `~/.claude/projects/` and `~/.codex/sessions/`, which hold each conversation, whether a turn is still running, open questions, subagents, and how full the context window is. cmux's own idle/running state for Codex goes stale, so a Codex card takes it from the transcript, and reads an approval off the terminal.
 
-The store at `data/seamux.db` holds only what those don't record: subagent lifecycle from the hooks, what each dispatched session was started for, pins and their order, queued messages, settings, and fan-out records. Deleting `data/` loses those and never a session.
+The store at `data/seamux.db`, in `~/.seamux` or a clone, holds only what those don't record: subagent lifecycle from the hooks, what each dispatched session was started for, pins and their order, queued messages, settings, and fan-out records. Deleting `data/` loses those and never a session.
 
 ### Columns
 

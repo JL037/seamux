@@ -1,9 +1,14 @@
 import type { Config } from "@react-router/dev/config";
 
+import { SEAMUX_HOME } from "./app/lib/paths.server.ts";
 import { remoteDomain } from "./app/lib/remote.server.ts";
 
-// The tunnel's hostname, read once at startup, like Vite's allowedHosts.
-const domain = remoteDomain(process.cwd());
+// The tunnel's hostname, read once at startup, like Vite's allowedHosts. Not
+// for a build, which would bake in the hostname of whoever built it: the
+// compiled server (server/serve.ts) sets it from its own .env when it starts.
+const domain = process.argv.includes("build")
+  ? null
+  : remoteDomain(SEAMUX_HOME);
 
 export default {
   // Config options...

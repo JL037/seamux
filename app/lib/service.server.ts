@@ -19,13 +19,13 @@
 import { spawn, type ChildProcess, execFile } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import type { Card, ServiceLogin, ServiceNotice } from "./board.ts";
 import type { Engine } from "./config.ts";
 import { BIN_DIRS } from "./bins.server";
+import { packagePath } from "./paths.server";
 import {
   installedEngines,
   listLive,
@@ -48,10 +48,7 @@ const OUTAGE_WINDOW_MS = 15 * 60 * 1000;
 const RESUME_PROMPT = "continue";
 
 // Stands in for a browser: writes the URL it is given to a file.
-const LOGIN_BROWSER = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../scripts/login-browser.sh",
-);
+const LOGIN_BROWSER = packagePath("scripts/login-browser.sh");
 
 const env = () => ({
   ...process.env,

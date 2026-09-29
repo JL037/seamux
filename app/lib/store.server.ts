@@ -7,12 +7,10 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
-// Two levels up is the repo root both from app/lib/ and from the bundled
-// build/server/index.js. Keep it that way if either moves.
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "../..");
-export const DB_PATH = process.env.SEAMUX_DB ?? join(REPO, "data/seamux.db");
+import { DATA_DIR } from "./paths.server.ts";
+
+export const DB_PATH = process.env.SEAMUX_DB ?? join(DATA_DIR, "seamux.db");
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS subagents (

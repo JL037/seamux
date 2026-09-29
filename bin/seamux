@@ -1,9 +1,26 @@
 #!/bin/sh
-# seamux's command line. With no command it runs the board (scripts/supervise.ts);
-# anything else goes to the protocol CLI (scripts/seamux.ts).
-# npm links this file into node_modules/.bin, so resolve the link to find the repo.
+# seamux's command line. With no command it runs the board (supervise);
+# `setup` and `uninstall` add or remove the subagent hooks and the dispatch
+# skill; anything else goes to the protocol CLI (seamux).
+#
+# A git checkout runs the TypeScript under scripts/ and hooks/. An installed
+# package runs the bundled JavaScript in dist/, since Node won't strip types
+# under node_modules.
+# npm links this file into node_modules/.bin, so resolve the link to find the package.
 repo="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
-if [ $# -eq 0 ]; then
-  exec node --no-warnings "$repo/scripts/supervise.ts"
-fi
-exec node --no-warnings "$repo/scripts/seamux.ts" "$@"
+
+# The script for an entry: script <name>
+script() {
+  if [ -e "$repo/.git" ]; then echo "$repo/scripts/$1.ts"; else echo "$repo/dist/$1.js"; fi
+}
+
+case "$1" in
+  "") exec node --no-warnings "$(script supervise)" ;;
+  setup)
+    node --no-warnings "$(script install-hooks)" || exit
+    exec node --no-warnings "$(script install-skills)" ;;
+  uninstall)
+    node --no-warnings "$(script install-hooks)" --uninstall || exit
+    exec node --no-warnings "$(script install-skills)" --uninstall ;;
+  *) exec node --no-warnings "$(script seamux)" "$@" ;;
+esac

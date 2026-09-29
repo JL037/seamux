@@ -1,13 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+
+import { DATA_DIR } from "./paths.server";
 
 // Snapshots sent from the Debug tab, beside the store in data/: the latest
 // one pretty-printed, and the last few as lines, oldest first.
-const DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../data/diagnostics",
-);
+const DIR = join(DATA_DIR, "diagnostics");
 const KEEP = 50;
 
 export function saveDiagnostics(entry: Record<string, unknown>) {

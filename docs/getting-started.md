@@ -7,41 +7,55 @@ This page covers installing seamux, running the board, and every setting it has.
 - **macOS** with [cmux](https://cmux.dev), in `/Applications` or `~/Applications` (or set `SEAMUX_CMUX_APP`), and its `cmux` command on your `PATH`. seamux drives sessions by typing into their cmux terminals, so a session outside cmux is shown but can't be driven.
 - **Claude Code**, with `claude` on your `PATH` (`~/.local/bin` is where the installer puts it).
 - **Codex**, optionally, installed with npm or pnpm (next to `node`) or Homebrew. Run `cmux hooks setup codex` once so cmux tracks its sessions.
-- **Node 24** or later, for `node:sqlite` and for running TypeScript directly.
+- **Node 24** or later, for `node:sqlite`, and in a clone for running TypeScript directly.
 - **A shell whose startup files set up your `PATH`.** Every session seamux starts runs in an interactive instance of your login shell (`$SHELL`), so it gets the same tools a terminal opened by hand does. zsh and bash are tested.
 
 ## Install and run
+
+There are two ways to run seamux: the published package, which runs a compiled board, or a clone of this repo, which runs the dev server so a change goes live as soon as it's saved.
+
+### From npm
+
+```bash
+npx seamux setup   # install the subagent hooks and the dispatch skill
+npx seamux         # run the board on http://127.0.0.1:54321 and keep it running
+```
+
+seamux keeps its settings and state in `~/.seamux`: its `.env`, `.seamux.json`, and `data/`. Set `SEAMUX_HOME` to keep them somewhere else. It also keeps copies of the hook and the fan-out CLI in `~/.seamux/bin`, which sessions call, since npx's cache can be emptied at any time. Each start of the board refreshes them, so upgrading seamux upgrades them too.
+
+### From a clone
 
 ```bash
 npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
 npm run seamux   # run the board on http://127.0.0.1:54321 and keep it running
 ```
 
-Run `npm run seamux` in its own cmux workspace. It supervises the dev server: it restarts it if it exits or stops answering, and refuses to run twice.
+A clone keeps its settings and state in the clone itself, all gitignored. `npm start` builds and runs the compiled board instead of the dev server, as the npm package does.
 
-The same command is `bin/seamux`, also exposed as the package's `seamux` bin: run `npm link` once and `seamux` starts the board from anywhere. With a command, such as `seamux list`, it's the fan-out CLI the README describes.
+### Running the board
 
-<!-- Screenshot: the board, just started -->
+Run the board in its own cmux workspace. It supervises the server: it restarts it if it exits or stops answering, and refuses to run twice.
 
-### What setup changes outside the repo
+The same command is `bin/seamux`, the package's `seamux` bin: in a clone, run `npm link` once and `seamux` starts the board from anywhere. With a command, such as `seamux list`, it's the fan-out CLI the README describes.
 
-`setup` writes to two places outside the repo. Both are safe to run again and both can be undone:
+### What setup changes outside seamux
 
-- **`~/.claude/settings.json`** gets `SubagentStart` and `SubagentStop` hooks that run `hooks/subagent-event.ts`, so the board can see subagents in every session. The file is backed up first. `npm run hooks:uninstall` removes only these entries.
-- **`~/.claude/skills/seamux-dispatch/`** gets the fan-out skill, rendered with this checkout's `bin/seamux` path. `npm run skills:uninstall` removes it.
+`setup` writes to two places outside seamux's own directory. Both are safe to run again and both can be undone:
+
+- **`~/.claude/settings.json`** gets `SubagentStart` and `SubagentStop` hooks that run seamux's subagent hook, so the board can see subagents in every session. The file is backed up first.
+- **`~/.claude/skills/seamux-dispatch/`** gets the fan-out skill, rendered with the path of the `seamux` command sessions call.
 
 ### Uninstall
 
 ```bash
-npm run hooks:uninstall    # take seamux's hooks out of ~/.claude/settings.json
-npm run skills:uninstall   # remove the seamux-dispatch skill
+npx seamux uninstall   # or, in a clone, bin/seamux uninstall
 ```
 
-Then delete the checkout. Its `data/` holds seamux's store, fan-out records and logs, and nothing any session needs: your sessions and transcripts are Claude Code's and Codex's, and stay where they are.
+That takes seamux's hooks out of `~/.claude/settings.json`, and nothing else there, and removes the seamux-dispatch skill. Then delete `~/.seamux`, or the clone. Its `data/` holds seamux's store, fan-out records and logs, and nothing any session needs: your sessions and transcripts are Claude Code's and Codex's, and stay where they are.
 
 ## Set a password
 
-Put `SEAMUX_USER` and `SEAMUX_PASS` in a `.env` at the root of the checkout (gitignored), or in the environment, and the board asks for them with HTTP Basic auth before serving anything:
+Put `SEAMUX_USER` and `SEAMUX_PASS` in the `.env` in seamux's home (`~/.seamux/.env`, or at the root of a clone, where it's gitignored), or in the environment, and the board asks for them with HTTP Basic auth before serving anything:
 
 ```bash
 SEAMUX_USER=you
@@ -96,24 +110,26 @@ Some choices are kept in the browser rather than the store: light or dark theme 
 
 ## `.seamux.json`
 
-`.seamux.json`, at the root of the checkout and gitignored, is how that checkout runs the board. `npm run seamux` writes it, and `npm run land` reads it to find the board:
+`.seamux.json`, in seamux's home (`~/.seamux`, or the root of a clone, gitignored), is how the board runs there. Starting the board writes it, and `npm run land` reads it to find the board:
 
 ```json
 { "port": 54321 }
 ```
 
-Edit the port there, or start `npm run seamux` once with `SEAMUX_PORT` set, and it's kept for later runs. The Remote tab's switches are kept here too, as `remote`, `mdns` and `tunnel`.
+Edit the port there, or start the board once with `SEAMUX_PORT` set, and it's kept for later runs. The Remote tab's switches are kept here too, as `remote`, `mdns` and `tunnel`.
 
 ## Environment variables
 
-All optional. Each can go in `.env` or the environment.
+All optional. Each can go in `.env` or the environment, except `SEAMUX_HOME`, which says where that `.env` is.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SEAMUX_PORT` | from `.seamux.json` | Port for `npm run seamux`, saved to `.seamux.json` |
+| `SEAMUX_PORT` | from `.seamux.json` | Port for the board, saved to `.seamux.json` |
 | `SEAMUX_USER`, `SEAMUX_PASS` | unset | HTTP Basic credentials for the board. Unset leaves the board unsecured on this Mac, and keeps mDNS off |
 | `SEAMUX_CF_TOKEN`, `SEAMUX_CF_DOMAIN`, `SEAMUX_CF_TEAM`, `SEAMUX_CF_AUD` | unset | The Cloudflare tunnel's token and hostname, and the Cloudflare Access team and AUD tag. All four are needed. See [Remote connections](remote-connections.md) |
 | `SEAMUX_CF_TUNNEL` | unset | The tunnel's id, shown in the Remote tab |
+| `SEAMUX_HOME` | the clone, or `~/.seamux` | Where seamux keeps `.env`, `.seamux.json` and `data/` |
+| `SEAMUX_COMPILED` | unset | `1` makes a clone run the compiled board, as `npm start` does |
 | `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
 | `SEAMUX_CMUX_APP` | `/Applications/cmux.app`, else `~/Applications/cmux.app` | Where cmux is installed, for its wrappers that launch each agent |
 | `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |

@@ -4,15 +4,13 @@ import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
 import { forgetDotenv } from "./app/lib/credentials.ts";
+import { SEAMUX_HOME } from "./app/lib/paths.server.ts";
 import {
-  ACCESS_HEADER,
-  checkLanRequest,
-  checkTunnelRequest,
-  forbiddenPage,
   lanHost,
   lanWanted,
   LISTEN_ENV,
   remoteDomain,
+  remoteGate,
 } from "./app/lib/remote.server.ts";
 
 // WSL does not deliver file events for Windows drives under /mnt/, so hot
@@ -29,53 +27,12 @@ function needsPolling(): boolean {
   }
 }
 
-// Every request from another machine must be addressed to the mDNS name and
-// carry HTTP Basic credentials, and every request through the tunnel a valid
-// Cloudflare Access token. That includes the ones Vite answers itself
-// (modules, assets, files under the checkout) before the board's own auth
-// middleware sees them.
+// The remote-access gate, ahead of everything Vite answers itself.
 function remoteAccess(): Plugin {
   return {
     name: "seamux-remote-access",
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const lan = checkLanRequest(
-          process.cwd(),
-          req.socket.remoteAddress,
-          req.headers.host ?? null,
-          req.headers.authorization ?? null,
-        );
-        if (lan.verdict === "login") {
-          res.statusCode = 401;
-          res.setHeader(
-            "WWW-Authenticate",
-            'Basic realm="seamux", charset="UTF-8"',
-          );
-          res.end("Authentication required");
-          return;
-        }
-        if (lan.verdict === "denied") {
-          console.warn(
-            `[seamux] refused a request from ${req.socket.remoteAddress}: ${lan.reason}`,
-          );
-          res.statusCode = 403;
-          res.setHeader("Content-Type", "text/html; charset=utf-8");
-          res.end(forbiddenPage(lan.reason, false));
-          return;
-        }
-        if (lan.verdict === "allowed") return next();
-        const token = req.headers[ACCESS_HEADER];
-        checkTunnelRequest(
-          process.cwd(),
-          req.headers.host ?? null,
-          typeof token === "string" ? token : null,
-        ).then((tunnel) => {
-          if (tunnel.verdict !== "denied") return next();
-          res.statusCode = 403;
-          res.setHeader("Content-Type", "text/html; charset=utf-8");
-          res.end(forbiddenPage(tunnel.reason));
-        }, next);
-      });
+      server.middlewares.use(remoteGate(SEAMUX_HOME));
     },
   };
 }
@@ -110,8 +67,8 @@ forgetDotenv();
 // The tunnel's hostname and whether mDNS is on, read once at startup:
 // changing either needs the dev server restarted, which the supervisor does
 // for mDNS.
-const domain = remoteDomain(process.cwd());
-const lan = lanWanted(process.cwd());
+const domain = remoteDomain(SEAMUX_HOME);
+const lan = lanWanted(SEAMUX_HOME);
 // The board's loaders run in this process, and tell the Remote tab.
 process.env[LISTEN_ENV] = lan ? "lan" : "local";
 

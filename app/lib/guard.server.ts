@@ -1,5 +1,6 @@
 import { data } from "react-router";
 
+import { SEAMUX_HOME } from "~/lib/paths.server";
 import { isLanHost, isTunnelHost } from "~/lib/remote.server";
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
@@ -15,12 +16,12 @@ export function isLocalRequest(request: Request): boolean {
 // The tunnel's hostname, which the auth middleware has already checked for
 // a valid Cloudflare Access token.
 function isTunnelRequest(request: Request): boolean {
-  return isTunnelHost(process.cwd(), request.headers.get("host"));
+  return isTunnelHost(SEAMUX_HOME, request.headers.get("host"));
 }
 
 // This Mac's .local name while mDNS is on. HTTP Basic has already let it in.
 function isLanRequest(request: Request): boolean {
-  return isLanHost(process.cwd(), request.headers.get("host"));
+  return isLanHost(SEAMUX_HOME, request.headers.get("host"));
 }
 
 // The board's actions spawn sessions and type into them. A browser lets any

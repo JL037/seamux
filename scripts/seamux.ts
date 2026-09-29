@@ -1,14 +1,5 @@
-// seamux protocol CLI, for sessions to call through bin/seamux.
-//
-//   seamux                              run the board (scripts/supervise.ts)
-//   seamux fanout <manifest.json | ->   declare a set of workers, then spawn each
-//                                       as its own top-level session
-//   seamux wait <dispatch-id>           barrier: block until every worker has
-//                                       reported, then print all handbacks
-//   seamux done <dispatch-id> <worker> --summary "…" [--result <path>] [--status ok|failed]
-//                                       a worker's completion marker
-//   seamux status <dispatch-id>         where a dispatch stands, without waiting
-//   seamux list                         every dispatch
+// seamux protocol CLI, for sessions to call through bin/seamux. USAGE below
+// lists its commands.
 
 import { readFileSync } from "node:fs";
 
@@ -38,15 +29,21 @@ function print(value: unknown) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+const USAGE = `seamux                              run the board
+seamux setup                        install the subagent hooks and the dispatch skill
+seamux uninstall                    remove them
+seamux fanout <manifest.json | ->   declare a set of workers, then spawn each
+                                    as its own top-level session
+seamux wait <dispatch-id>           barrier: block until every worker has
+                                    reported, then print all handbacks
+seamux done <dispatch-id> <worker> --summary "…" [--result <path>] [--status ok|failed]
+                                    a worker's completion marker
+seamux status <dispatch-id>         where a dispatch stands, without waiting
+seamux list                         every dispatch
+`;
+
 function usage(): never {
-  process.stderr.write(
-    readFileSync(new URL(import.meta.url), "utf8")
-      .split("\n")
-      .filter((l) => l.startsWith("//"))
-      .slice(0, 13)
-      .map((l) => l.slice(3))
-      .join("\n") + "\n",
-  );
+  process.stderr.write(USAGE);
   process.exit(64);
 }
 

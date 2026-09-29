@@ -21,15 +21,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-// Two levels up is the repo root both from app/lib/ and from the bundled
-// build/server/index.js. Keep it that way if either moves.
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "../..");
+import { DATA_DIR, SEAMUX_BIN } from "./paths.server.ts";
+
 export const DISPATCH_DIR =
-  process.env.SEAMUX_DISPATCH_DIR ?? join(REPO, "data/dispatches");
-export const SEAMUX_BIN = join(REPO, "bin/seamux");
+  process.env.SEAMUX_DISPATCH_DIR ?? join(DATA_DIR, "dispatches");
 
 export interface WorkerSpec {
   key: string;

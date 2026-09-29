@@ -15,8 +15,9 @@
 // starts and stops cloudflared to match, and restarts the dev server when
 // mDNS changes, since vite.config.ts picks the address it listens on once.
 //
-// scripts/supervise.ts and vite.config.ts import this under plain Node, so it
-// uses node: builtins and relative imports only.
+// scripts/supervise.ts, vite.config.ts and the compiled server
+// (server/serve.ts) import this under plain Node, so it uses node: builtins
+// and relative imports only.
 
 import {
   createPublicKey,
@@ -26,6 +27,7 @@ import {
 } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { hostname } from "node:os";
 import { join } from "node:path";
 
@@ -61,6 +63,8 @@ export interface RemoteSettings {
 
 // What the Remote tab shows. No secrets.
 export interface RemoteStatus {
+  // Where seamux keeps its .env and data/: its checkout, or ~/.seamux.
+  home: string;
   // "Enable remote connections": with it off, neither way in is open.
   enabled: boolean;
   mdns: {
@@ -307,6 +311,7 @@ export function remoteStatus(dir: string, host: string | null): RemoteStatus {
   const env = readEnv(dir, ["SEAMUX_CF_DOMAIN", "SEAMUX_CF_TUNNEL"]);
   const switches = readSwitches(dir);
   return {
+    home: dir,
     enabled: switches.remote,
     mdns: {
       wanted: switches.mdns,
@@ -357,6 +362,70 @@ export async function checkTunnelRequest(
     `[seamux] refused a request through the tunnel: ${checked.reason}`,
   );
   return { verdict: "denied", reason: checked.reason };
+}
+
+// --- The gate every request passes ---------------------------------------
+
+// Every request from another machine must be addressed to the mDNS name and
+// carry HTTP Basic credentials, and every request through the tunnel a valid
+// Cloudflare Access token. As middleware ahead of everything that answers
+// requests: in dev, Vite's own (modules, assets, files under the checkout)
+// before the board's auth middleware sees them; compiled, the static files
+// and the board alike.
+export function remoteGate(dir: string) {
+  return (
+    req: IncomingMessage,
+    res: ServerResponse,
+    next: (err?: unknown) => void,
+  ) => {
+    const lan = checkLanRequest(
+      dir,
+      req.socket.remoteAddress,
+      req.headers.host ?? null,
+      req.headers.authorization ?? null,
+    );
+    if (lan.verdict === "login") {
+      res.statusCode = 401;
+      res.setHeader("WWW-Authenticate", 'Basic realm="seamux", charset="UTF-8"');
+      res.end("Authentication required");
+      return;
+    }
+    if (lan.verdict === "denied") {
+      console.warn(
+        `[seamux] refused a request from ${req.socket.remoteAddress}: ${lan.reason}`,
+      );
+      res.statusCode = 403;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(forbiddenPage(lan.reason, false));
+      return;
+    }
+    if (lan.verdict === "allowed") return next();
+    const token = req.headers[ACCESS_HEADER];
+    checkTunnelRequest(
+      dir,
+      req.headers.host ?? null,
+      typeof token === "string" ? token : null,
+    ).then((tunnel) => {
+      if (tunnel.verdict !== "denied") return next();
+      res.statusCode = 403;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(forbiddenPage(tunnel.reason));
+    }, next);
+  };
+}
+
+// Whether the board answers a request addressed to `host`, as Vite's
+// allowedHosts decides in dev: localhost, an IP address, the tunnel's
+// hostname, and this Mac's .local name while mDNS is on. Any other name is a
+// page elsewhere that pointed its own DNS at this Mac to read the board.
+export function hostAllowed(dir: string, host: string | null): boolean {
+  if (host === null) return false;
+  const name = hostOf(host);
+  if (name === "localhost" || name.endsWith(".localhost")) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || /^\[[0-9a-f:.]+\]$/.test(name)) {
+    return true;
+  }
+  return isTunnelHost(dir, host) || isLanHost(dir, host);
 }
 
 // The 403 for a refused tunnel or network request, and why.

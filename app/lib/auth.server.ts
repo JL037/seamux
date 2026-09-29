@@ -12,13 +12,13 @@ import {
   isLanHost,
   isTunnelHost,
 } from "~/lib/remote.server";
+import { SEAMUX_HOME } from "~/lib/paths.server";
 
-// The board runs from its checkout, so that is where its .env is.
 // A request through the tunnel has passed Cloudflare Access, so it counts.
 export function isSecured(request: Request): boolean {
   return (
-    readCredentials(process.cwd()) !== null ||
-    isTunnelHost(process.cwd(), request.headers.get("host"))
+    readCredentials(SEAMUX_HOME) !== null ||
+    isTunnelHost(SEAMUX_HOME, request.headers.get("host"))
   );
 }
 
@@ -36,7 +36,7 @@ export const requireAuth: MiddlewareFunction<Response> = async (
   next,
 ) => {
   const tunnel = await checkTunnelRequest(
-    process.cwd(),
+    SEAMUX_HOME,
     request.headers.get("host"),
     request.headers.get(ACCESS_HEADER),
   );
@@ -47,9 +47,9 @@ export const requireAuth: MiddlewareFunction<Response> = async (
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   }
-  const credentials = readCredentials(process.cwd());
+  const credentials = readCredentials(SEAMUX_HOME);
   if (!credentials) {
-    if (!isLanHost(process.cwd(), request.headers.get("host"))) return next();
+    if (!isLanHost(SEAMUX_HOME, request.headers.get("host"))) return next();
     return new Response(
       forbiddenPage(
         "SEAMUX_USER and SEAMUX_PASS are unset, and the board doesn't answer the network without them",

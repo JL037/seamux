@@ -8,7 +8,6 @@ import { execFile } from "node:child_process";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
@@ -47,6 +46,7 @@ import {
   type LiveSession,
   type Surface,
 } from "./drive.server";
+import { IS_CHECKOUT, PACKAGE_ROOT, packageVersion } from "./paths.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
 import { serviceNotices } from "./service.server";
 import {
@@ -1079,14 +1079,16 @@ async function branchOf(cwd: string | null): Promise<string | null> {
   }
 }
 
-// Two levels up is the repo root from app/lib/ and from build/server/.
-const SEAMUX_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
-
+// The commit a checkout serves, or an installed package's version.
 async function servedVersion(): Promise<Board["version"]> {
+  if (!IS_CHECKOUT || !PACKAGE_ROOT) {
+    const version = packageVersion();
+    return version ? { hash: `v${version}`, subject: "" } : null;
+  }
   try {
     const { stdout } = await run(
       "git",
-      ["-C", SEAMUX_ROOT, "log", "-1", "--format=%h %s"],
+      ["-C", PACKAGE_ROOT, "log", "-1", "--format=%h %s"],
       { timeout: 5_000 },
     );
     const [hash, ...subject] = stdout.trim().split(" ");

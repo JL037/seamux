@@ -1,9 +1,10 @@
 // Installs (or with --uninstall, removes) seamux's skills in
 // ~/.claude/skills, so sessions in any repo can use the protocol. Each
-// SKILL.md is rendered with this checkout's bin/seamux path. Idempotent.
+// SKILL.md is rendered with the path of the seamux command sessions call
+// (app/lib/paths.server.ts). Idempotent.
 //
-//   npm run skills:install
-//   npm run skills:uninstall
+//   npm run skills:install      (or `seamux setup`)
+//   npm run skills:uninstall    (or `seamux uninstall`)
 
 import {
   existsSync,
@@ -14,17 +15,18 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SOURCE = join(REPO, "skills");
+import { packagePath, SEAMUX_BIN } from "../app/lib/paths.server.ts";
+import { installRuntime } from "./runtime.ts";
+
+const SOURCE = packagePath("skills");
 const TARGET = join(homedir(), ".claude/skills");
-const BIN = join(REPO, "bin/seamux");
 // Marks a skill as ours, so uninstall never removes one it did not write.
 const MARK = "<!-- installed by seamux: npm run skills:install -->";
 
 const uninstall = process.argv.includes("--uninstall");
+if (!uninstall) installRuntime();
 
 for (const name of readdirSync(SOURCE)) {
   const dest = join(TARGET, name);
@@ -41,7 +43,7 @@ for (const name of readdirSync(SOURCE)) {
     continue;
   }
   const body = readFileSync(join(SOURCE, name, "SKILL.md"), "utf8")
-    .replaceAll("{{SEAMUX_BIN}}", BIN)
+    .replaceAll("{{SEAMUX_BIN}}", SEAMUX_BIN)
     .trimEnd();
   mkdirSync(dest, { recursive: true });
   writeFileSync(file, `${body}\n\n${MARK}\n`);

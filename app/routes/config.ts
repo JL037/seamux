@@ -13,6 +13,7 @@ import { forgetCommands } from "~/lib/commands.server";
 import { checkDirectory } from "~/lib/drive.server";
 import { assertFromBoard, isLocalRequest } from "~/lib/guard.server";
 import { readCredentials } from "~/lib/credentials";
+import { SEAMUX_HOME } from "~/lib/paths.server";
 import {
   readRemoteSettings,
   setRemoteSwitch,
@@ -66,16 +67,16 @@ function setRemote(which: RemoteSwitch, on: boolean, request: Request) {
       throw new Error("Remote access can only be turned on from this Mac");
     }
     if (which === "tunnel") {
-      const { missing } = readRemoteSettings(process.cwd());
+      const { missing } = readRemoteSettings(SEAMUX_HOME);
       if (missing.length > 0) {
         throw new Error(`Set ${missing.join(", ")} first`);
       }
     }
-    if (which === "mdns" && !readCredentials(process.cwd())) {
+    if (which === "mdns" && !readCredentials(SEAMUX_HOME)) {
       throw new Error("Set SEAMUX_USER and SEAMUX_PASS first");
     }
   }
-  setRemoteSwitch(process.cwd(), which, on);
+  setRemoteSwitch(SEAMUX_HOME, which, on);
 }
 
 export async function action({

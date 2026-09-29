@@ -102,6 +102,7 @@ import { ENGINE_LABELS, type Engine } from "~/lib/config";
 import { configOrDefaults } from "~/lib/config.server";
 import { installedEngines } from "~/lib/drive.server";
 import { startQueue } from "~/lib/queue.server";
+import { SEAMUX_HOME } from "~/lib/paths.server";
 import { remoteStatus, type RemoteStatus } from "~/lib/remote.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useCoarsePointer } from "~/lib/use-pointer";
@@ -138,7 +139,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     board: await loadBoard(),
     config: configOrDefaults(),
     engines: installedEngines(),
-    remote: remoteStatus(process.cwd(), request.headers.get("host")),
+    remote: remoteStatus(SEAMUX_HOME, request.headers.get("host")),
   };
 }
 
