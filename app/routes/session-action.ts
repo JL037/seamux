@@ -18,6 +18,7 @@ import {
   renameClosed,
   renameLive,
   resume,
+  UnsentError,
 } from "~/lib/drive.server";
 import { assertFromBoard, SESSION_ID } from "~/lib/guard.server";
 import { startQueue } from "~/lib/queue.server";
@@ -148,7 +149,8 @@ async function perform(
     try {
       await sendOrSignIn(sessionId, row.text);
     } catch (err) {
-      restoreQueued(row);
+      // Typed but not sent: queued again, it would be typed a second time.
+      if (!(err instanceof UnsentError)) restoreQueued(row);
       throw err;
     }
   } else if (intent === "queue-drop") {

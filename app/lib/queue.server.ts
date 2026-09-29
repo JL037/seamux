@@ -6,6 +6,7 @@
 
 import { atRest, type Card } from "./board.ts";
 import { loadBoard } from "./board.server";
+import { UnsentError } from "./drive.server";
 import { sendOrSignIn } from "./service.server";
 import {
   queuedFor,
@@ -92,7 +93,8 @@ async function drain() {
         state.sent.set(sessionId, { at: Date.now(), seenBusy: false });
       }
     } catch (err) {
-      restoreQueued(row);
+      // Typed but not sent: queued again, it would be typed a second time.
+      if (!(err instanceof UnsentError)) restoreQueued(row);
       console.error(`seamux queue: ${sessionId}:`, (err as Error).message);
     }
   }

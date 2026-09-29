@@ -20,6 +20,7 @@ import {
   readDialog,
   renameLive,
   sendMessage,
+  UnsentError,
 } from "~/lib/drive.server";
 import { FakeCmux, type FakeSurface } from "./fake-cmux";
 
@@ -38,7 +39,11 @@ afterEach(async () => {
   // cmux falls back to the caller's own terminal otherwise, which is
   // whatever seamux runs in (CLAUDE.md).
   for (const r of cmux.requests) {
-    if (/^(surface\.(send_text|send_key|read_text|close)|terminal\.paste)$/.test(r.method)) {
+    if (
+      /^(surface\.(send_text|send_key|read_text|close)|terminal\.paste)$/.test(
+        r.method,
+      )
+    ) {
       expect(r.params, r.method).toMatchObject({
         surface_id: expect.any(String),
         workspace_id: expect.any(String),
@@ -93,10 +98,72 @@ describe("sendMessage", () => {
     expect(input(surface)).toEqual(["text:fix the login", "key:enter"]);
   });
 
-  it("pastes a message with a line break, which typing would submit early", async () => {
+  it("types a message with line breaks, with Shift+Enter between its lines", async () => {
     const { surface } = cmux.addSession("s");
-    await sendMessage("s", "one\ntwo");
-    expect(input(surface)).toEqual(["paste:one\ntwo", "key:enter"]);
+    await sendMessage("s", "one\ntwo\r\nthree");
+    expect(input(surface)).toEqual([
+      "text:one",
+      "key:shift+enter",
+      "text:two",
+      "key:shift+enter",
+      "text:three",
+      "key:enter",
+    ]);
+  });
+
+  it("types a long message a little at a time, which Claude Code would otherwise take for a paste", async () => {
+    const { surface } = cmux.addSession("s");
+    const text = "x".repeat(250);
+    await sendMessage("s", text);
+    expect(input(surface)).toEqual([
+      `text:${"x".repeat(100)}`,
+      `text:${"x".repeat(100)}`,
+      `text:${"x".repeat(50)}`,
+      "key:enter",
+    ]);
+  });
+
+  it("pastes a message with a tab, which typing would autocomplete", async () => {
+    const { surface } = cmux.addSession("s");
+    await sendMessage("s", "a\tb");
+    expect(input(surface)).toEqual(["paste:a\tb", "key:enter"]);
+  });
+
+  // The prompt box as Claude Code draws it, holding `text`.
+  const promptBox = (text: string) =>
+    [
+      "⏺ ok",
+      "─".repeat(40),
+      `❯ ${text}`,
+      "─".repeat(40),
+      "  ⏸ manual mode on",
+    ].join("\n");
+
+  it("presses Enter again while the message still sits in the prompt box", async () => {
+    const { surface } = cmux.addSession("s");
+    let enters = 0;
+    cmux.onInput((s, i) => {
+      if (i.kind === "text") s.screen = promptBox(i.value);
+      // The first Enter is lost, as it is while Claude Code takes a paste in.
+      if (i.value === "enter" && ++enters > 1) s.screen = promptBox("");
+    });
+    await sendMessage("s", "fix the login");
+    expect(input(surface)).toEqual([
+      "text:fix the login",
+      "key:enter",
+      "key:enter",
+    ]);
+  });
+
+  it("says so when the message never leaves the prompt box", async () => {
+    const { surface } = cmux.addSession("s");
+    cmux.onInput((s, i) => {
+      if (i.kind === "text") s.screen = promptBox(i.value);
+    });
+    await expect(sendMessage("s", "fix the login")).rejects.toBeInstanceOf(
+      UnsentError,
+    );
+    expect(input(surface).filter((i) => i === "key:enter")).toHaveLength(4);
   });
 
   it("always pastes into Codex, which folds long typed input", async () => {
@@ -293,7 +360,8 @@ describe("renameLive", () => {
 });
 
 describe("dispatch", () => {
-  const dir = () => realpathSync(mkdtempSync(join(tmpdir(), "seamux-dispatch-")));
+  const dir = () =>
+    realpathSync(mkdtempSync(join(tmpdir(), "seamux-dispatch-")));
 
   it("starts Claude Code in a new workspace through cmux's wrapper", async () => {
     const cwd = dir();
@@ -326,11 +394,15 @@ describe("dispatch", () => {
   it("answers the new-folder trust dialog, which nothing else reports", async () => {
     await dispatch({ cwd: dir(), prompt: "Trust me" });
     const created = cmux.workspaces.at(-1)!.surfaces[0];
-    created.screen = "Do you trust the files in this folder?\n❯ 1. No, exit\n  2. Yes, I trust this folder";
+    created.screen =
+      "Do you trust the files in this folder?\n❯ 1. No, exit\n  2. Yes, I trust this folder";
     // Its default is "No, exit", so Down, then Enter.
-    await vi.waitFor(() => expect(input(created)).toEqual(["key:down", "key:enter"]), {
-      timeout: 5_000,
-    });
+    await vi.waitFor(
+      () => expect(input(created)).toEqual(["key:down", "key:enter"]),
+      {
+        timeout: 5_000,
+      },
+    );
   });
 
   it("refuses an empty prompt before reaching cmux", async () => {

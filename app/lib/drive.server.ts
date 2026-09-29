@@ -123,29 +123,103 @@ function target(s: Surface) {
   return { surface_id: s.surfaceId, workspace_id: s.workspaceId };
 }
 
-// Claude Code folds a long paste into a "[Pasted text #1]" placeholder, so a
-// message for it is typed, and pasted only when it has a line break, which
-// cmux's bracketed paste keeps inside the message. A tab counts too: typed,
-// one would autocomplete. Codex is the other way round: it folds long typed
-// input into "[Pasted Content N chars]" but shows a paste in full, so it
-// always gets one. A separate Enter submits it.
+// Claude Code folds a long paste into a "[Pasted text #1]" placeholder and
+// hands it to the model wrapped in <pasted_content>, so a message for it is
+// typed, with Shift+Enter between its lines, since a typed line break
+// submits. A tab counts as needing a paste: typed, one would autocomplete.
+// Codex is the other way round: it folds long typed input into
+// "[Pasted Content N chars]" but shows a paste in full, so it always gets
+// one. A separate Enter submits it.
 const MUST_PASTE = /[\r\n\t]/;
+const LINE_BREAK = /\r\n|\r|\n/;
+
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Claude Code takes typed input arriving faster than about ten characters a
+// millisecond for a paste: it drops pieces of it, and an Enter that comes
+// while it is still taking it in is lost, leaving the message unsent in its
+// prompt box. So text is typed a little at a time.
+const TYPE_CHUNK = 100;
+const TYPE_GAP_MS = 20;
+
+async function typeText(surface: Surface, text: string) {
+  const chars = Array.from(text);
+  for (let at = 0; at < chars.length; at += TYPE_CHUNK) {
+    if (at) await pause(TYPE_GAP_MS);
+    await rpc("surface.send_text", {
+      ...target(surface),
+      text: chars.slice(at, at + TYPE_CHUNK).join(""),
+    });
+  }
+}
 
 async function enterText(surface: Surface, text: string, paste: boolean) {
-  await rpc(paste ? "terminal.paste" : "surface.send_text", {
-    ...target(surface),
-    text,
-  });
+  if (paste) await rpc("terminal.paste", { ...target(surface), text });
+  else await typeText(surface, text);
 }
+
+// The message is still in the prompt box after its Enter.
+export class UnsentError extends Error {
+  constructor() {
+    super(
+      "The message is in the chat's prompt box but didn't send; press Enter there",
+    );
+  }
+}
+
+// How long to give Claude Code to take a message in before checking it went,
+// and how many more Enters to press when it didn't.
+const SUBMIT_WAIT_MS = 300;
+const SUBMIT_RETRIES = 3;
 
 export async function sendMessage(sessionId: string, text: string) {
   const live = (await listLive()).get(sessionId);
   if (!live) throw new Error("This session is not running in a cmux surface");
   const { surface, engine } = live;
-  await enterText(surface, text, engine === "codex" || MUST_PASTE.test(text));
+  if (engine === "codex" || /\t/.test(text)) {
+    await enterText(surface, text, true);
+  } else {
+    for (const [i, line] of text.split(LINE_BREAK).entries()) {
+      if (i)
+        await rpc("surface.send_key", {
+          ...target(surface),
+          key: "shift+enter",
+        });
+      await typeText(surface, line);
+    }
+  }
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
+  if (engine === "claude") await confirmSent(surface, text);
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
+}
+
+// Press Enter again while the message still sits in Claude Code's prompt
+// box, and give up with an UnsentError if it stays there.
+async function confirmSent(surface: Surface, text: string) {
+  for (let tries = 0; ; tries++) {
+    await pause(SUBMIT_WAIT_MS);
+    if (!endsPromptBox(await readScreen(surface), text)) return;
+    if (tries === SUBMIT_RETRIES) throw new UnsentError();
+    await rpc("surface.send_key", { ...target(surface), key: "enter" });
+  }
+}
+
+// Whether Claude Code's prompt box, the lines between the last two rules on
+// the screen with "❯" leading the first, ends with the end of `text`. The box
+// wraps lines, so whitespace is left out of the comparison.
+export function endsPromptBox(screen: string, text: string): boolean {
+  const lines = screen.split("\n").map((l) => l.trim());
+  const rules = lines.flatMap((l, i) => (/^[─━▔]{8,}/.test(l) ? [i] : []));
+  const [top, bottom] = rules.slice(-2);
+  if (bottom === undefined || !lines[top + 1]?.startsWith("❯")) return false;
+  const box = lines
+    .slice(top + 1, bottom)
+    .join("")
+    .replace(/^❯/, "")
+    .replace(/\s+/g, "");
+  const tail = text.replace(/\s+/g, "").slice(-20);
+  return tail.length > 0 && box.endsWith(tail);
 }
 
 // Esc: stops the current turn, keeps the session and its history.
@@ -154,7 +228,6 @@ export async function interrupt(sessionId: string) {
   await rpc("surface.send_key", { ...target(surface), key: "escape" });
 }
 
-const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Long enough for the question dialog to redraw between keys.
 const KEY_GAP_MS = 400;
 
