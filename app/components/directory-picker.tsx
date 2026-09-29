@@ -8,12 +8,14 @@ import { cn } from "cn";
 // directory hides every other one; here, opening the list (↓, or the chevron)
 // shows them all, and only typing narrows it. Tab completes a partly typed
 // path as a shell does, from the known directories and the ones on disk: to
-// the only one it can be, or as far as every one it could be agrees.
+// the only one it can be, or as far as every one it could be agrees. A Tab
+// that settles on one directory calls onPicked, so the form can move on.
 export function DirectoryPicker({
   value,
   onValueChange,
   options,
   onFocus,
+  onPicked,
   placeholder,
   className,
   inputClassName,
@@ -23,6 +25,7 @@ export function DirectoryPicker({
   onValueChange: (value: string) => void;
   options: string[];
   onFocus?: () => void;
+  onPicked?: () => void;
   placeholder?: string;
   className?: string;
   inputClassName?: string;
@@ -100,14 +103,23 @@ export function DirectoryPicker({
         i++;
       common = common.slice(0, i);
     }
+    // The only directory it can be: take it and move on.
+    if (candidates.length === 1) {
+      if (common !== typed) onValueChange(common);
+      setQuery(null);
+      setOpen(false);
+      if (!onPicked) return common !== typed;
+      onPicked();
+      return true;
+    }
     if (common.length > typed.length) {
       onValueChange(common);
       setQuery(common);
-      if (candidates.length > 1) setOpen(true);
+      setOpen(true);
       return true;
     }
     // Nothing more they all agree on: show them, once.
-    if (candidates.length > 1 && !open) {
+    if (!open) {
       setQuery(typed);
       setOpen(true);
       return true;
@@ -123,6 +135,7 @@ export function DirectoryPicker({
       onValueChange(arrowedTo.current);
       setQuery(null);
       setOpen(false);
+      onPicked?.();
       return;
     }
     if (!value.trim()) return;

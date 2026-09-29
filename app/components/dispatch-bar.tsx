@@ -89,6 +89,7 @@ export function DispatchBar({
   // The new chat shows in Working as it is sent, until the board lists it.
   const { spawn, started } = useOptimistic();
   const spawning = useRef("");
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   // An unsent directory from before a reload wins over the last one used.
   useEffect(() => {
@@ -150,6 +151,7 @@ export function DispatchBar({
   return (
     <section className="flex flex-col gap-2 rounded-xl border bg-card p-2 shadow-sm transition-shadow focus-within:border-ring/60 focus-within:ring-3 focus-within:ring-ring/15">
       <Textarea
+        ref={promptRef}
         data-focus-key="dispatch:prompt"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -170,6 +172,7 @@ export function DispatchBar({
           onValueChange={setCwd}
           options={options}
           onFocus={loadDirs}
+          onPicked={() => promptRef.current?.focus()}
           placeholder="/dir pick"
           className="flex-1 basis-64"
           inputClassName="sensitive text-sm"
