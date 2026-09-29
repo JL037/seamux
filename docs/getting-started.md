@@ -130,6 +130,8 @@ All optional. Each can go in `.env` or the environment, except `SEAMUX_HOME`, wh
 | `SEAMUX_HOME` | the clone, or `~/.seamux` | Where seamux keeps `.env`, `.seamux.json` and `data/` |
 | `SEAMUX_COMPILED` | unset | `1` makes a clone run the compiled board, as `npm start` does |
 | `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
+| `CMUX_SOCKET_PATH` | set in every cmux terminal, else `~/.local/state/cmux/cmux.sock` | cmux's control socket |
+| `CMUX_SOCKET_PASSWORD` | unset | cmux's socket password, if you've turned on its password mode. seamux doesn't read the one saved in cmux's Settings |
 | `SEAMUX_CMUX_APP` | `/Applications/cmux.app`, else `~/Applications/cmux.app` | Where cmux is installed, for its wrappers that launch each agent |
 | `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |
 | `SEAMUX_POLL` | unset | `1` makes hot reload poll for file changes. It already polls on WSL's `/mnt/` drives |
