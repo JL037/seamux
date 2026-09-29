@@ -1,14 +1,14 @@
 # Opens and keeps up to date the Version Packages pull request, which folds
 # the pending changesets into CHANGELOG.md and bumps the version in
-# package.json. Merging it is what releases seamux: release.yml sees a version
-# npm hasn't, and publishes it.
+# package.json. Merging it sets the version of the next release, which is
+# published to npm by hand from main.
 #
-# THIS WORKFLOW CANNOT PUBLISH, and that is its security property. It reads
+# This workflow cannot publish, and should never be able to. It reads
 # contributor-written changesets, which are untrusted text, and holds no npm
-# credential and no OIDC identity, so a crafted changeset has nothing here to
-# steal. By the time release.yml publishes, the Version Packages pull request
-# has merged and there are no changesets left to read. Keep the publish out of
-# this file, and never give the changesets action a `publish:` input.
+# credential, so a crafted changeset has nothing here to steal. If publishing
+# is ever automated, it goes in a workflow of its own that runs after the
+# Version Packages pull request merges, when no changesets are left to read;
+# never give the changesets action a `publish:` input.
 #
 # Concurrency is required: two pushes racing on the changeset-release/main
 # branch would leave a pull request describing versions the other computed.
