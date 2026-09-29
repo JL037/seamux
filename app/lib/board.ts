@@ -256,8 +256,14 @@ export const DISPATCH_VISIBLE_MS = 24 * 60 * 60 * 1000;
 // DONE cards stay visible for this long after the chat closes.
 export const DONE_VISIBLE_MS = 30 * 60 * 1000;
 
-// Whether /exit is safe: the turn is over and no dialog is open, so it
-// would land in an empty prompt box.
-export function closable(card: Card): boolean {
+// Whether the turn is over and no dialog is open, so what's typed lands in
+// an empty prompt box. A reply that ended on a question puts the card in
+// WAITING, but the prompt box is free.
+export function atRest(card: Card): boolean {
   return card.column === "idle" || card.waiting?.reason === ASKED_IN_REPLY;
+}
+
+// Whether /exit is safe.
+export function closable(card: Card): boolean {
+  return atRest(card);
 }
