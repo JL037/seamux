@@ -59,10 +59,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
         {/* Use the theme chosen with the header toggle, else follow the OS;
-            shadcn tokens key off the .dark class. */}
+            shadcn tokens key off the .dark class. When hydration fails,
+            React renders <html> afresh and strips every attribute from it,
+            so the class is put back whenever it goes missing. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(()=>{const k=${JSON.stringify(THEME_KEY)};const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>{let t=null;try{t=JSON.parse(localStorage.getItem(k))}catch{}document.documentElement.classList.toggle("dark",t==="dark"||(t!=="light"&&m.matches))};s();m.addEventListener("change",s)})()`,
+            __html: `(()=>{const k=${JSON.stringify(THEME_KEY)};const r=document.documentElement;const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>{let t=null;try{t=JSON.parse(localStorage.getItem(k))}catch{}const d=t==="dark"||(t!=="light"&&m.matches);if(r.classList.contains("dark")!==d)r.classList.toggle("dark",d)};s();m.addEventListener("change",s);new MutationObserver(s).observe(r,{attributes:true,attributeFilter:["class"]})})()`,
           }}
         />
         {/* Blur for screenshots, from the Debug tab, before the first paint

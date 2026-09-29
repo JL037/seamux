@@ -8,7 +8,8 @@ import { Button } from "~/components/ui/button";
 export const THEME_KEY = "seamux:theme";
 
 // The sun or moon beside the cog: flips the board between light and dark,
-// and remembers the choice. Until one is made, the board follows the OS.
+// and remembers the choice. Until one is made, or once it matches the OS
+// again, the board follows the OS.
 export function ThemeToggle() {
   // The class is set before hydration, so read it after mount.
   const [dark, setDark] = useState<boolean | null>(null);
@@ -24,10 +25,17 @@ export function ThemeToggle() {
 
   const toggle = () => {
     const next = !document.documentElement.classList.contains("dark");
-    document.documentElement.classList.toggle("dark", next);
+    // Store the choice before flipping the class: root.tsx's script puts
+    // the class back to match storage whenever it changes.
     try {
-      localStorage.setItem(THEME_KEY, JSON.stringify(next ? "dark" : "light"));
+      // Flipping back to what the OS wants goes back to following it.
+      if (next === matchMedia("(prefers-color-scheme: dark)").matches) {
+        localStorage.removeItem(THEME_KEY);
+      } else {
+        localStorage.setItem(THEME_KEY, JSON.stringify(next ? "dark" : "light"));
+      }
     } catch {}
+    document.documentElement.classList.toggle("dark", next);
   };
 
   const label = dark ? "Switch to light mode" : "Switch to dark mode";
