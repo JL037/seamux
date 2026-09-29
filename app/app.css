@@ -178,9 +178,10 @@ html[data-unsecured].dark {
 
 /* Debug → Blur for screenshots: everything a chat says, and where it runs,
    blurred in this browser, so the board can be shown or shared. Mark such
-   an element with the sensitive class. */
+   an element with the sensitive class. In em, so it grows with the text:
+   a fixed 5px left small print readable. */
 [data-blur] .sensitive {
-  filter: blur(5px);
+  filter: blur(0.5em);
 }
 
 /* The mark's ramp: the primary action, and the edge of a working card. */
