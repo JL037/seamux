@@ -85,7 +85,7 @@ Switches on remote connections: mDNS for your own network, and a Cloudflare tunn
 
 ### Debug
 
-- **Blur cards for screenshots**: blurs what each chat says and where it runs (names, paths, branches, prompts, replies, questions, queued messages and open files) while the columns, layout and controls stay readable, so the board can go in a screenshot or a bug report. Kept in this browser only.
+- **Blur cards for screenshots**: blurs what each chat says, where it runs and when (names, paths, branches, how long ago, prompts, replies, questions, queued messages and open files) while the columns, layout and controls stay readable, so the board can go in a screenshot or a bug report. Kept in this browser only.
 - **Diagnostics**: sends a snapshot of how this browser lays out the board to the Mac, for triage from a phone. It records the screen size, the media queries that match, the safe areas, which stylesheets are loaded and whether they carry the phone layout's rules, and every column's and card's size and computed style. It also records the service worker's state and recent script errors. A snapshot is sent when the board loads, a second after the window is resized or turned, and when you press **Send now**. The tab shows the last one, and the Mac keeps it in `data/diagnostics/latest.json`, with the last 50 in `data/diagnostics/log.jsonl`.
 - **Clear this browser's cache for the board**: a link to `/reset`, which answers with `Clear-Site-Data: "cache"` and goes back to the board. It gets a browser that is stuck on old code working again, and keeps drafts, settings and the Access login. The error page links to it too.
 - **Clear autocomplete cache**: forgets every folder's slash commands, so each is listed again the next time you type `/`.

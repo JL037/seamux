@@ -967,7 +967,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
                 {card.branch}
               </span>
             )}
-            <span>{ago(card.lastActivityAt, now)}</span>
+            <span className="sensitive">{ago(card.lastActivityAt, now)}</span>
             {card.engine !== "claude" && (
               <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
                 {ENGINE_LABELS[card.engine]}

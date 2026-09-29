@@ -49,7 +49,7 @@ export function SubagentSummary({
           {s.type && s.description && (
             <span className="shrink-0 text-muted-foreground">{s.type}</span>
           )}
-          <span className="ml-auto shrink-0 text-muted-foreground">
+          <span className="sensitive ml-auto shrink-0 text-muted-foreground">
             {s.stale ? "stale" : since(s.startedAt, now)}
           </span>
         </div>
@@ -84,7 +84,7 @@ export function SubagentDetail({
             <StatusIcon agent={s} />
             <span className="sensitive font-medium">{label(s)}</span>
           </div>
-          <div className="pl-4.5 text-muted-foreground">
+          <div className="sensitive pl-4.5 text-muted-foreground">
             {[
               s.type,
               s.stale

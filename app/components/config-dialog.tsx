@@ -375,8 +375,9 @@ function DebugTab({
           onCheckedChange={blur.setEnabled}
           label="Blur cards for screenshots"
         >
-          Blurs what each chat says and where it runs: names, paths, branches,
-          prompts, replies, questions and open files, leaving the board's
+          Blurs what each chat says, where it runs and when: names, paths,
+          branches, how long ago, prompts, replies, questions and open files,
+          leaving the board's
           layout, columns and controls readable. For sharing a screenshot or
           attaching one to a bug report. Kept in this browser only.
         </SwitchRow>
