@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The fake `claude` command, first on PATH in the tests (test/setup.ts), so no
+// The fake `claude` command, first on PATH in the tests (tests/setup.ts), so no
 // test reads the real Claude Code's sessions. `claude agents --json` lists
 // none; anything else is refused.
 const args = process.argv.slice(2);

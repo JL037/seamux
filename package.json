@@ -34,6 +34,7 @@
     "bump": "changeset version && npm install --package-lock-only --ignore-scripts",
     "typecheck": "react-router typegen && tsc",
     "test": "vitest run",
+    "test:cmux": "vitest run --config vitest.cmux.config.ts",
     "hooks:install": "node --no-warnings scripts/install-hooks.ts",
     "hooks:uninstall": "node --no-warnings scripts/install-hooks.ts --uninstall",
     "skills:install": "node --no-warnings scripts/install-skills.ts",

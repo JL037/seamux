@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The fake `cmux` command, first on PATH in the tests (test/setup.ts). It
-// answers `cmux sessions list --json` from the state test/fake-cmux.ts writes,
+// The fake `cmux` command, first on PATH in the tests (tests/setup.ts). It
+// answers `cmux sessions list --json` from the state tests/fake-cmux.ts writes,
 // and refuses anything else: seamux reaches everything else over the socket.
 import { readFileSync } from "node:fs";
 

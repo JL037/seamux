@@ -1,5 +1,5 @@
 // seamux's connection to cmux. Every call goes one of two ways, which are the
-// whole contract test/fake-cmux.ts stands in for:
+// whole contract tests/fake-cmux.ts stands in for:
 //
 // - The control socket, for anything that acts on cmux or reads it live:
 //   `cmuxRpc(method, params)`. seamux speaks cmux's v2 protocol itself rather

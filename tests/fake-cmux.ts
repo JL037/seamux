@@ -7,12 +7,13 @@
 //   "_cmux_capability_v1 <token> ", an optional "auth <password>" line first,
 //   and {"id","ok","result"} or {"id","ok":false,"error":{"code","message"}}
 //   back. Every request is recorded, so a test can assert what seamux sent.
-// - `cmux sessions list --json`, answered by test/bin/cmux from a state file
+// - `cmux sessions list --json`, answered by tests/bin/cmux from a state file
 //   this writes, since the real command reads cmux's saved records rather
 //   than the socket.
 //
-// It models only what seamux relies on. A method it doesn't know gets cmux's
-// own method_not_found, so a new call seamux starts making fails loudly here
+// It models only what seamux relies on, and refuses what cmux refuses with
+// cmux's own codes and words (checked by tests-cmux/). A method it doesn't
+// know gets cmux's own method_not_found, so a new call seamux starts making fails loudly here
 // until the fake learns it, which is the point: that is a new piece of the
 // contract to pin down.
 
@@ -71,6 +72,11 @@ class Refusal extends Error {
     super(message);
   }
 }
+
+// The keys seamux presses, each checked against cmux by tests-cmux/. cmux
+// refuses a key it doesn't know, and so does the fake, so a misspelt one
+// fails here too.
+export const KEYS = ["enter", "escape", "tab", "down"];
 
 // Methods that act on one terminal, which must always be named: cmux falls
 // back to the caller's own surface when one isn't (CLAUDE.md).
@@ -323,6 +329,9 @@ export class FakeCmux {
           this.workspaceById(params.workspace_id),
           params.surface_id,
         );
+        if (method === "surface.send_key" && !KEYS.includes(String(params.key))) {
+          throw new Refusal("invalid_params", "Unknown key");
+        }
         const input = {
           kind:
             method === "surface.send_key"
@@ -349,7 +358,8 @@ export class FakeCmux {
 
   private surfaceIn(workspace: FakeWorkspace, id: unknown): FakeSurface {
     const surface = workspace.surfaces.find((s) => s.id === id);
-    if (!surface) throw new Refusal("not_found", "Surface not found");
+    // cmux's words for a surface id it doesn't have in the workspace.
+    if (!surface) throw new Refusal("invalid_params", "Surface is not a terminal");
     return surface;
   }
 }

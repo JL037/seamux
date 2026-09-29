@@ -10,8 +10,8 @@ export default defineConfig({
     alias: { "~": fileURLToPath(new URL("./app", import.meta.url)) },
   },
   test: {
-    include: ["test/**/*.test.ts"],
-    setupFiles: ["test/setup.ts"],
+    include: ["tests/**/*.test.ts"],
+    setupFiles: ["tests/setup.ts"],
     environment: "node",
     // Each file gets its own process, so its fake cmux and its imports of
     // seamux's modules start fresh.

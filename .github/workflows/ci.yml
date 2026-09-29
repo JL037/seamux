@@ -42,7 +42,8 @@ jobs:
       # No dependency's install scripts run: nothing here needs them.
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
-      # Against a fake cmux (test/fake-cmux.ts): nothing here needs cmux or
-      # Claude Code installed.
+      # tests/, against a fake cmux (tests/fake-cmux.ts): nothing here needs
+      # cmux or Claude Code installed. tests-cmux/, the contract against a
+      # real cmux, runs locally only (npm run test:cmux).
       - run: npm test
       - run: npm run build

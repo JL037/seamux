@@ -51,5 +51,6 @@ On GitHub, `release-version.yml` keeps a "Version Packages" pull request open th
 
 ## Checking changes
 
-- `npm run typecheck` and `npm test`. The tests drive `test/fake-cmux.ts`, a stand-in for cmux's control socket and `cmux sessions list`, and never reach the real cmux: `test/setup.ts` replaces the socket path and drops the capability token. A new cmux call needs the fake taught it, and a test of what seamux sends.
+- `npm run typecheck` and `npm test`. `tests/` runs against `tests/fake-cmux.ts`, a stand-in for cmux's control socket and `cmux sessions list`, and never reaches the real cmux: `tests/setup.ts` replaces the socket path and drops the capability token. CI runs it.
+- `npm run test:cmux`, from a cmux terminal, checks the same contract against the real cmux: `tests-cmux/` is the vendor contract, and never runs in CI. Run it after cmux updates, and whenever you change a cmux call. When it fails, cmux changed: update seamux, the fake to match what cmux now does (its refusals use cmux's own codes and words), and `docs/findings.md`. A new cmux call gets all three: a contract test in `tests-cmux/`, the method in the fake, and a test in `tests/` of what seamux sends.
 - Try new cmux or Claude Code calls against a throwaway session in its own cmux workspace, never against the user's live sessions, and close the workspace afterwards.
