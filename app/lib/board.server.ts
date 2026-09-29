@@ -183,7 +183,9 @@ async function backgroundDetail(
 async function indexTranscripts(): Promise<Map<string, Transcript>> {
   const root = join(CLAUDE_DIR, "projects");
   const index = new Map<string, Transcript>();
-  for (const project of await readdir(root)) {
+  // None yet: Claude Code has never run here, or only Codex has.
+  const projects = await readdir(root).catch(() => [] as string[]);
+  for (const project of projects) {
     let files: string[];
     try {
       files = await readdir(join(root, project));
@@ -671,7 +673,13 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
 
   const [agents, attached, workspaces, transcripts, codexTranscripts, names] =
     await Promise.all([
-      listAgents(),
+      // No Claude Code installed is a board of Codex sessions, not an error.
+      listAgents().catch((err: NodeJS.ErrnoException) => {
+        if (err.code !== "ENOENT") {
+          warnings.push(`Claude Code sessions unknown: ${err.message}`);
+        }
+        return [] as AgentRow[];
+      }),
       attachedTo().catch((err) => {
         warnings.push(`Attached sessions unknown: ${err.message}`);
         return null;

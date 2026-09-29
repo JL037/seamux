@@ -29,9 +29,9 @@ function print(value: unknown) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-const USAGE = `seamux                              run the board
+const USAGE = `seamux                              run the board, setting seamux up first if it isn't
 seamux setup                        install the subagent hooks and the dispatch skill
-seamux uninstall                    remove them
+seamux uninstall                    remove them, and keep the board from starting until setup
 seamux fanout <manifest.json | ->   declare a set of workers, then spawn each
                                     as its own top-level session
 seamux wait <dispatch-id>           barrier: block until every worker has

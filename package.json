@@ -23,7 +23,6 @@
     "seamux": "bin/seamux"
   },
   "scripts": {
-    "setup": "npm install && bin/seamux setup",
     "seamux": "bin/seamux",
     "dev": "react-router dev",
     "land": "node --no-warnings scripts/land.ts",
@@ -34,11 +33,7 @@
     "bump": "changeset version && npm install --package-lock-only --ignore-scripts",
     "typecheck": "react-router typegen && tsc",
     "test": "vitest run",
-    "test:cmux": "vitest run --config vitest.cmux.config.ts",
-    "hooks:install": "node --no-warnings scripts/install-hooks.ts",
-    "hooks:uninstall": "node --no-warnings scripts/install-hooks.ts --uninstall",
-    "skills:install": "node --no-warnings scripts/install-skills.ts",
-    "skills:uninstall": "node --no-warnings scripts/install-skills.ts --uninstall"
+    "test:cmux": "vitest run --config vitest.cmux.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

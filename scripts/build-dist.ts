@@ -19,8 +19,7 @@ const ENTRIES = {
   supervise: "scripts/supervise.ts",
   seamux: "scripts/seamux.ts",
   "subagent-event": "hooks/subagent-event.ts",
-  "install-hooks": "scripts/install-hooks.ts",
-  "install-skills": "scripts/install-skills.ts",
+  setup: "scripts/setup.ts",
 };
 const STANDALONE = ["seamux", "subagent-event"];
 

@@ -18,7 +18,7 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 - `app/lib/paths.server.ts`: where the package is, and `SEAMUX_HOME`, where `.env`, `.seamux.json` and `data/` live: the checkout, or `~/.seamux` for an installed package. Read state from there, never from `process.cwd()` or a path relative to a module.
 - `hooks/subagent-event.ts`, everything under `scripts/` and `server/serve.ts` run under plain Node with type stripping in a checkout, and so does everything they import: relative imports with `.ts` extensions, `import type`, no enums. `npm run build` bundles them into `dist/` (`scripts/build-dist.ts`) for an installed package, where Node won't strip types. `bin/seamux` runs the TypeScript in a checkout and `dist/` otherwise.
 - `server/serve.ts`: the compiled board, which the supervisor runs in place of the dev server for an installed package, or with `SEAMUX_COMPILED=1` (`npm start`).
-- `skills/seamux-dispatch/SKILL.md` is a template; `npm run skills:install` (or `seamux setup`) renders it into `~/.claude/skills`.
+- `skills/seamux-dispatch/SKILL.md` is a template; `scripts/setup.ts` renders it into `~/.claude/skills`, with the subagent hooks, whenever the board starts (and on `seamux setup`).
 
 ## Working on seamux
 

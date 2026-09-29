@@ -18,11 +18,10 @@ You need:
 Then:
 
 ```bash
-npx seamux setup   # install the subagent hooks and the dispatch skill
-npx seamux         # run the board on http://127.0.0.1:54321 and keep it running
+npx seamux   # run the board on http://127.0.0.1:54321 and keep it running
 ```
 
-Or, from a clone of this repo, `npm run setup` and then `npm run seamux`, which runs the dev server so a change goes live as soon as it's saved.
+The first run installs the subagent hooks and the dispatch skill Claude Code needs for the board, and says what it changed; `npx seamux uninstall` removes them. Or, from a clone of this repo, `npm install` and then `npm run seamux`, which runs the dev server so a change goes live as soon as it's saved.
 
 - **[Getting started](docs/getting-started.md)**: requirements, installing from npm or a clone, what `setup` changes outside seamux, setting a password, and every setting and environment variable.
 - **[Remote connections](docs/remote-connections.md)**: reaching the board from your phone or another computer, over your own network with mDNS, or from anywhere through a Cloudflare tunnel behind Cloudflare Access.

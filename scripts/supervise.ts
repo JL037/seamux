@@ -11,7 +11,9 @@
 // - restarts it when asked: `npm run land` touches data/board.restart after
 //   reinstalling dependencies. Other changes go live by hot reload;
 // - on start, stops a board server orphaned by a supervisor that was killed;
-// - refuses to run twice.
+// - refuses to run twice;
+// - on start, sets seamux up when it isn't, or updates an old setup
+//   (scripts/setup.ts), and after `seamux uninstall` doesn't start at all.
 //
 // It also runs the Cloudflare tunnel while the board's Remote switches are on
 // (app/lib/remote.server.ts), restarting it with the same backoff when it exits,
@@ -56,6 +58,7 @@ import {
   updateRunFile,
 } from "../app/lib/remote.server.ts";
 import { installRuntime } from "./runtime.ts";
+import { ensureSetup, SETUP_COMMAND } from "./setup.ts";
 
 // Where .seamux.json and data/ live. `npm run land` passes the main
 // checkout's own instead, since it runs from a worktree.
@@ -195,6 +198,24 @@ async function supervise() {
     log(`already running as pid ${other}; not starting a second one`);
     process.exit(1);
   }
+
+  // Set seamux up if it isn't, or bring an old setup up to date. After
+  // `seamux uninstall`, don't start at all until `seamux setup`.
+  const setup = ensureSetup();
+  if (setup.state === "uninstalled") {
+    console.error(
+      `seamux was uninstalled. Run \`${SETUP_COMMAND}\` to reinstall its hooks and skill.`,
+    );
+    process.exit(1);
+  }
+  if (setup.state === "failed") {
+    log(
+      `couldn't set seamux up (${setup.error}); starting anyway, but the board won't see subagents`,
+    );
+  } else if (setup.changed) {
+    log(setup.changed);
+  }
+
   writeFileSync(SUPERVISOR_PID, `${process.pid}\n`);
 
   const server = COMPILED ? packagePath("dist/serve.js") : null;

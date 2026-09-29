@@ -4,7 +4,7 @@ Issues and pull requests are welcome. For anything bigger than a fix, open an is
 
 ## Setting up
 
-Follow [Getting started](docs/getting-started.md): macOS, cmux, Claude Code and Node 24 or later, then `npm run setup` and `npm run seamux`.
+Follow [Getting started](docs/getting-started.md): macOS, cmux, Claude Code and Node 24 or later, then `npm install` and `npm run seamux`.
 
 ## Making a change
 

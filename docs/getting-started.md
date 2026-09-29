@@ -17,17 +17,18 @@ There are two ways to run seamux: the published package, which runs a compiled b
 ### From npm
 
 ```bash
-npx seamux setup   # install the subagent hooks and the dispatch skill
-npx seamux         # run the board on http://127.0.0.1:54321 and keep it running
+npx seamux   # run the board on http://127.0.0.1:54321 and keep it running
 ```
+
+The first run sets seamux up: it installs the subagent hooks and the dispatch skill, and says what it changed (see [What setup changes](#what-setup-changes-outside-seamux)). Later runs keep them up to date, quietly unless something changed.
 
 seamux keeps its settings and state in `~/.seamux`: its `.env`, `.seamux.json`, and `data/`. Set `SEAMUX_HOME` to keep them somewhere else. It also keeps copies of the hook and the fan-out CLI in `~/.seamux/bin`, which sessions call, since npx's cache can be emptied at any time. Each start of the board refreshes them, so upgrading seamux upgrades them too.
 
 ### From a clone
 
 ```bash
-npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
-npm run seamux   # run the board on http://127.0.0.1:54321 and keep it running
+npm install
+npm run seamux   # set seamux up, then run the board on http://127.0.0.1:54321 and keep it running
 ```
 
 A clone keeps its settings and state in the clone itself, all gitignored. `npm start` builds and runs the compiled board instead of the dev server, as the npm package does.
@@ -40,7 +41,7 @@ The same command is `bin/seamux`, the package's `seamux` bin: in a clone, run `n
 
 ### What setup changes outside seamux
 
-`setup` writes to two places outside seamux's own directory. Both are safe to run again and both can be undone:
+Starting the board, or `npx seamux setup`, writes to two places outside seamux's own directory, when they aren't already right. Both are safe to repeat and both can be undone:
 
 - **`~/.claude/settings.json`** gets `SubagentStart` and `SubagentStop` hooks that run seamux's subagent hook, so the board can see subagents in every session. The file is backed up first.
 - **`~/.claude/skills/seamux-dispatch/`** gets the fan-out skill, rendered with the path of the `seamux` command sessions call.
@@ -51,7 +52,7 @@ The same command is `bin/seamux`, the package's `seamux` bin: in a clone, run `n
 npx seamux uninstall   # or, in a clone, bin/seamux uninstall
 ```
 
-That takes seamux's hooks out of `~/.claude/settings.json`, and nothing else there, and removes the seamux-dispatch skill. Then delete `~/.seamux`, or the clone. Its `data/` holds seamux's store, fan-out records and logs, and nothing any session needs: your sessions and transcripts are Claude Code's and Codex's, and stay where they are.
+That takes seamux's hooks out of `~/.claude/settings.json`, and nothing else there, and removes the seamux-dispatch skill. It also remembers the uninstall: from then on the board won't start, and says to run `npx seamux setup` (or `bin/seamux setup`), which installs both again. To remove seamux entirely, delete `~/.seamux`, or the clone. Its `data/` holds seamux's store, fan-out records and logs, and nothing any session needs: your sessions and transcripts are Claude Code's and Codex's, and stay where they are.
 
 ## Set a password
 

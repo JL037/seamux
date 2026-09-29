@@ -1,5 +1,5 @@
 // SubagentStart / SubagentStop hook. Installed globally by
-// scripts/install-hooks.ts, so it runs inside every Claude Code session.
+// scripts/setup.ts, so it runs inside every Claude Code session.
 //
 // It must never get in a session's way: it reads the payload, records it,
 // and exits 0 whatever happens.

@@ -1,7 +1,8 @@
 #!/bin/sh
-# seamux's command line. With no command it runs the board (supervise);
-# `setup` and `uninstall` add or remove the subagent hooks and the dispatch
-# skill; anything else goes to the protocol CLI (seamux).
+# seamux's command line. With no command it runs the board (supervise),
+# setting seamux up first if it isn't; `setup` and `uninstall` add or remove
+# the subagent hooks and the dispatch skill (setup); anything else goes to
+# the protocol CLI (seamux).
 #
 # A git checkout runs the TypeScript under scripts/ and hooks/. An installed
 # package runs the bundled JavaScript in dist/, since Node won't strip types
@@ -16,11 +17,6 @@ script() {
 
 case "$1" in
   "") exec node --no-warnings "$(script supervise)" ;;
-  setup)
-    node --no-warnings "$(script install-hooks)" || exit
-    exec node --no-warnings "$(script install-skills)" ;;
-  uninstall)
-    node --no-warnings "$(script install-hooks)" --uninstall || exit
-    exec node --no-warnings "$(script install-skills)" --uninstall ;;
+  setup|uninstall) exec node --no-warnings "$(script setup)" "$1" ;;
   *) exec node --no-warnings "$(script seamux)" "$@" ;;
 esac
