@@ -1,0 +1,55 @@
+# Opens and keeps up to date the Version Packages pull request, which folds
+# the pending changesets into CHANGELOG.md and bumps the version in
+# package.json. Merging it is what releases seamux: release.yml sees a version
+# npm hasn't, and publishes it.
+#
+# THIS WORKFLOW CANNOT PUBLISH, and that is its security property. It reads
+# contributor-written changesets, which are untrusted text, and holds no npm
+# credential and no OIDC identity, so a crafted changeset has nothing here to
+# steal. By the time release.yml publishes, the Version Packages pull request
+# has merged and there are no changesets left to read. Keep the publish out of
+# this file, and never give the changesets action a `publish:` input.
+#
+# Concurrency is required: two pushes racing on the changeset-release/main
+# branch would leave a pull request describing versions the other computed.
+#
+# Action refs are pinned to commit SHAs; the trailing comment records the tag.
+
+name: Release Version PR
+
+on:
+  push:
+    branches: [main]
+
+concurrency: release-version-${{ github.ref }}
+
+permissions: {}
+
+jobs:
+  version:
+    name: Version Packages PR
+    # package.json says seamux runs on macOS only, which npm enforces on
+    # install.
+    runs-on: macos-latest
+    permissions:
+      contents: write # push the changeset-release/main branch
+      pull-requests: write # open or update the Version Packages PR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+
+      # `npm run bump` runs `changeset version`, then brings package-lock.json's
+      # own version into line with package.json's.
+      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          version: npm run bump
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

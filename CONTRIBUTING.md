@@ -22,6 +22,12 @@ For a pull request, push your branch and open the PR against `main` instead of l
 - Several documented cmux and Claude Code behaviours turned out wrong when seamux ran them. [docs/findings.md](docs/findings.md) lists them. Add to it when a tool surprises you, and say which version you measured.
 - Prose is checked with [Taskless](https://taskless.io); its rules are in `.taskless/`.
 
+## Release notes
+
+If your change alters what someone running seamux gets, add a changeset: run `npx changeset`, pick `patch`, and describe the change for them. It becomes the change's line in `CHANGELOG.md` when seamux next releases. Docs, CI and refactors need none. While seamux is `0.y.z`, new features are `patch` too; save `minor` for something people must react to, and say what they must do. A pull request without a changeset gets a warning, never a failure.
+
+Releases are cut by merging the "Version Packages" pull request that GitHub Actions keeps open, which publishes to npm and tags the release.
+
 ## Rules the code keeps
 
 `CLAUDE.md` lists them in full, and agents working on seamux read it. The ones a change most often runs into:

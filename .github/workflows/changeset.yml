@@ -1,0 +1,74 @@
+name: Changeset
+
+# Advisory, never blocking. A pull request that changes what someone running
+# seamux gets should add a `.changeset/<name>.md`; this job says so when one is
+# missing and gets out of the way otherwise. Whether a change ships a release
+# note is a judgement call the workflow isn't in a position to make.
+#
+# It looks for a changeset anywhere between `main` and the pull request's head,
+# so in a stack of pull requests, one changeset on the bottom branch covers
+# every branch above it.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  changeset:
+    name: Changeset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # need `origin/main` to diff the whole stack against
+          persist-credentials: false
+
+      - name: Look for a changeset in this stack
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+
+          # The Version Packages pull request consumes changesets; removing them
+          # is its whole job.
+          if [ "$HEAD_REF" = "changeset-release/main" ]; then
+            echo "Version Packages PR — no changeset expected."
+            exit 0
+          fi
+
+          # For deliberate no-release-note pull requests (docs, CI, chores). It
+          # quiets a warning, not a failure.
+          case ",${LABELS}," in
+            *,skip-changeset,*)
+              echo "The 'skip-changeset' label is present — no release note expected."
+              exit 0
+              ;;
+          esac
+
+          # Three dots: everything the stack added since it left main. Added or
+          # modified, since one change gets one changeset, extended as it grows.
+          FOUND=$(git diff --name-only --diff-filter=AM "origin/main...$HEAD_SHA" -- '.changeset/*.md' \
+            | grep -viE '/README\.md$' || true)
+
+          if [ -n "$FOUND" ]; then
+            echo "Changeset(s) present in this stack:"
+            echo "$FOUND" | sed 's/^/  - /'
+            exit 0
+          fi
+
+          echo "::warning::No changeset found in this stack. If this changes what someone running seamux gets, run \`npx changeset\` (on the bottom branch of a stack). If it ships no release note (docs, CI, chore), ignore this or apply the \`skip-changeset\` label."
+          {
+            echo "### No changeset in this stack"
+            echo ""
+            echo "Nothing under \`.changeset/\` was added or modified between \`main\` and this branch."
+            echo ""
+            echo "- Changes what someone running seamux gets → run \`npx changeset\`, on the **bottom** branch of a stack."
+            echo "- Ships no release note (docs, CI, chore) → nothing to do. Apply \`skip-changeset\` to silence this."
+            echo ""
+            echo "_This is a warning. It does not block the merge._"
+          } >> "$GITHUB_STEP_SUMMARY"

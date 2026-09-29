@@ -24,9 +24,27 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 The board runs from the main checkout, on `main`, under `npm run seamux`, which keeps the dev server up and restarts it when needed. Never edit the main checkout directly: it is what the board serves.
 
 1. Work in your own worktree, on your own branch. A session dispatched from the board with "new worktree" already has one, under `.claude/worktrees/`, branched from main; otherwise make one under `worktrees/<name>`.
-2. Commit, then run `npm run land` from the worktree. It waits for any other landing to finish, rebases your branch onto main, typechecks it, fast-forwards main, and restarts the board if dependencies or any `.server.ts` module changed; otherwise hot reload picks the change up within seconds.
+2. If the change alters what someone running seamux gets, add a changeset in the same commit (see Release notes below). Commit, then run `npm run land` from the worktree. It waits for any other landing to finish, rebases your branch onto main, typechecks it, fast-forwards main, and restarts the board if dependencies or any `.server.ts` module changed; otherwise hot reload picks the change up within seconds.
 3. If it reports a conflict, rebase onto main yourself, resolve, and run it again. main is untouched until a landing succeeds.
 4. Once landed, as your very last step, remove your own worktree and branch (`git -C <main checkout> worktree remove <your worktree>`, then `git branch -d`), and never anyone else's. The user closes the chat from the board.
+
+## Release notes
+
+Releases come from changesets. Each change that someone running seamux would notice gets one `.changeset/<short-name>.md`, which becomes its line in `CHANGELOG.md`. Write the file by hand, since `npx changeset` is interactive:
+
+```md
+---
+"seamux": patch
+---
+
+What changed, for someone running seamux: what they'll see, and anything they must do.
+```
+
+- **One change, one changeset.** A later commit on the same change extends the existing file instead of adding a second.
+- **`patch` while seamux is `0.y.z`**, new features included: semver makes no stability promise before 1.0. Use `minor` only for a change someone must react to, such as a moved setting or a new requirement, and say in the note what they must do.
+- **No changeset** for what nobody running seamux sees: docs, CI, refactors, tooling.
+
+On GitHub, `release-version.yml` keeps a "Version Packages" pull request open that folds pending changesets into `CHANGELOG.md` and bumps the version, and merging it releases: `release.yml` publishes to npm through trusted publishing, then tags `v<version>`.
 
 ## Checking changes
 
