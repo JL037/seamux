@@ -3,8 +3,8 @@
 # bundled scripts that the npm package ships, so a change that would break
 # `npx seamux` fails here rather than on release.
 #
-# seamux runs on macOS only, but neither the typecheck nor the build touches
-# cmux, Claude Code or anything else platform-bound, so this runs on Linux.
+# On macOS, because package.json says seamux runs there only, and npm refuses
+# to install it anywhere else (EBADPLATFORM), even for a typecheck.
 #
 # Taskless isn't wired in yet: the repo has no rules, and a check with none
 # is always green. Add it (`npx @taskless/cli agent ci`) with the first rule.
@@ -30,7 +30,7 @@ permissions:
 jobs:
   check:
     name: Typecheck and build
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
