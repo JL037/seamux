@@ -25,8 +25,8 @@ import { promisify } from "node:util";
 
 import type { Card, ServiceLogin, ServiceNotice } from "./board.ts";
 import type { Engine } from "./config.ts";
+import { BIN_DIRS } from "./bins.server";
 import {
-  BIN_DIRS,
   installedEngines,
   listLive,
   sendMessage,

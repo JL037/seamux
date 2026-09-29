@@ -38,7 +38,7 @@ export function AttachmentChips({
           )}
           <div className="flex min-w-0 flex-col">
             <span className="font-medium">{a.label}</span>
-            <span className="truncate text-muted-foreground">
+            <span className="sensitive truncate text-muted-foreground">
               {a.file.name}
             </span>
           </div>

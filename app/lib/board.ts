@@ -55,8 +55,8 @@ export function hasPreviews(q: Question): boolean {
   return !q.multiSelect && q.options.some((o) => o.preview != null);
 }
 
-// How Jakob answers one question: option indices, with a note on a question
-// with previews, or his own text on any other single-select question.
+// How the user answers one question: option indices, with a note on a question
+// with previews, or their own text on any other single-select question.
 export type Answer = { picks: number[]; notes?: string } | { text: string };
 
 // The reason on a chat whose turn ended on a question in its reply. Claude
@@ -106,7 +106,7 @@ export interface Card {
   branch: string | null;
   lastActivityAt: number | null;
   lastPrompt: string | null;
-  // When Jakob sent the last prompt, which orders each column.
+  // When the user sent the last prompt, which orders each column.
   lastPromptAt: number | null;
   lastReply: string | null;
   // null until the chat's first response, and again just after a compaction.
@@ -187,7 +187,7 @@ export interface ServiceNotice {
   outage: { text: string; sessions: { sessionId: string; name: string }[] } | null;
 }
 
-// Whether the notice asks something of Jakob, so it counts like a waiting
+// Whether the notice asks something of the user, so it counts like a waiting
 // chat. An outage alone is only news.
 export function needsAction(n: ServiceNotice): boolean {
   return (

@@ -47,7 +47,7 @@ export function DispatchStrip({ sets }: { sets: DispatchSet[] }) {
               !open && "max-md:hidden",
             )}
           >
-            <span className="font-medium">{set.title}</span>
+            <span className="sensitive font-medium">{set.title}</span>
             <span className="font-mono text-xs text-muted-foreground">
               {set.id}
             </span>

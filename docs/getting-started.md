@@ -4,10 +4,11 @@ This page covers installing seamux, running the board, and every setting it has.
 
 ## What you need
 
-- **macOS** with [cmux](https://cmux.dev). seamux drives sessions by typing into their cmux terminals, so a session outside cmux is shown but can't be driven.
+- **macOS** with [cmux](https://cmux.dev), in `/Applications` or `~/Applications` (or set `SEAMUX_CMUX_APP`), and its `cmux` command on your `PATH`. seamux drives sessions by typing into their cmux terminals, so a session outside cmux is shown but can't be driven.
 - **Claude Code**, with `claude` on your `PATH` (`~/.local/bin` is where the installer puts it).
 - **Codex**, optionally, installed with npm or pnpm (next to `node`) or Homebrew. Run `cmux hooks setup codex` once so cmux tracks its sessions.
 - **Node 24** or later, for `node:sqlite` and for running TypeScript directly.
+- **A shell whose startup files set up your `PATH`.** Every session seamux starts runs in an interactive instance of your login shell (`$SHELL`), so it gets the same tools a terminal opened by hand does. zsh and bash are tested.
 
 ## Install and run
 
@@ -28,6 +29,15 @@ The same command is `bin/seamux`, also exposed as the package's `seamux` bin: ru
 
 - **`~/.claude/settings.json`** gets `SubagentStart` and `SubagentStop` hooks that run `hooks/subagent-event.ts`, so the board can see subagents in every session. The file is backed up first. `npm run hooks:uninstall` removes only these entries.
 - **`~/.claude/skills/seamux-dispatch/`** gets the fan-out skill, rendered with this checkout's `bin/seamux` path. `npm run skills:uninstall` removes it.
+
+### Uninstall
+
+```bash
+npm run hooks:uninstall    # take seamux's hooks out of ~/.claude/settings.json
+npm run skills:uninstall   # remove the seamux-dispatch skill
+```
+
+Then delete the checkout. Its `data/` holds seamux's store, fan-out records and logs, and nothing any session needs: your sessions and transcripts are Claude Code's and Codex's, and stay where they are.
 
 ## Set a password
 
@@ -53,7 +63,7 @@ Most settings live in the board. Click the cog beside the seamux name.
 - **Default agent**: what the dispatch bar starts new sessions with, Claude Code or Codex. An agent that isn't installed is greyed out. The dispatch bar has a picker to change it for one dispatch. Fan-out workers always run Claude Code, since they rely on its hooks and the dispatch skill.
 - **Worktrees**: whether the dispatch bar's "new worktree" switch starts on.
 - **Notifications**: desktop notifications when a chat starts waiting while the board isn't the focused window. Turning it on asks the browser for permission and then sends a test notification, "Desktop Notifications are Enabled", and the choice is kept in this browser rather than the store. Browsers only allow notifications on a secure origin, so the switch is greyed out on the plain-HTTP `.local` address.
-- **Directories**: what the dispatch bar's directory picker offers. When this is empty, the picker lists directories with live sessions, past dispatches, and every git repo up to two levels under `~/code`. ↓ or the chevron opens the whole list, whatever is already in the field; typing narrows it. Tab completes a partly typed path as a shell does, from that list and from the directories on disk: all the way when only one directory fits, otherwise as far as every fitting directory agrees, then opens the list of them.
+- **Directories**: what the dispatch bar's directory picker offers. When this is empty, the picker lists directories with live sessions, past dispatches, and every git repo up to two levels under the usual code folders in your home directory (`~/code`, `~/Developer`, `~/projects`, `~/src` and a few more). Any directory can be added or dispatched into, inside your home directory or not. ↓ or the chevron opens the whole list, whatever is already in the field; typing narrows it. Tab completes a partly typed path as a shell does, from that list and from the directories on disk: all the way when only one directory fits, otherwise as far as every fitting directory agrees, then opens the list of them.
 
 ### Macros
 
@@ -75,13 +85,14 @@ Switches on remote connections: mDNS for your own network, and a Cloudflare tunn
 
 ### Debug
 
+- **Blur cards for screenshots**: blurs what each chat says and where it runs (names, paths, branches, prompts, replies, questions, queued messages and open files) while the columns, layout and controls stay readable, so the board can go in a screenshot or a bug report. Kept in this browser only.
 - **Diagnostics**: sends a snapshot of how this browser lays out the board to the Mac, for triage from a phone. It records the screen size, the media queries that match, the safe areas, which stylesheets are loaded and whether they carry the phone layout's rules, and every column's and card's size and computed style. It also records the service worker's state and recent script errors. A snapshot is sent when the board loads, a second after the window is resized or turned, and when you press **Send now**. The tab shows the last one, and the Mac keeps it in `data/diagnostics/latest.json`, with the last 50 in `data/diagnostics/log.jsonl`.
 - **Clear this browser's cache for the board**: a link to `/reset`, which answers with `Clear-Site-Data: "cache"` and goes back to the board. It gets a browser that is stuck on old code working again, and keeps drafts, settings and the Access login. The error page links to it too.
 - **Clear autocomplete cache**: forgets every folder's slash commands, so each is listed again the next time you type `/`.
 
 ### In the browser
 
-Some choices are kept in the browser rather than the store: light or dark theme, whether DONE is shown, project colours, whether to send desktop notifications, and whether to send diagnostics.
+Some choices are kept in the browser rather than the store: light or dark theme, whether DONE is shown, project colours, whether to send desktop notifications, whether to send diagnostics, and whether to blur cards for screenshots.
 
 ## `.seamux.json`
 
@@ -104,5 +115,6 @@ All optional. Each can go in `.env` or the environment.
 | `SEAMUX_CF_TOKEN`, `SEAMUX_CF_DOMAIN`, `SEAMUX_CF_TEAM`, `SEAMUX_CF_AUD` | unset | The Cloudflare tunnel's token and hostname, and the Cloudflare Access team and AUD tag. All four are needed. See [Remote connections](remote-connections.md) |
 | `SEAMUX_CF_TUNNEL` | unset | The tunnel's id, shown in the Remote tab |
 | `SEAMUX_DB` | `data/seamux.db` | The SQLite store |
+| `SEAMUX_CMUX_APP` | `/Applications/cmux.app`, else `~/Applications/cmux.app` | Where cmux is installed, for its wrappers that launch each agent |
 | `SEAMUX_DISPATCH_DIR` | `data/dispatches` | Fan-out manifests and completion markers |
 | `SEAMUX_POLL` | unset | `1` makes hot reload poll for file changes. It already polls on WSL's `/mnt/` drives |

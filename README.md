@@ -1,12 +1,21 @@
 # seamux
 
-A board over every Claude Code and Codex session on this Mac, and the tools to drive and dispatch them. Each card is a live chat you can read and reply to. The columns show what each chat needs from you, and one bar starts new work as its own session.
+A board over every Claude Code and Codex session on your Mac, and the tools to drive and dispatch them. Each card is a live chat you can read and reply to. The columns show what each chat needs from you, and one bar starts new work as its own session.
+
+Running a dozen agent sessions at once means a dozen terminals to check: which one is waiting on a permission prompt, which finished an hour ago, which is still working. seamux puts them all on one board in your browser, where you can answer a question, approve a tool call, queue the next prompt or start new work without finding the right tab. It works from your phone too.
 
 ![Board sketch](docs/board-sketch.png)
 
 ## Getting it running
 
-On macOS with [cmux](https://cmux.dev), Claude Code and Node 24 or later:
+You need:
+
+- **macOS.** seamux reads cmux and the agents' own files on this Mac.
+- **[cmux](https://cmux.dev)**, the terminal your sessions run in. seamux drives a session by typing into its cmux terminal, so a session outside cmux shows on the board but can't be driven from it.
+- **[Claude Code](https://claude.com/claude-code)**, and optionally Codex.
+- **Node 24** or later.
+
+Then, from a clone of this repo:
 
 ```bash
 npm run setup    # install dependencies, the subagent hooks, and the dispatch skill
@@ -88,6 +97,12 @@ A worker counts as finished only when it writes its `done` marker, not when its 
 - **It never destroys.** seamux has no command that deletes a session, a worktree or a transcript. When something should go, seamux sends a prompt asking the session that owns it to remove it.
 - **Localhost, unless you open it.** The server binds `127.0.0.1`, and every write checks that the request came from the board itself, so no other website can type into your sessions. The only other ways in are the ones the Remote tab switches on: mDNS, only with the board's password, and the Cloudflare tunnel, only with a valid Access token.
 
+Whoever can reach the board can type into every session on your Mac, and those sessions can run commands. Treat access to it like access to your terminal. [SECURITY.md](SECURITY.md) says how to report a vulnerability.
+
 ## Working on seamux
 
-The board serves from the main checkout, so changes go through a worktree and `npm run land`. See `CLAUDE.md`. `docs/findings.md` lists the Claude Code and cmux behaviours that turned out to differ from their docs; read it before relying on either tool's documentation.
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setting up, checking a change, and how the board you run picks it up. `docs/findings.md` lists the Claude Code and cmux behaviours that turned out to differ from their docs; read it before relying on either tool's documentation.
+
+## License
+
+[MIT](LICENSE)

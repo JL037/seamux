@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ASKED_IN_REPLY, type Card } from "~/lib/board";
 import { useLocalStorage } from "~/lib/use-session-storage";
 
-// Cards blocked on Jakob, pinned or not.
+// Cards blocked on the user, pinned or not.
 export function waitingCards(cards: Card[]): Card[] {
   return cards.filter((c) => c.column === "waiting");
 }

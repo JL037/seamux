@@ -24,7 +24,7 @@ export async function readTail(path: string): Promise<string[]> {
 }
 
 // Claude Code wraps text pasted into a prompt in
-// <pasted_content id="N">…</pasted_content id="N"> for the model. Jakob sees
+// <pasted_content id="N">…</pasted_content id="N"> for the model. The user sees
 // the paste, not the tags.
 export function unwrapPasted(text: string): string {
   return text
@@ -56,7 +56,7 @@ export function replyExcerpt(text: string): string {
 }
 
 // The last paragraph of a reply that ends on a question, so the chat is
-// waiting on Jakob although no dialog is open. The question need not be
+// waiting on the user although no dialog is open. The question need not be
 // its last sentence: "Want me to go ahead? Or tell me to stop." still asks.
 // Trailing markdown such as bold or a closing quote does not hide the
 // question mark, and one inside a URL or code does not count.

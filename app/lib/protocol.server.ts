@@ -20,6 +20,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,6 +75,7 @@ function writeAtomic(path: string, value: unknown) {
   renameSync(tmp, path);
 }
 
+// Checks every worker, and expands a cwd written as ~/… in place.
 export function validateWorkers(workers: WorkerSpec[]) {
   if (workers.length === 0) throw new Error("A dispatch needs workers");
   const seen = new Set<string>();
@@ -86,8 +88,11 @@ export function validateWorkers(workers: WorkerSpec[]) {
     if (seen.has(w.key)) throw new Error(`Duplicate worker key: ${w.key}`);
     seen.add(w.key);
     if (!w.prompt?.trim()) throw new Error(`Worker ${w.key} has no prompt`);
+    if (w.cwd === "~" || w.cwd?.startsWith("~/")) {
+      w.cwd = join(homedir(), w.cwd.slice(1));
+    }
     if (!w.cwd?.startsWith("/"))
-      throw new Error(`Worker ${w.key} needs an absolute cwd`);
+      throw new Error(`Worker ${w.key} needs an absolute cwd, or one under ~/`);
   }
 }
 

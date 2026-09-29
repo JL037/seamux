@@ -105,6 +105,7 @@ import { startQueue } from "~/lib/queue.server";
 import { remoteStatus, type RemoteStatus } from "~/lib/remote.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useCoarsePointer } from "~/lib/use-pointer";
+import { useBlur } from "~/lib/use-blur";
 import { useDiagnostics } from "~/lib/use-diagnostics";
 import { useSessionAction } from "~/lib/use-session-action";
 import {
@@ -123,7 +124,7 @@ import { cn } from "~/lib/utils";
 const POLL_MS = 3000;
 
 export function meta({ matches, loaderData }: Route.MetaArgs) {
-  // Chats waiting, and services that need Jakob, such as a sign-in.
+  // Chats waiting, and services that need the user, such as a sign-in.
   const waiting = loaderData
     ? waitingCards(loaderData.board.cards).length +
       attentionCount(loaderData.board.attention)
@@ -142,7 +143,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 // A hidden tab still polls, more slowly, so the title's count and the
-// notifications keep up while Jakob is elsewhere.
+// notifications keep up while the user is elsewhere.
 const HIDDEN_POLL_MS = 15000;
 
 // Re-run the loader on an interval.
@@ -469,7 +470,7 @@ function ChatInput({
               }
               disabled={!card.drivable}
               className={cn(
-                "min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground",
+                "sensitive min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground",
                 multiline && "cursor-pointer",
               )}
             />
@@ -651,15 +652,17 @@ function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
         render={<button type="button" onClick={() => setOpen(true)} />}
       >
         <PathSwatch cwd={orphan.cwd} />
-        {orphan.name} · {orphan.state} · {shortPath(orphan.cwd)}
+        <span className="sensitive">{orphan.name}</span> · {orphan.state} ·{" "}
+        <span className="sensitive">{shortPath(orphan.cwd)}</span>
       </Badge>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{orphan.name}</DialogTitle>
+            <DialogTitle className="sensitive">{orphan.name}</DialogTitle>
             <DialogDescription>
               A background session, {orphan.state}, in{" "}
-              {shortPath(orphan.cwd)}. No open chat owns it.
+              <span className="sensitive">{shortPath(orphan.cwd)}</span>. No
+              open chat owns it.
             </DialogDescription>
           </DialogHeader>
           <pre className="rounded-md bg-muted px-3 py-2 font-mono text-sm select-all">
@@ -742,7 +745,7 @@ function SessionName({
         defaultValue={name}
         maxLength={100}
         aria-label="Session name"
-        className="min-w-0 flex-1 rounded-sm bg-muted px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="sensitive min-w-0 flex-1 rounded-sm bg-muted px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onFocus={(e) => e.currentTarget.select()}
         onBlur={(e) => finish(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -774,7 +777,7 @@ function SessionName({
         }
         onDoubleClick={edit}
         className={cn(
-          "truncate",
+          "sensitive truncate",
           draggable && "cursor-grab active:cursor-grabbing",
           pending && "opacity-60",
           error && "text-destructive",
@@ -872,7 +875,7 @@ function ReplyExcerpt({ text, cwd }: { text: string; cwd: string }) {
     <Faded
       from="end"
       className={cn(
-        "prose prose-sm max-h-40 max-w-none break-words text-xs dark:prose-invert max-md:max-h-52 max-md:text-sm",
+        "sensitive prose prose-sm max-h-40 max-w-none break-words text-xs dark:prose-invert max-md:max-h-52 max-md:text-sm",
         "prose-headings:my-1 prose-headings:text-xs max-md:prose-headings:text-sm prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-2",
         "prose-pre:my-1 prose-pre:bg-muted prose-pre:p-2 prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
         "prose-table:my-1 [&>:first-child]:mt-0 [&>:last-child]:mb-0",
@@ -954,10 +957,12 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs max-md:text-sm">
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <PathSwatch cwd={card.cwd} />
-              <span className="truncate font-mono">{shortPath(card.cwd)}</span>
+              <span className="sensitive truncate font-mono">
+                {shortPath(card.cwd)}
+              </span>
             </span>
             {card.branch && (
-              <span className="inline-flex items-center gap-1 font-mono">
+              <span className="sensitive inline-flex items-center gap-1 font-mono">
                 <GitBranch className="size-3" />
                 {card.branch}
               </span>
@@ -981,7 +986,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             </p>
           )}
           {card.intent && (
-            <p className="line-clamp-2 rounded-md bg-muted px-2 py-1">
+            <p className="sensitive line-clamp-2 rounded-md bg-muted px-2 py-1">
               <span className="font-medium">
                 {card.forkedFrom ? "Tangent: " : "Goal: "}
               </span>
@@ -989,7 +994,10 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             </p>
           )}
           {card.lastPrompt && card.lastPrompt !== card.intent && (
-            <Faded from="start" className="max-h-12 text-muted-foreground">
+            <Faded
+              from="start"
+              className="sensitive max-h-12 text-muted-foreground"
+            >
               <span className="font-medium text-foreground">You: </span>
               {shortenAttachments(card.lastPrompt)}
             </Faded>
@@ -998,7 +1006,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
           {card.closing && (
             <p
               className={cn(
-                "rounded-md px-2 py-1",
+                "sensitive rounded-md px-2 py-1",
                 card.closing.state === "held"
                   ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                   : "bg-muted text-muted-foreground",
@@ -1024,7 +1032,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
                   title={b.needs ?? undefined}
                 >
                   <Layers />
-                  {b.name} · {b.state}
+                  <span className="sensitive">{b.name}</span> · {b.state}
                 </Badge>
               ))}
             </div>
@@ -1054,16 +1062,18 @@ function StartingCard({ spawn }: { spawn: Spawning }) {
       )}
     >
       <CardHeader className="grid-cols-[minmax(0,1fr)]">
-        <CardTitle className="truncate max-md:text-base">
+        <CardTitle className="sensitive truncate max-md:text-base">
           {firstWords(spawn.name.split("\n")[0], 8)}
         </CardTitle>
         <CardDescription className="flex items-center gap-1.5 text-xs max-md:text-sm">
           <PathSwatch cwd={spawn.cwd} />
-          <span className="truncate font-mono">{shortPath(spawn.cwd)}</span>
+          <span className="sensitive truncate font-mono">
+            {shortPath(spawn.cwd)}
+          </span>
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-xs max-md:text-sm">
-        <p className="line-clamp-2 rounded-md bg-muted px-2 py-1">
+        <p className="sensitive line-clamp-2 rounded-md bg-muted px-2 py-1">
           <span className="font-medium">
             {spawn.forked ? "Tangent: " : "Goal: "}
           </span>
@@ -1153,7 +1163,8 @@ function movedBefore(ids: string[], id: string, before: string): string[] {
   return rest;
 }
 
-// Pinned cards in Jakob's order, which he changes by dragging a card's name.
+// Pinned cards in the user's order, which they change by dragging a card's
+// name.
 // A line marks where it will land; the move shows at once, ahead of the
 // board that confirms it.
 function PinnedCards({ cards, now }: { cards: BoardCard[]; now: number }) {
@@ -1456,7 +1467,7 @@ function Warnings({ warnings }: { warnings: string[] }) {
 // Below md the columns are a carousel, and this strip of tabs sits above it:
 // each tab names a column and its count, follows the swipe, and scrolls to
 // its column when tapped. Waiting's count turns amber, and Attention's red
-// while a service needs Jakob, to be seen from any column.
+// while a service needs the user, to be seen from any column.
 function ColumnTabs({
   columns,
   counts,
@@ -1530,7 +1541,7 @@ function ColumnTabs({
 const MOBILE_COLUMN_KEY = "seamux:mobile-column";
 
 // The carousel's current column: the one most in view, remembered for the
-// tab. A fresh tab opens on Attention when a service needs Jakob, else on
+// tab. A fresh tab opens on Attention when a service needs the user, else on
 // Waiting when anything waits, else on Working.
 function useCarousel(
   columns: BoardColumnKey[],
@@ -1609,6 +1620,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const { config, engines, remote } = loaderData;
   const now = board.generatedAt;
   const diagnostics = useDiagnostics(board.version?.hash);
+  const blur = useBlur();
   const notifications = useWaitingNotifications(board.cards);
   // Cards moved ahead of the poll by what was just sent, and chats still
   // starting.
@@ -1641,7 +1653,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     ...Object.fromEntries(COLUMNS.map((c) => [c, byColumn(c).length])),
     working: byColumn("working").length + starting.length,
   } as Record<BoardColumnKey, number>;
-  // Only what asks something of Jakob; an outage alone is news.
+  // Only what asks something of the user; an outage alone is news.
   const actions = attentionCount(attention);
   const { carousel, active, pick } = useCarousel(
     mobileColumns,
@@ -1724,6 +1736,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   remote={remote}
                   notifications={notifications}
                   diagnostics={diagnostics}
+                  blur={blur}
                 />
                 <ThemeToggle />
               </span>

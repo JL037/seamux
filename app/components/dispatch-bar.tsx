@@ -161,7 +161,7 @@ export function DispatchBar({
         }}
         placeholder="Dispatch new work: what should a new session do? (⌘↵)"
         rows={2}
-        className="min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
+        className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <div className="flex flex-wrap items-center gap-2">
         <DirectoryPicker
@@ -172,7 +172,7 @@ export function DispatchBar({
           onFocus={loadDirs}
           placeholder="/dir pick"
           className="flex-1 basis-64"
-          inputClassName="text-sm"
+          inputClassName="sensitive text-sm"
         />
         {available.length > 1 && (
           <select

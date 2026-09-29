@@ -97,7 +97,7 @@ interface TranscriptSummary {
   cwd: string | null;
   branch: string | null;
   lastPrompt: string | null;
-  // When Jakob sent it. null when it lies beyond the tail read.
+  // When the user sent it. null when it lies beyond the tail read.
   lastPromptAt: number | null;
   lastReply: string | null;
   // From the last message: is a turn in progress? null when unknown.
@@ -108,7 +108,7 @@ interface TranscriptSummary {
   question: string | null;
   // How full the context window is, from the last response's usage.
   context: ContextUsage | null;
-  // Prompts Jakob typed while a turn ran, not yet taken up by the chat.
+  // Prompts the user typed while a turn ran, not yet taken up by the chat.
   queued: string[];
   // The error the last message is, when the API answered with one.
   apiError: ApiError | null;
@@ -217,7 +217,7 @@ const SYNTHETIC_PROMPT =
   /^(<(local-command|command-|system-reminder|bash-|task-notification)|This session is being continued from a previous conversation|\[Request interrupted)/;
 
 // What the harness queues for the chat on its own: background task and
-// subagent hand-backs. The rest of the queue is prompts Jakob typed.
+// subagent hand-backs. The rest of the queue is prompts the user typed.
 const HARNESS_QUEUED = /^<(task-notification|agent-message)[\s>]/;
 
 // Claude Code logs its input queue as it changes. Replaying the log gives
@@ -400,7 +400,7 @@ async function summarize(path: string): Promise<TranscriptSummary> {
   return summary;
 }
 
-// The visible conversation, oldest first: what Jakob and the agent said to
+// The visible conversation, oldest first: what the user and the agent said to
 // each other, without tool traffic, sidechains, or harness turns.
 // What resuming or renaming a closed chat needs, read server-side from its
 // transcript. null when the session is still live, since resuming would run
@@ -581,7 +581,7 @@ function waitingOn(
   needs: string | null,
 ): Waiting | null {
   // A background session says itself when its reply left it blocked on
-  // Jakob, whether or not the reply ends on a question mark.
+  // the user, whether or not the reply ends on a question mark.
   const blocked = row.state === "blocked";
   if (row.status === "idle" && (summary?.question || blocked)) {
     return {
@@ -621,8 +621,8 @@ function liveColumn(
   background: BackgroundSession[],
   subagents: Subagent[],
 ): Column {
-  // A blocked child needs Jakob just as much as a blocked parent. A failed
-  // one is over: it shows on the card but asks nothing of Jakob.
+  // A blocked child needs the user just as much as a blocked parent. A failed
+  // one is over: it shows on the card but asks nothing of the user.
   const childNeedsHuman = background.some((b) => b.state === "blocked");
   if (needsInput || childNeedsHuman) return "waiting";
   // A parent at rest while its subagents run is still working.
@@ -699,7 +699,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       .map(([id, l]) => [id, l.surface]),
   );
 
-  // A background session attached to a terminal is a chat Jakob is in, so
+  // A background session attached to a terminal is a chat the user is in, so
   // it gets a card like any interactive session. Once the terminal closes it
   // keeps running, with a live `status`, but it is a background job again.
   // Without `ps`, a live `status` is the best guess.
@@ -817,7 +817,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const jobIds = new Set(agents.map((a) => a.id).filter((id) => id != null));
   const closed = (id: string) => !known.has(id) && !jobIds.has(id.slice(0, 8));
 
-  // In the order Jakob dragged them into.
+  // In the order the user dragged them into.
   let pinRows: PinRow[] = [];
   try {
     pinRows = settlePins(agents, closed, liveKnown);
@@ -826,7 +826,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   }
   const pinned = new Set(pinRows.map((p) => p.session_id));
 
-  // DONE: a chat Jakob closed recently, its transcript written within the
+  // DONE: a chat the user closed recently, its transcript written within the
   // window.
   const shown = (id: string, t: { mtimeMs: number }) =>
     closed(id) && now - t.mtimeMs < DONE_VISIBLE_MS;
@@ -929,10 +929,10 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   } catch (err) {
     warnings.push(`Dispatch store unavailable: ${(err as Error).message}`);
   }
-  // Oldest prompt first, so the card Jakob last turned to is at the bottom
-  // of its column. Only Jakob sends a prompt, so a working card keeps its
+  // Oldest prompt first, so the card the user last turned to is at the bottom
+  // of its column. Only the user sends a prompt, so a working card keeps its
   // place while its turn writes to the transcript. Pinned cards keep the
-  // order Jakob dragged them into instead.
+  // order the user dragged them into instead.
   cards.sort((a, b) => (a.lastPromptAt ?? 0) - (b.lastPromptAt ?? 0));
   const pinRank = new Map(pinRows.map((p, i) => [p.session_id, i]));
   const rank = (c: Card) => pinRank.get(c.sessionId) ?? pinRows.length;
@@ -1096,10 +1096,22 @@ async function servedVersion(): Promise<Board["version"]> {
   }
 }
 
-const REPO_ROOTS = [join(homedir(), "code")];
+// The folders people keep their code in. A missing one is skipped.
+const REPO_ROOTS = [
+  "code",
+  "Code",
+  "dev",
+  "Developer",
+  "git",
+  "projects",
+  "Projects",
+  "repos",
+  "src",
+  "work",
+].map((d) => join(homedir(), d));
 
 // Git repos up to two levels under each root, e.g. ~/code/seamux and
-// ~/code/taskless/cli.
+// ~/code/acme/api.
 async function gitRepos(): Promise<string[]> {
   const found: string[] = [];
   async function scan(dir: string, depth: number) {
@@ -1144,7 +1156,7 @@ export async function knownDirectories(): Promise<string[]> {
     ...dispatched,
     ...repos.sort(),
   ];
-  return [...new Set(all)].filter((d) => d.startsWith(`${homedir()}/`));
+  return [...new Set(all)];
 }
 
 // Fan-outs still waiting on workers, and complete ones from the last day.

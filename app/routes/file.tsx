@@ -126,7 +126,7 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
           </span>
         </Link>
         <span
-          className="min-w-0 flex-1 truncate font-mono text-xs"
+          className="sensitive min-w-0 flex-1 truncate font-mono text-xs"
           title={file.path}
         >
           {file.path}
@@ -172,7 +172,7 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
           Showing the first 2 MB.
         </p>
       )}
-      <main className="min-h-0 flex-1 overflow-auto">
+      <main className="sensitive min-h-0 flex-1 overflow-auto">
         {file.type === "directory" ? (
           <ul className="mx-auto max-w-3xl p-4 text-sm">
             {file.path !== "/" && (

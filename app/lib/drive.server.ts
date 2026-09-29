@@ -6,7 +6,6 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { appendFile, realpath, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
@@ -22,6 +21,7 @@ import { forgetCommands } from "./commands.server.ts";
 import { parseCodexApproval, renameCodexSession } from "./codex.server.ts";
 import { ENGINES, renderMacro, usesVariable, type Engine } from "./config.ts";
 import { configOrDefaults } from "./config.server.ts";
+import { BIN_DIRS, CMUX_BIN, findBin, SHELL } from "./bins.server.ts";
 import { projectOf } from "./project-colors.ts";
 import { recordDispatch } from "./store.server.ts";
 
@@ -234,7 +234,7 @@ export async function answerQuestion(
 
 // Answer an open permission prompt. Measured against Claude Code 2.1.281:
 // 1 is always "Yes", while "No" moves with the options offered, so a denial
-// is Esc, which refuses the call and ends the turn for Jakob to reply to.
+// is Esc, which refuses the call and ends the turn for the user to reply to.
 // Codex 0.156.1 approves on `y`, and Esc refuses there too.
 export async function answerApproval(
   sessionId: string,
@@ -341,13 +341,13 @@ export async function answerDialog(
   });
 }
 
-// Close a chat the way Jakob would: /exit, which Claude Code and Codex both
+// Close a chat the way the user would: /exit, which Claude Code and Codex both
 // take, then close the tab it ran in.
 // The conversation is kept, and the card moves to DONE, where it can be
 // resumed.
 //
 // A workspace seamux launched closes itself when the agent exits, but a chat
-// Jakob started by hand leaves its shell behind, so the tab is closed once
+// the user started by hand leaves its shell behind, so the tab is closed once
 // the agent is gone. cmux refuses to close a workspace's last tab, so then
 // the workspace goes instead. An agent that has not exited keeps its tab.
 const EXIT_WAIT_MS = 10_000;
@@ -394,7 +394,8 @@ export async function closeChat(sessionId: string) {
 // A close is held, leaving the chat open with a note, when the turn never
 // starts or never ends, when it ends on a question, or when it leaves
 // uncommitted changes or its worktree behind: the session said why in its
-// reply, which Jakob should read before it goes. Closing a held chat again exits it without the macro.
+// reply, which the user should read before it goes. Closing a held chat
+// again exits it without the macro.
 export interface Closing {
   state: "cleaning" | "held";
   note: string | null;
@@ -413,7 +414,7 @@ const CLOSE_TURN_MS = 30 * 60_000;
 const HELD_VISIBLE_MS = 10 * 60_000;
 
 // A held note goes once the chat is given another prompt, since whatever
-// it said no longer holds: Jakob answered it, and it may have cleaned up.
+// it said no longer holds: the user answered it, and it may have cleaned up.
 export function closingState(
   sessionId: string,
   now: { lastPrompt: string | null },
@@ -559,7 +560,7 @@ async function finishClose(
       return;
     }
     if (!started) continue;
-    // A turn that ended by asking Jakob something wants an answer, not an
+    // A turn that ended by asking the user something wants an answer, not an
     // exit.
     if (card.waiting?.reason === ASKED_IN_REPLY) {
       hold(
@@ -597,19 +598,13 @@ async function finishClose(
 
 // Every session seamux starts runs in its own cmux workspace.
 //
-// cmux runs the command in a login shell that does not read ~/.zshrc, so
-// the session would miss the PATH and environment a terminal opened by hand
-// gets (npx, pnpm, brew's tools). The command re-runs itself in an
-// interactive zsh, which reads it. Launch through cmux's own wrapper for
-// the agent, which registers the session with cmux (so the board can find
-// its surface), and put the agents' install directories first on PATH, in
-// case ~/.zshrc does not.
-const CMUX_BIN = "/Applications/cmux.app/Contents/Resources/bin";
-const CLAUDE_BIN_DIR = join(homedir(), ".local/bin");
-// Node, for bin/seamux and the subagent hook inside the new session: the
-// same one this server runs on. A Codex installed with npm or pnpm is here.
-const NODE_BIN_DIR = dirname(process.execPath);
-export const BIN_DIRS = [CLAUDE_BIN_DIR, NODE_BIN_DIR, "/opt/homebrew/bin"];
+// cmux runs the command in a zsh login shell that does not read ~/.zshrc,
+// so the session would miss the PATH and environment a terminal opened by
+// hand gets (npx, pnpm, brew's tools). The command re-runs itself in an
+// interactive instance of the user's own shell, which reads its startup
+// files. Launch through cmux's own wrapper for the agent, which registers
+// the session with cmux (so the board can find its surface), and put the
+// agents' install directories first on PATH, in case those files do not.
 
 interface EngineSpec {
   bin: string;
@@ -641,15 +636,11 @@ const ENGINE_SPECS: Record<Engine, EngineSpec> = {
 // Which agents this Mac can launch: cmux's wrapper for it, and the agent
 // itself where a launch would look.
 export function installedEngines(): Record<Engine, boolean> {
-  const dirs = [...BIN_DIRS, ...(process.env.PATH ?? "").split(":")].filter(
-    // cmux's per-terminal shims forward to its wrappers, not to an agent.
-    (d) => d && !d.includes("cmux-cli-shims"),
-  );
   return Object.fromEntries(
     ENGINES.map((e) => [
       e,
       existsSync(ENGINE_SPECS[e].wrapper) &&
-        dirs.some((d) => existsSync(join(d, ENGINE_SPECS[e].bin))),
+        findBin(ENGINE_SPECS[e].bin) !== null,
     ]),
   ) as Record<Engine, boolean>;
 }
@@ -669,7 +660,7 @@ async function launch(
     {
       cwd,
       title,
-      initial_command: `exec zsh -ic ${shq(
+      initial_command: `exec ${shq(SHELL)} -ic ${shq(
         [
           `PATH=${BIN_DIRS.map(shq).join(":")}:"$PATH"`,
           shq(spec.wrapper),
@@ -690,7 +681,7 @@ async function launch(
 
 const TRUST_WAIT_MS = 30_000;
 
-// Both agents stop on a new folder to ask whether Jakob trusts it, before
+// Both agents stop on a new folder to ask whether the user trusts it, before
 // the session exists anywhere the board could see it. Choosing the folder
 // to dispatch into is that decision, so seamux answers yes.
 async function acceptTrust(surface: Surface, spec: EngineSpec) {
@@ -889,7 +880,7 @@ export async function askToDelete(orphan: {
   });
 }
 
-// Only real directories inside the home folder can be dispatched into.
+// Any real directory can be dispatched into.
 export async function checkDirectory(path: string): Promise<string> {
   if (!path.startsWith("/")) throw new Error("Pick an absolute directory");
   let real: string;
@@ -900,9 +891,6 @@ export async function checkDirectory(path: string): Promise<string> {
   }
   if (!(await stat(real)).isDirectory())
     throw new Error(`Not a directory: ${path}`);
-  if (!real.startsWith(`${homedir()}/`)) {
-    throw new Error("Directory must be inside your home folder");
-  }
   return real;
 }
 

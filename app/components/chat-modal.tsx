@@ -207,9 +207,9 @@ export function ChatModal({
       >
         <DialogHeader>
           <DialogTitle className="flex min-w-0 items-center gap-1 pr-8">
-            {title ?? card.name}
+            {title ?? <span className="sensitive">{card.name}</span>}
           </DialogTitle>
-          <DialogDescription className="font-mono text-xs">
+          <DialogDescription className="sensitive font-mono text-xs">
             {card.cwd}
             {card.branch && ` · ${card.branch}`}
           </DialogDescription>
@@ -231,7 +231,7 @@ export function ChatModal({
                 <div
                   key={`${m.at}-${i}`}
                   className={cn(
-                    "max-w-[85%] rounded-lg px-3 py-2 text-sm max-md:text-base",
+                    "sensitive max-w-[85%] rounded-lg px-3 py-2 text-sm max-md:text-base",
                     m.role === "user"
                       ? "self-end whitespace-pre-wrap break-words bg-primary text-primary-foreground"
                       : "prose prose-sm max-md:prose-base self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
@@ -317,7 +317,7 @@ export function ChatModal({
                       ? "Next message (⌘↵ to queue it for when this turn ends), or a tangent to fork"
                       : "Next message (⌘↵ to send), or a tangent to fork"
               }
-              className="max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none border-b-0 focus-visible:border-input focus-visible:ring-0 md:max-h-[40dvh] md:min-h-32"
+              className="sensitive max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none border-b-0 focus-visible:border-input focus-visible:ring-0 md:max-h-[40dvh] md:min-h-32"
             />
             <ContextBar context={card.context} className="border-input" />
           </div>
@@ -403,7 +403,7 @@ function QueuedList({ card }: { card: Card }) {
           className="flex items-start gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground"
           title="Typed in the terminal, so Claude Code holds it"
         >
-          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+          <p className="sensitive min-w-0 flex-1 whitespace-pre-wrap break-words">
             <MessageText text={text} />
           </p>
           <span className="shrink-0 text-xs">in the terminal</span>
@@ -444,10 +444,10 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
                 setEditing(false);
               }
             }}
-            className="min-h-20 flex-1 resize-y"
+            className="sensitive min-h-20 flex-1 resize-y"
           />
         ) : (
-          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+          <p className="sensitive min-w-0 flex-1 whitespace-pre-wrap break-words">
             <MessageText text={message.text} />
           </p>
         )}

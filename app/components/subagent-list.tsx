@@ -45,7 +45,7 @@ export function SubagentSummary({
           )}
         >
           <StatusIcon agent={s} />
-          <span className="truncate">{label(s)}</span>
+          <span className="sensitive truncate">{label(s)}</span>
           {s.type && s.description && (
             <span className="shrink-0 text-muted-foreground">{s.type}</span>
           )}
@@ -82,7 +82,7 @@ export function SubagentDetail({
         <li key={s.agentId} className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
             <StatusIcon agent={s} />
-            <span className="font-medium">{label(s)}</span>
+            <span className="sensitive font-medium">{label(s)}</span>
           </div>
           <div className="pl-4.5 text-muted-foreground">
             {[
@@ -96,7 +96,9 @@ export function SubagentDetail({
               .filter(Boolean)
               .join(" · ")}
           </div>
-          {s.lastMessage && <p className="pl-4.5">{s.lastMessage}</p>}
+          {s.lastMessage && (
+            <p className="sensitive pl-4.5">{s.lastMessage}</p>
+          )}
         </li>
       ))}
     </ul>

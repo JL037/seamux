@@ -8,12 +8,11 @@
 // in it.
 
 import { spawn } from "node:child_process";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 
 import type { SlashCommand } from "./board.ts";
+import { findBin } from "./bins.server.ts";
 
-const CLAUDE = join(homedir(), ".local/bin/claude");
 const TTL_MS = 10 * 60_000;
 const TIMEOUT_MS = 20_000;
 
@@ -50,7 +49,7 @@ export function forgetCommands() {
 function listCommands(cwd: string): Promise<SlashCommand[]> {
   return new Promise((resolve, reject) => {
     const child = spawn(
-      CLAUDE,
+      findBin("claude") ?? "claude",
       [
         "-p",
         "--input-format",

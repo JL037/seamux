@@ -10,6 +10,7 @@ import {
 
 import type { Route } from "./+types/root";
 import { THEME_KEY } from "~/components/theme-toggle";
+import { BLUR_KEY } from "~/lib/use-blur";
 import { Toaster } from "~/components/ui/sonner";
 import { isSecured, requireAuth } from "~/lib/auth.server";
 import "./app.css";
@@ -62,6 +63,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html: `(()=>{const k=${JSON.stringify(THEME_KEY)};const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>{let t=null;try{t=JSON.parse(localStorage.getItem(k))}catch{}document.documentElement.classList.toggle("dark",t==="dark"||(t!=="light"&&m.matches))};s();m.addEventListener("change",s)})()`,
+          }}
+        />
+        {/* Blur for screenshots, from the Debug tab, before the first paint
+            so nothing shows unblurred. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(()=>{try{if(JSON.parse(localStorage.getItem(${JSON.stringify(BLUR_KEY)})))document.documentElement.setAttribute("data-blur","")}catch{}})()`,
           }}
         />
       </head>

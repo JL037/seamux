@@ -37,7 +37,7 @@ const BOX =
   "rounded-md border bg-background px-2 py-1 outline-none placeholder:text-muted-foreground";
 
 // An open AskUserQuestion, answered from the card. The board drives the
-// same dialog Jakob would see in the terminal.
+// same dialog the user would see in the terminal.
 function QuestionForm({
   card,
   ask,
@@ -87,7 +87,7 @@ function QuestionForm({
           <fieldset key={i} className="flex flex-col gap-1.5">
             <legend className="mb-1.5 flex items-start gap-1.5 font-medium">
               <CircleHelp className="mt-px size-3.5 shrink-0 text-amber-500" />
-              <span>
+              <span className="sensitive">
                 {q.question}
                 {q.multiSelect && (
                   <span className="font-normal text-muted-foreground">
@@ -120,7 +120,7 @@ function QuestionForm({
                   >
                     {picked && <Check className="size-2.5" />}
                   </span>
-                  <span className="min-w-0">
+                  <span className="sensitive min-w-0">
                     {o.label}
                     {o.description && o.description !== o.label && (
                       <span className="block text-muted-foreground">
@@ -132,7 +132,7 @@ function QuestionForm({
               );
             })}
             {shown != null && (
-              <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px] leading-snug max-md:text-xs">
+              <pre className="sensitive max-h-48 overflow-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px] leading-snug max-md:text-xs">
                 {shown}
               </pre>
             )}
@@ -156,7 +156,7 @@ function QuestionForm({
                   }
                   onKeyDown={holdEnter}
                   placeholder="A note to go with your pick"
-                  className={BOX}
+                  className={cn("sensitive", BOX)}
                 />
               ))}
             {!q.multiSelect && !previews && (
@@ -167,7 +167,7 @@ function QuestionForm({
                 }
                 onKeyDown={holdEnter}
                 placeholder="Or type your own answer"
-                className={BOX}
+                className={cn("sensitive", BOX)}
               />
             )}
           </fieldset>
@@ -184,7 +184,7 @@ function QuestionForm({
 }
 
 // An open permission prompt, answered from the card. Approve is the dialog's
-// "Yes"; Deny refuses the call and ends the turn, so Jakob can reply.
+// "Yes"; Deny refuses the call and ends the turn, so the user can reply.
 function ApprovalButtons({
   card,
   approval,
@@ -259,7 +259,7 @@ export function WaitingPanel({ card }: { card: Card }) {
         <CircleHelp className="mt-px size-3.5 shrink-0 text-amber-500" />
         <span className="min-w-0 break-words">
           <span className="font-medium">Asked: </span>
-          {w.detail}
+          <span className="sensitive">{w.detail}</span>
         </span>
       </div>
     );
@@ -277,12 +277,15 @@ export function WaitingPanel({ card }: { card: Card }) {
             {w.tool && ` · ${w.tool}`}
           </span>
           {w.detail && (
-            <span className="block break-words font-mono text-muted-foreground">
+            <span className="sensitive block break-words font-mono text-muted-foreground">
               {w.detail}
             </span>
           )}
           {w.dialog?.detail.map((line, i) => (
-            <span key={i} className="block break-words text-muted-foreground">
+            <span
+              key={i}
+              className="sensitive block break-words text-muted-foreground"
+            >
               {line}
             </span>
           ))}

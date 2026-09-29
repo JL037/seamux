@@ -15,15 +15,15 @@ Use it when the pieces are independent: no piece needs another's output to start
 
 ## 1. Declare the set
 
-Write a manifest. Every worker needs a key (lowercase, digits, `-`, `_`), an absolute `cwd`, and a self-contained prompt: the worker starts with none of your context, so say exactly what to do and where to write its output. Give each worker its own output path, so no two workers write the same file.
+Write a manifest. Every worker needs a key (lowercase, digits, `-`, `_`), an absolute `cwd` (or one starting `~/`), and a self-contained prompt: the worker starts with none of your context, so say exactly what to do and where to write its output. Give each worker its own output path, so no two workers write the same file.
 
 ```json
 {
   "title": "Classify firms, batches 1-3",
   "workers": [
-    { "key": "batch-01", "cwd": "/Users/jakob/brain", "prompt": "Classify the firms in inbox/batch-01.md ... Write results to out/batch-01.md." },
-    { "key": "batch-02", "cwd": "/Users/jakob/brain", "prompt": "..." },
-    { "key": "batch-03", "cwd": "/Users/jakob/brain", "prompt": "...", "worktree": true }
+    { "key": "batch-01", "cwd": "~/project", "prompt": "Classify the firms in inbox/batch-01.md ... Write results to out/batch-01.md." },
+    { "key": "batch-02", "cwd": "~/project", "prompt": "..." },
+    { "key": "batch-03", "cwd": "~/project", "prompt": "...", "worktree": true }
   ]
 }
 ```

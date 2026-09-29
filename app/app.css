@@ -176,6 +176,13 @@ html[data-unsecured].dark {
   }
 }
 
+/* Debug → Blur for screenshots: everything a chat says, and where it runs,
+   blurred in this browser, so the board can be shown or shared. Mark such
+   an element with the sensitive class. */
+[data-blur] .sensitive {
+  filter: blur(5px);
+}
+
 /* The mark's ramp: the primary action, and the edge of a working card. */
 @utility bg-brand-ramp {
   background-image: linear-gradient(

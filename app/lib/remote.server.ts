@@ -66,7 +66,7 @@ export interface RemoteStatus {
   mdns: {
     // The switch.
     wanted: boolean;
-    // e.g. http://osmium.local:54321
+    // e.g. http://my-mac.local:54321
     url: string;
     // Whether the running dev server listens beyond loopback.
     listening: boolean;

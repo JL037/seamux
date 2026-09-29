@@ -27,7 +27,7 @@ function useServiceAction(service: Engine) {
 }
 
 // A toast when a sign-in ends, and a notification when a service newly
-// needs Jakob, the way a chat that starts waiting does. Neither fires for
+// needs the user, the way a chat that starts waiting does. Neither fires for
 // what the first board shows.
 export function useServiceAlerts(notices: ServiceNotice[], notifying: boolean) {
   const seen = useRef<Map<Engine, ServiceNotice> | null>(null);

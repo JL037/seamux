@@ -34,6 +34,7 @@ import {
 } from "~/lib/config";
 import type { RemoteStatus } from "~/lib/remote.server";
 import type { Notifications } from "~/components/waiting-alerts";
+import type { Blur } from "~/lib/use-blur";
 import type { Diagnostics } from "~/lib/use-diagnostics";
 import { cn } from "~/lib/utils";
 import type { ConfigResult } from "~/routes/config";
@@ -83,6 +84,7 @@ export function ConfigDialog({
   remote,
   notifications,
   diagnostics,
+  blur,
 }: {
   config: Config;
   // Which agents this Mac can launch.
@@ -90,6 +92,7 @@ export function ConfigDialog({
   remote: RemoteStatus;
   notifications: Notifications;
   diagnostics: Diagnostics;
+  blur: Blur;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("general");
@@ -146,7 +149,7 @@ export function ConfigDialog({
             ) : tab === "remote" ? (
               <RemoteTab remote={remote} />
             ) : (
-              <DebugTab diagnostics={diagnostics} />
+              <DebugTab diagnostics={diagnostics} blur={blur} />
             )}
           </div>
         </DialogContent>
@@ -239,7 +242,7 @@ function DirectoriesSetting({ directories }: { directories: string[] }) {
             if (discovered.state === "idle" && !discovered.data)
               discovered.load("/directories?discovered");
           }}
-          placeholder="/Users/you/code/project"
+          placeholder="/path/to/project"
           className="flex-1"
           inputClassName="text-xs"
         />
@@ -354,10 +357,30 @@ function NotificationSetting({ enabled, permission, toggle }: Notifications) {
   );
 }
 
-function DebugTab({ diagnostics }: { diagnostics: Diagnostics }) {
+function DebugTab({
+  diagnostics,
+  blur,
+}: {
+  diagnostics: Diagnostics;
+  blur: Blur;
+}) {
   const action = useConfigAction();
   return (
     <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-2">
+        <h3 className="font-medium">Screenshots</h3>
+        <SwitchRow
+          checked={blur.enabled}
+          disabled={false}
+          onCheckedChange={blur.setEnabled}
+          label="Blur cards for screenshots"
+        >
+          Blurs what each chat says and where it runs: names, paths, branches,
+          prompts, replies, questions and open files, leaving the board's
+          layout, columns and controls readable. For sharing a screenshot or
+          attaching one to a bug report. Kept in this browser only.
+        </SwitchRow>
+      </section>
       <DiagnosticsSetting {...diagnostics} />
       <section className="flex flex-col gap-2">
         <h3 className="font-medium">Autocomplete</h3>

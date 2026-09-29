@@ -40,8 +40,8 @@ const SCHEMA = `
     created_at     INTEGER NOT NULL
   );
 
-  -- Sessions Jakob pinned, because they are meant to run for a long time,
-  -- in the order he dragged them into; a new pin goes last. The Claude Code
+  -- Sessions the user pinned, because they are meant to run for a long time,
+  -- in the order they dragged them into; a new pin goes last. The Claude Code
   -- process a pinned chat last ran in, which \`/clear\` keeps under a new
   -- session id, and the chat a pin was carried from by one.
   CREATE TABLE IF NOT EXISTS pins (
@@ -53,7 +53,7 @@ const SCHEMA = `
     cleared_from TEXT
   );
 
-  -- Messages Jakob wrote while a chat was working, held here instead of in
+  -- Messages the user wrote while a chat was working, held here instead of in
   -- Claude Code's queue so they can be edited. Sent in id order, one per
   -- turn, once the chat is idle; a row goes as it is sent.
   CREATE TABLE IF NOT EXISTS queued_messages (
@@ -65,7 +65,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS queued_messages_session
     ON queued_messages (session_id);
 
-  -- Jakob's settings, from the board's config dialog. A JSON value per key;
+  -- The user's settings, from the board's config dialog. A JSON value per key;
   -- a missing key means the default.
   CREATE TABLE IF NOT EXISTS config (
     key   TEXT PRIMARY KEY,
