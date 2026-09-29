@@ -44,7 +44,7 @@ What changed, for someone running seamux: what they'll see, and anything they mu
 - **`patch` while seamux is `0.y.z`**, new features included: semver makes no stability promise before 1.0. Use `minor` only for a change someone must react to, such as a moved setting or a new requirement, and say in the note what they must do.
 - **No changeset** for what nobody running seamux sees: docs, CI, refactors, tooling.
 
-On GitHub, `release-version.yml` keeps a "Version Packages" pull request open that folds pending changesets into `CHANGELOG.md` and bumps the version, and merging it sets the next release's version. Publishing to npm is done by hand from `main` afterwards (`npm publish`, whose `prepack` builds first), then tagged `v<version>`; nothing publishes automatically yet.
+On GitHub, `release-version.yml` keeps a "Version Packages" pull request open that folds pending changesets into `CHANGELOG.md` and bumps the version, and merging it releases: `release.yml` publishes the new version to npm through trusted publishing, once someone approves the `npm-production` environment, then tags `v<version>` and creates its GitHub Release from `CHANGELOG.md`.
 
 ## Checking changes
 
