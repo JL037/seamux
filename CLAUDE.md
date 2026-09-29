@@ -9,6 +9,7 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 - **Derive, don't store.** Session state comes from `claude agents --json`, cmux, and the transcripts on every poll. The store (`app/lib/store.server.ts`) holds only what nothing else records: subagent lifecycle, dispatch intent, pins, queued messages, and settings.
 - **Always pass a surface to cmux.** cmux RPCs default to the caller's own surface, which is whatever terminal seamux runs in.
 - **Blur what a chat says.** Any element that shows a session's content or where it runs (names, paths, branches, how long ago, prompts, replies, questions, files) carries the `sensitive` class, which the Debug tab's screenshot blur covers.
+- **Ship a changeset with every change someone running seamux would notice.** See Release notes below: `patch` or `minor`, never `major` while seamux is `0.y.z`.
 - **Verify tool behaviour by running it.** Several documented cmux and Claude Code behaviours turned out wrong; `docs/findings.md` lists them, and new ones go there.
 
 ## Layout
@@ -41,7 +42,9 @@ What changed, for someone running seamux: what they'll see, and anything they mu
 ```
 
 - **One change, one changeset.** A later commit on the same change extends the existing file instead of adding a second.
-- **`patch` while seamux is `0.y.z`**, new features included: semver makes no stability promise before 1.0. Use `minor` only for a change someone must react to, such as a moved setting or a new requirement, and say in the note what they must do.
+- **Pick the bump by what someone running seamux has to do.** seamux is pre-1.0, so only two are used, and never `major`:
+  - **`minor`**: a change they may have to migrate to or adopt, such as a moved or renamed setting, a new requirement, a changed command, or a change to where seamux keeps its state. Say in the note what they must do.
+  - **`patch`**: a bug fix, or a small addition that asks nothing of them.
 - **No changeset** for what nobody running seamux sees: docs, CI, refactors, tooling.
 
 On GitHub, `release-version.yml` keeps a "Version Packages" pull request open that folds pending changesets into `CHANGELOG.md` and bumps the version, and merging it releases: `release.yml` publishes the new version to npm through trusted publishing, once someone approves the `npm-production` environment, then tags `v<version>` and creates its GitHub Release from `CHANGELOG.md`.
