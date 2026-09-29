@@ -46,6 +46,7 @@ import {
   type LiveSession,
   type Surface,
 } from "./drive.server";
+import { cmuxRpc } from "./cmux.server";
 import { IS_CHECKOUT, PACKAGE_ROOT, packageVersion } from "./paths.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
 import { serviceNotices } from "./service.server";
@@ -152,9 +153,9 @@ interface Workspace {
 // signal is not read: it stays set after the dialog is answered, and
 // `claude agents` reports waiting itself.
 async function cmuxWorkspaces(): Promise<Workspace[]> {
-  const { workspaces } = await readJson<{
+  const { workspaces } = await cmuxRpc<{
     workspaces: { id: string; ref: string; current_directory: string }[];
-  }>("cmux", ["rpc", "workspace.list", "{}"]);
+  }>("workspace.list");
   return workspaces.map((w) => ({
     id: w.id,
     ref: w.ref,

@@ -17,7 +17,8 @@ For a pull request, push your branch and open the PR against `main` instead of l
 
 ## Checking a change
 
-- `npm run typecheck` and `npm run build` must pass; CI runs both on every pull request. There are no tests yet.
+- `npm run typecheck`, `npm test` and `npm run build` must pass; CI runs all three on every pull request.
+- The tests run against a fake cmux (`test/fake-cmux.ts`), which speaks cmux's socket protocol and answers `cmux sessions list`, so they need neither cmux nor Claude Code installed, and never touch your real sessions. When seamux starts making a new cmux call, the fake refuses it as an unknown method until you teach it that method, which is also when to add a test pinning down what seamux sends.
 - Try a new cmux or Claude Code call against a throwaway session in its own cmux workspace, never against sessions you care about, and close the workspace afterwards.
 - Several documented cmux and Claude Code behaviours turned out wrong when seamux ran them. [docs/findings.md](docs/findings.md) lists them. Add to it when a tool surprises you, and say which version you measured.
 - Prose is checked with [Taskless](https://taskless.io); its rules are in `.taskless/`.

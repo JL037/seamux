@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+// The fake `cmux` command, first on PATH in the tests (test/setup.ts). It
+// answers `cmux sessions list --json` from the state test/fake-cmux.ts writes,
+// and refuses anything else: seamux reaches everything else over the socket.
+import { readFileSync } from "node:fs";
+
+const args = process.argv.slice(2);
+if (args[0] === "sessions" && args[1] === "list" && args.includes("--json")) {
+  process.stdout.write(readFileSync(process.env.SEAMUX_TEST_CMUX_STATE, "utf8"));
+  process.exit(0);
+}
+process.stderr.write(`fake cmux: unsupported command: ${args.join(" ")}\n`);
+process.exit(2);

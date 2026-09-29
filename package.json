@@ -33,6 +33,7 @@
     "changeset": "changeset",
     "bump": "changeset version && npm install --package-lock-only --ignore-scripts",
     "typecheck": "react-router typegen && tsc",
+    "test": "vitest run",
     "hooks:install": "node --no-warnings scripts/install-hooks.ts",
     "hooks:uninstall": "node --no-warnings scripts/install-hooks.ts --uninstall",
     "skills:install": "node --no-warnings scripts/install-skills.ts",
@@ -76,7 +77,8 @@
     "rolldown": "^1.2.11",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "vite": "^8.0.3"
+    "vite": "^8.0.3",
+    "vitest": "^5.0.2"
   },
   "files": [
     "bin/",

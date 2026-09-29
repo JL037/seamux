@@ -22,6 +22,7 @@ import { parseCodexApproval, renameCodexSession } from "./codex.server.ts";
 import { ENGINES, renderMacro, usesVariable, type Engine } from "./config.ts";
 import { configOrDefaults } from "./config.server.ts";
 import { BIN_DIRS, CMUX_BIN, findBin, SHELL } from "./bins.server.ts";
+import { cmuxCli, cmuxRpc } from "./cmux.server.ts";
 import { projectOf } from "./project-colors.ts";
 import { recordDispatch } from "./store.server.ts";
 
@@ -32,16 +33,7 @@ export interface Surface {
   workspaceId: string;
 }
 
-async function rpc<T = unknown>(method: string, params: object): Promise<T> {
-  const { stdout } = await run(
-    "cmux",
-    ["rpc", method, JSON.stringify(params)],
-    {
-      timeout: 10_000,
-    },
-  );
-  return JSON.parse(stdout) as T;
-}
+const rpc = cmuxRpc;
 
 interface CmuxSession {
   session_id: string;
@@ -75,8 +67,7 @@ const codexResumed = ((globalThis as any).__seamuxCodexResumed ??= new Map<
 // while cmux marks it active for its surface. Codex never gets that mark,
 // so a Codex session is live while its process is.
 export async function listLive(): Promise<Map<string, LiveSession>> {
-  const { stdout } = await run("cmux", ["sessions", "list", "--json"], {
-    timeout: 10_000,
+  const stdout = await cmuxCli(["sessions", "list", "--json"], {
     maxBuffer: 16 * 1024 * 1024,
   });
   const { sessions } = JSON.parse(stdout) as { sessions: CmuxSession[] };
@@ -253,18 +244,11 @@ export async function answerApproval(
 }
 
 async function readScreen(surface: Surface): Promise<string> {
-  const { stdout } = await run(
-    "cmux",
-    [
-      "read-screen",
-      "--workspace",
-      surface.workspaceId,
-      "--surface",
-      surface.surfaceId,
-    ],
-    { timeout: 10_000 },
+  const { text } = await rpc<{ text: string }>(
+    "surface.read_text",
+    target(surface),
   );
-  return stdout;
+  return text;
 }
 
 const OPTION = /^(?:❯\s*)?([1-9])\.\s+(.+)$/;

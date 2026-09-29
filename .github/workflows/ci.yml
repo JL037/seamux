@@ -1,5 +1,5 @@
-# Checks every pull request, and every push to main, the way `npm run land`
-# checks a landing: it typechecks, then builds the compiled board and the
+# Checks every pull request, and every push to main: it typechecks, runs the
+# tests, then builds the compiled board and the
 # bundled scripts that the npm package ships, so a change that would break
 # `npx seamux` fails here rather than on release.
 #
@@ -42,4 +42,7 @@ jobs:
       # No dependency's install scripts run: nothing here needs them.
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
+      # Against a fake cmux (test/fake-cmux.ts): nothing here needs cmux or
+      # Claude Code installed.
+      - run: npm test
       - run: npm run build
