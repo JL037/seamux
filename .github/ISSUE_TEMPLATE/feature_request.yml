@@ -1,0 +1,28 @@
+name: Feature request
+description: Something seamux should do, or do differently.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The situation, and what gets in the way today. A problem described well is worth more than a solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you'd like seamux to handle it, if you have an idea.
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      description: Which agent it's about, if either.
+      options:
+        - Claude Code
+        - Codex
+        - Both
+        - Neither

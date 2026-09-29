@@ -1,0 +1,116 @@
+name: Bug report
+description: Something on the board, or in driving a session, didn't work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. seamux sits between cmux and Claude Code or Codex, and all three change often, so the versions below are usually what tells us where a bug lives.
+
+        Found a security problem? Don't report it here: see [SECURITY.md](https://github.com/thecodedrift/seamux/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what seamux did instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: From a fresh board, the steps that make it happen. Say which card or column, and what the session was doing at the time (working, waiting on a question, a permission prompt, idle).
+      placeholder: |
+        1. Dispatch a Claude Code session in a new worktree
+        2. Wait for it to ask a question
+        3. Answer it from the card
+        4. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot, blurred
+      description: |
+        A screenshot of the board showing the problem. **Blur it first**: open the cog menu → Debug → turn on **Blur cards for screenshots**. That blurs what each chat says and where it runs, and leaves the layout and controls readable. Drag the image in here. Write "No UI involved" if the bug isn't on the board.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      description: Which agent the session was running.
+      options:
+        - Claude Code
+        - Codex
+        - Both
+        - Not about a session
+    validations:
+      required: true
+
+  - type: input
+    id: agent-version
+    attributes:
+      label: Agent version
+      description: The output of `claude --version`, `codex --version`, or both.
+      placeholder: 2.1.283 (Claude Code)
+    validations:
+      required: true
+
+  - type: input
+    id: cmux-version
+    attributes:
+      label: cmux version
+      description: The output of `cmux --version`.
+      placeholder: cmux 0.64.23 (103) [211b8bb35]
+    validations:
+      required: true
+
+  - type: input
+    id: seamux-version
+    attributes:
+      label: seamux version
+      description: Shown in the board's header, next to "updated", such as `v0.2.0`, or a commit when you run a clone.
+      placeholder: v0.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you run seamux
+      options:
+        - npx seamux (npm)
+        - A clone, with npm run seamux
+        - A clone, with npm start
+    validations:
+      required: true
+
+  - type: dropdown
+    id: access
+    attributes:
+      label: Where you opened the board
+      options:
+        - On this Mac (127.0.0.1)
+        - Over the network (mDNS)
+        - Through the Cloudflare tunnel
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: macOS and Node
+      description: The output of `sw_vers -productVersion` and `node --version`.
+      placeholder: 26.5, v24.13.1
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Anything the board's terminal printed around the time, or a Debug → Diagnostics snapshot for a layout problem. Check it for anything private first.
+      render: text
