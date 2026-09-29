@@ -4,7 +4,7 @@ A board over every Claude Code and Codex session on your Mac, and the tools to d
 
 Running a dozen agent sessions at once means a dozen terminals to check: which one is waiting on a permission prompt, which finished an hour ago, which is still working. seamux puts them all on one board in your browser, where you can answer a question, approve a tool call, queue the next prompt or start new work without finding the right tab. It works from your phone too.
 
-![Board sketch](docs/board-sketch.png)
+![The seamux board: Idle, Waiting and Working columns of session cards, blurred for the screenshot](docs/board.png)
 
 ## Getting it running
 
