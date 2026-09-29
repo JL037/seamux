@@ -205,9 +205,13 @@ async function confirmSent(surface: Surface, text: string) {
   }
 }
 
+// What the comparison leaves out: whitespace, since the box wraps lines, and
+// invisible characters, since Claude Code strips a lone one from the box and
+// holds the message for another Enter, saying "Removed 1 invisible character".
+const UNSEEN = /[\s\p{Cf}\p{Mn}\p{Me}\u115F\u1160\u3164\uFFA0]/gu;
+
 // Whether Claude Code's prompt box, the lines between the last two rules on
-// the screen with "❯" leading the first, ends with the end of `text`. The box
-// wraps lines, so whitespace is left out of the comparison.
+// the screen with "❯" leading the first, ends with the end of `text`.
 export function endsPromptBox(screen: string, text: string): boolean {
   const lines = screen.split("\n").map((l) => l.trim());
   const rules = lines.flatMap((l, i) => (/^[─━▔]{8,}/.test(l) ? [i] : []));
@@ -217,8 +221,8 @@ export function endsPromptBox(screen: string, text: string): boolean {
     .slice(top + 1, bottom)
     .join("")
     .replace(/^❯/, "")
-    .replace(/\s+/g, "");
-  const tail = text.replace(/\s+/g, "").slice(-20);
+    .replace(UNSEEN, "");
+  const tail = Array.from(text.replace(UNSEEN, "")).slice(-20).join("");
   return tail.length > 0 && box.endsWith(tail);
 }
 

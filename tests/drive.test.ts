@@ -155,6 +155,21 @@ describe("sendMessage", () => {
     ]);
   });
 
+  it("presses Enter again when Claude Code holds a message it stripped invisible characters from", async () => {
+    const { surface } = cmux.addSession("s");
+    let enters = 0;
+    cmux.onInput((s, i) => {
+      if (i.value !== "enter") return;
+      s.screen = promptBox(++enters > 1 ? "" : "fix the login");
+    });
+    await sendMessage("s", "fix the\u200b login\u00ad");
+    expect(input(surface)).toEqual([
+      "text:fix the\u200b login\u00ad",
+      "key:enter",
+      "key:enter",
+    ]);
+  });
+
   it("says so when the message never leaves the prompt box", async () => {
     const { surface } = cmux.addSession("s");
     cmux.onInput((s, i) => {
