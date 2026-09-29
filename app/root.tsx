@@ -5,14 +5,13 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import { THEME_KEY } from "~/components/theme-toggle";
 import { BLUR_KEY } from "~/lib/use-blur";
 import { Toaster } from "~/components/ui/sonner";
-import { isSecured, requireAuth } from "~/lib/auth.server";
+import { requireAuth } from "~/lib/auth.server";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -29,19 +28,11 @@ export const links: Route.LinksFunction = () => [
 
 export const middleware: Route.MiddlewareFunction[] = [requireAuth];
 
-export function loader({ request }: Route.LoaderArgs) {
-  return { secured: isSecured(request) };
-}
-
 export function Layout({ children }: { children: React.ReactNode }) {
-  // Undefined while an error renders without data: assume secured rather
-  // than flash the warning.
-  const unsecured = useRouteLoaderData<typeof loader>("root")?.secured === false;
   return (
     <html
       lang="en"
       suppressHydrationWarning
-      data-unsecured={unsecured ? "" : undefined}
     >
       <head>
         <meta charSet="utf-8" />
@@ -55,7 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="seamux" />
-        <meta name="theme-color" content={unsecured ? "#3A0B0B" : "#0B1220"} />
+        <meta name="theme-color" content="#0B1220" />
         <Meta />
         <Links />
         {/* Use the theme chosen with the header toggle, else follow the OS;

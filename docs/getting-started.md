@@ -62,9 +62,7 @@ SEAMUX_USER=you
 SEAMUX_PASS=something-long
 ```
 
-It reads them on every request, so a change to `.env` takes effect without a restart. With either one unset the board still runs, but its background turns red and it calls itself "seamux (unsecured)". mDNS won't turn on without them.
-
-<!-- Screenshot: the red "seamux (unsecured)" board -->
+It reads them on every request, so a change to `.env` takes effect without a restart. Set, they're asked for by every request, from this Mac too, and for every file the board serves; only a request through the Cloudflare tunnel skips them, since Cloudflare Access logs it in. With either one unset the board answers only this Mac, and mDNS won't turn on.
 
 ## Settings
 
@@ -125,7 +123,7 @@ All optional. Each can go in `.env` or the environment, except `SEAMUX_HOME`, wh
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SEAMUX_PORT` | from `.seamux.json` | Port for the board, saved to `.seamux.json` |
-| `SEAMUX_USER`, `SEAMUX_PASS` | unset | HTTP Basic credentials for the board. Unset leaves the board unsecured on this Mac, and keeps mDNS off |
+| `SEAMUX_USER`, `SEAMUX_PASS` | unset | HTTP Basic credentials for the board, asked for by every request except the tunnel's. Unset leaves the board open to this Mac only, and keeps mDNS off |
 | `SEAMUX_CF_TOKEN`, `SEAMUX_CF_DOMAIN`, `SEAMUX_CF_TEAM`, `SEAMUX_CF_AUD` | unset | The Cloudflare tunnel's token and hostname, and the Cloudflare Access team and AUD tag. All four are needed. See [Remote connections](remote-connections.md) |
 | `SEAMUX_CF_TUNNEL` | unset | The tunnel's id, shown in the Remote tab |
 | `SEAMUX_HOME` | the clone, or `~/.seamux` | Where seamux keeps `.env`, `.seamux.json` and `data/` |

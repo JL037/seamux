@@ -1,16 +1,13 @@
 import { data } from "react-router";
 
 import { SEAMUX_HOME } from "~/lib/paths.server";
-import { isLanHost, isTunnelHost } from "~/lib/remote.server";
-
-const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
+import { isLanHost, isLocalName, isTunnelHost } from "~/lib/remote.server";
 
 // Whether the request was made on this Mac, not through the tunnel or over
 // the network. A request from another machine that claims a local Host never
-// gets this far: vite.config.ts refuses it by its socket.
+// gets this far: remoteGate refuses it by its socket.
 export function isLocalRequest(request: Request): boolean {
-  const host = request.headers.get("host") ?? "";
-  return LOCAL_HOSTS.has(host.replace(/:\d+$/, ""));
+  return isLocalName(request.headers.get("host"));
 }
 
 // The tunnel's hostname, which the auth middleware has already checked for

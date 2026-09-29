@@ -10,27 +10,18 @@ import {
   checkTunnelRequest,
   forbiddenPage,
   isLanHost,
-  isTunnelHost,
 } from "~/lib/remote.server";
 import { SEAMUX_HOME } from "~/lib/paths.server";
 
-// A request through the tunnel has passed Cloudflare Access, so it counts.
-export function isSecured(request: Request): boolean {
-  return (
-    readCredentials(SEAMUX_HOME) !== null ||
-    isTunnelHost(SEAMUX_HOME, request.headers.get("host"))
-  );
-}
-
-// In front of every route: documents, data requests and actions.
+// In front of every route: documents, data requests and actions. The
+// servers' remoteGate has already checked every request, by its socket too;
+// this checks again what it can without the socket.
 //
 // Through the tunnel, Cloudflare Access is the login: the request must carry
 // a valid Access token, and HTTP Basic isn't asked for. Otherwise HTTP Basic,
 // when credentials are configured. Without them it lets everything through,
-// and the board turns red and names itself "seamux (unsecured)" instead,
-// except at the mDNS name, which never answers without them. (The dev
-// server's own middleware, in vite.config.ts, has already checked a request
-// from the network, since only it can see the socket.)
+// since remoteGate only lets this Mac in then, except at the mDNS name,
+// which never answers without them.
 export const requireAuth: MiddlewareFunction<Response> = async (
   { request },
   next,

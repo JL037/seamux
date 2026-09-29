@@ -1,15 +1,21 @@
-// Remote access, two ways in besides localhost, both behind the Remote tab's
-// "Enable remote connections" switch:
+// The board runs in one of three modes, which the Remote tab picks:
 //
-// - mDNS: the board listens on every interface and answers at this Mac's
-//   Bonjour name, <LocalHostName>.local. A request from the network must be
-//   addressed to that name and carry the HTTP Basic credentials, which must
-//   be set.
-// - A Cloudflare named tunnel from SEAMUX_CF_DOMAIN to the board, with
-//   Cloudflare Access in front of it. A request through the tunnel must carry
-//   a valid Access token for SEAMUX_CF_TEAM and SEAMUX_CF_AUD, checked here,
-//   and then needs no HTTP Basic credentials. If the Access application is
-//   ever deleted or loosened, the board still refuses.
+// - local: it binds 127.0.0.1 and answers only a request from this Mac
+//   addressed to localhost, 127.0.0.1 or [::1]. The rest of the modes answer
+//   those too.
+// - mdns: it listens on every interface and also answers this Mac's Bonjour
+//   name, <LocalHostName>.local, from anywhere. That needs the HTTP Basic
+//   credentials set.
+// - tunnel: a Cloudflare named tunnel from SEAMUX_CF_DOMAIN to the board, with
+//   Cloudflare Access in front of it. The board binds 127.0.0.1 as in local
+//   mode, and also answers cloudflared, on this Mac, at the tunnel's
+//   hostname. A request there must carry a valid Access token for
+//   SEAMUX_CF_TEAM and SEAMUX_CF_AUD, checked here, and then needs no HTTP
+//   Basic credentials. If the Access application is ever deleted or
+//   loosened, the board still refuses.
+//
+// Whenever SEAMUX_USER and SEAMUX_PASS are set, every request other than the
+// tunnel's must carry them, whatever it asks for.
 //
 // The switches live in .seamux.json. The supervisor (scripts/supervise.ts)
 // starts and stops cloudflared to match, and restarts the dev server when
@@ -119,8 +125,8 @@ export function readRemoteSettings(dir: string): {
   };
 }
 
-// The tunnel's hostname, once every variable is set: Vite's allowedHosts and
-// the board's guard accept it alongside localhost.
+// The tunnel's hostname, once every variable is set: Vite's allowedHosts
+// lets it through, for remoteGate to decide.
 export function remoteDomain(dir: string): string | null {
   return readRemoteSettings(dir).settings?.domain ?? null;
 }
@@ -163,15 +169,23 @@ export function updateRunFile(dir: string, fields: Record<string, unknown>) {
 export type RemoteSwitch = "remote" | "tunnel" | "mdns";
 
 // `remote` is the master switch. Before there was mDNS it was the tunnel's
-// own switch, so a file without `tunnel` takes it from `remote`.
+// own switch, so a file without `tunnel` takes it from `remote`. mDNS and the
+// tunnel are never on together; a file from before that rule with both on
+// gets the tunnel.
 function readSwitches(dir: string): Record<RemoteSwitch, boolean> {
   const saved = readRunFile(dir);
   const remote = saved.remote === true;
-  return {
-    remote,
-    tunnel: typeof saved.tunnel === "boolean" ? saved.tunnel : remote,
-    mdns: saved.mdns === true,
-  };
+  const tunnel = typeof saved.tunnel === "boolean" ? saved.tunnel : remote;
+  return { remote, tunnel, mdns: saved.mdns === true && !tunnel };
+}
+
+export type RemoteMode = "local" | "mdns" | "tunnel";
+
+export function remoteMode(dir: string): RemoteMode {
+  const s = readSwitches(dir);
+  if (!s.remote) return "local";
+  if (s.tunnel) return "tunnel";
+  return s.mdns ? "mdns" : "local";
 }
 
 export function remoteEnabled(dir: string): boolean {
@@ -180,19 +194,21 @@ export function remoteEnabled(dir: string): boolean {
 
 // Whether cloudflared should run.
 export function tunnelWanted(dir: string): boolean {
-  const s = readSwitches(dir);
-  return s.remote && s.tunnel;
+  return remoteMode(dir) === "tunnel";
 }
 
 // Whether the board should listen on the network.
 export function lanWanted(dir: string): boolean {
-  const s = readSwitches(dir);
-  return s.remote && s.mdns;
+  return remoteMode(dir) === "mdns";
 }
 
 // Writes every switch, so the tunnel's no longer follows the master's.
+// Turning mDNS or the tunnel on turns the other off.
 export function setRemoteSwitch(dir: string, which: RemoteSwitch, on: boolean) {
-  updateRunFile(dir, { ...readSwitches(dir), [which]: on });
+  const switches = { ...readSwitches(dir), [which]: on };
+  if (on && which === "mdns") switches.tunnel = false;
+  if (on && which === "tunnel") switches.mdns = false;
+  updateRunFile(dir, switches);
 }
 
 function runPort(dir: string): number {
@@ -240,39 +256,63 @@ export function isLoopback(address: string | undefined): boolean {
   );
 }
 
-export type LanVerdict =
-  | { verdict: "local" }
+// The names a request from this Mac may be addressed to in every mode.
+const LOCAL_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+export function isLocalName(host: string | null): boolean {
+  return host !== null && LOCAL_NAMES.has(hostOf(host));
+}
+
+export type GateVerdict =
   | { verdict: "allowed" }
+  | { verdict: "tunnel" }
   | { verdict: "login" }
   | { verdict: "denied"; reason: string };
 
-// For a request from another machine, which only the dev server's own
-// middleware can tell apart, by its socket: it must be addressed to this
-// Mac's .local name while mDNS is on, and carry the HTTP Basic credentials.
-// That also stops it claiming Host: 127.0.0.1 to pass as local, or the
-// tunnel's hostname. The reason finishes "seamux refused this request
-// because …".
-export function checkLanRequest(
+// Whether the board answers a request, by its socket's address, its Host and
+// its HTTP Basic credentials: "tunnel" for one addressed to the tunnel, which
+// must then carry a valid Access token instead. Only the servers' own
+// middleware can see the socket, so this runs there, ahead of everything
+// they answer. The Host check also stops a page elsewhere that points its
+// own name at this Mac from reading the board. The reason finishes "seamux
+// refused this request because …".
+export function checkRequest(
   dir: string,
   peer: string | undefined,
   host: string | null,
   authorization: string | null,
-): LanVerdict {
-  if (isLoopback(peer)) return { verdict: "local" };
-  if (!lanWanted(dir)) {
+): GateVerdict {
+  const mode = remoteMode(dir);
+  const loopback = isLoopback(peer);
+  const name = host === null ? null : hostOf(host);
+  const domain = mode === "tunnel" ? remoteDomain(dir) : null;
+  if (!loopback && mode !== "mdns") {
     return {
       verdict: "denied",
       reason: "it came from the network, and mDNS is off in the Remote tab",
     };
   }
-  if (host === null || hostOf(host) !== lanHost()) {
+  if (domain !== null && name === domain) {
+    // cloudflared connects from this Mac; the network can't get here, since
+    // the board binds 127.0.0.1 in tunnel mode.
+    return { verdict: "tunnel" };
+  }
+  const answered =
+    (loopback && isLocalName(host)) || (mode === "mdns" && name === lanHost());
+  if (!answered) {
+    const names = [
+      ...(loopback ? LOCAL_NAMES : []),
+      ...(mode === "mdns" ? [lanHost()] : []),
+      ...(domain !== null ? [domain] : []),
+    ];
     return {
       verdict: "denied",
-      reason: `it came from the network addressed to ${host ?? "no host"}, and the board only answers the network at ${lanHost()}`,
+      reason: `it was addressed to ${host ?? "no host"}, and the board only answers ${names.join(", ")}`,
     };
   }
   const credentials = readCredentials(dir);
   if (!credentials) {
+    if (mode !== "mdns" || name !== lanHost()) return { verdict: "allowed" };
     return {
       verdict: "denied",
       reason:
@@ -333,8 +373,9 @@ export function remoteStatus(dir: string, host: string | null): RemoteStatus {
 
 // --- Requests through the tunnel -----------------------------------------
 
+// The tunnel's hostname, while the board is in tunnel mode.
 export function isTunnelHost(dir: string, host: string | null): boolean {
-  const domain = remoteDomain(dir);
+  const domain = tunnelWanted(dir) ? remoteDomain(dir) : null;
   return domain !== null && host !== null && hostOf(host) === domain;
 }
 
@@ -366,40 +407,38 @@ export async function checkTunnelRequest(
 
 // --- The gate every request passes ---------------------------------------
 
-// Every request from another machine must be addressed to the mDNS name and
-// carry HTTP Basic credentials, and every request through the tunnel a valid
-// Cloudflare Access token. As middleware ahead of everything that answers
-// requests: in dev, Vite's own (modules, assets, files under the checkout)
-// before the board's auth middleware sees them; compiled, the static files
-// and the board alike.
+// checkRequest, then the Access token for a request through the tunnel. As
+// middleware ahead of everything that answers requests: in dev, Vite's own
+// (modules, assets, files under the checkout) before the board's auth
+// middleware sees them; compiled, the static files and the board alike.
 export function remoteGate(dir: string) {
   return (
     req: IncomingMessage,
     res: ServerResponse,
     next: (err?: unknown) => void,
   ) => {
-    const lan = checkLanRequest(
+    const gate = checkRequest(
       dir,
       req.socket.remoteAddress,
       req.headers.host ?? null,
       req.headers.authorization ?? null,
     );
-    if (lan.verdict === "login") {
+    if (gate.verdict === "allowed") return next();
+    if (gate.verdict === "login") {
       res.statusCode = 401;
       res.setHeader("WWW-Authenticate", 'Basic realm="seamux", charset="UTF-8"');
       res.end("Authentication required");
       return;
     }
-    if (lan.verdict === "denied") {
+    if (gate.verdict === "denied") {
       console.warn(
-        `[seamux] refused a request from ${req.socket.remoteAddress}: ${lan.reason}`,
+        `[seamux] refused a request from ${req.socket.remoteAddress}: ${gate.reason}`,
       );
       res.statusCode = 403;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.end(forbiddenPage(lan.reason, false));
+      res.end(forbiddenPage(gate.reason, false));
       return;
     }
-    if (lan.verdict === "allowed") return next();
     const token = req.headers[ACCESS_HEADER];
     checkTunnelRequest(
       dir,
@@ -412,20 +451,6 @@ export function remoteGate(dir: string) {
       res.end(forbiddenPage(tunnel.reason));
     }, next);
   };
-}
-
-// Whether the board answers a request addressed to `host`, as Vite's
-// allowedHosts decides in dev: localhost, an IP address, the tunnel's
-// hostname, and this Mac's .local name while mDNS is on. Any other name is a
-// page elsewhere that pointed its own DNS at this Mac to read the board.
-export function hostAllowed(dir: string, host: string | null): boolean {
-  if (host === null) return false;
-  const name = hostOf(host);
-  if (name === "localhost" || name.endsWith(".localhost")) return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || /^\[[0-9a-f:.]+\]$/.test(name)) {
-    return true;
-  }
-  return isTunnelHost(dir, host) || isLanHost(dir, host);
 }
 
 // The 403 for a refused tunnel or network request, and why.

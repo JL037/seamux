@@ -1,13 +1,15 @@
 # Remote connections
 
-Out of the box the board answers only this Mac, at `127.0.0.1`. The config dialog's Remote tab has two other ways in:
+Out of the box the board answers only this Mac: a request must come from this Mac, addressed to `localhost`, `127.0.0.1` or `[::1]`. Any other name, even one that points at this Mac, is refused, so a website can't point its own domain at `127.0.0.1` and read the board. The config dialog's Remote tab has two other ways in, one at a time:
 
 - **mDNS**, for devices on the same network: the board answers at this Mac's `.local` name, behind its HTTP Basic password.
 - **A Cloudflare tunnel**, for anywhere: the board answers at a hostname of yours, behind Cloudflare Access.
 
 On a phone the board shows one column at a time; see [Columns](../README.md#columns). Through the tunnel it can also be added to the Home Screen, where it opens full screen with its own icon.
 
-Both sit under one switch, **Enable remote connections**. With it off, neither is open and the Remote tab hides their settings. Every switch on the tab can only be turned on from this Mac, and turns off from anywhere, so a lost phone can't reopen the board once you've shut it.
+Both sit under one switch, **Enable remote connections**. With it off, neither is open and the Remote tab hides their settings. Only one of them is on at a time: turning mDNS on turns the tunnel off, and the other way round.
+
+Whenever `SEAMUX_USER` and `SEAMUX_PASS` are set, every request asks for them, from this Mac too and for every file the board serves, except through the tunnel, where Cloudflare Access is the login. Every switch on the tab can only be turned on from this Mac, and turns off from anywhere, so a lost phone can't reopen the board once you've shut it.
 
 <!-- Screenshot: the Remote tab with remote connections off -->
 
@@ -27,7 +29,7 @@ Then turn on **Enable remote connections** and **Enable mDNS**. The board restar
 A request from another machine must:
 
 - be addressed to `<name>.local`. The same board reached by its IP address, or with a forged `Host: 127.0.0.1`, is refused, so a request from the network can never pass as one from this Mac;
-- carry the HTTP Basic credentials, including requests for Vite's own files.
+- carry the HTTP Basic credentials, including requests for Vite's own files. So does a request from this Mac.
 
 HTTP Basic over plain HTTP sends the password unencrypted, and anyone on the network can read it. Use mDNS on networks you trust, and the tunnel everywhere else.
 
@@ -37,7 +39,7 @@ Turning mDNS off shuts the network out straight away, and the board then restart
 
 <!-- Screenshot: the Enable Cloudflare Tunnel section, expanded -->
 
-A Cloudflare named tunnel connects out from this Mac to Cloudflare, so the board keeps listening on loopback only, and nothing on your network changes. Cloudflare Access sits in front of it and asks you to log in.
+A Cloudflare named tunnel connects out from this Mac to Cloudflare, so the board keeps listening on loopback only, and nothing on your network changes. It answers `localhost` as it does out of the box, and the tunnel's hostname only for `cloudflared`, on this Mac. Turning the tunnel on turns mDNS off. Cloudflare Access sits in front of it and asks you to log in.
 
 The Remote tab's **Enable Cloudflare Tunnel** section starts collapsed, and opens by itself once any of its variables is set.
 

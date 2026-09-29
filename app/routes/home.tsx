@@ -54,10 +54,6 @@ import { ContextBar } from "~/components/context-bar";
 import { DispatchBar } from "~/components/dispatch-bar";
 import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
 import { Markdown } from "~/components/markdown";
-import {
-  productNameFromMatches,
-  useProductName,
-} from "~/components/product-name";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
 import { ThemeToggle } from "~/components/theme-toggle";
@@ -124,13 +120,13 @@ import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
 
-export function meta({ matches, loaderData }: Route.MetaArgs) {
+export function meta({ loaderData }: Route.MetaArgs) {
   // Chats waiting, and services that need the user, such as a sign-in.
   const waiting = loaderData
     ? waitingCards(loaderData.board.cards).length +
       attentionCount(loaderData.board.attention)
     : 0;
-  return [{ title: titleWithCount(productNameFromMatches(matches), waiting) }];
+  return [{ title: titleWithCount("seamux", waiting) }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -1614,7 +1610,6 @@ function useCarousel(
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const name = useProductName();
   usePoll(POLL_MS);
   useFocusRestore();
   const board: Board = loaderData.board;
@@ -1728,7 +1723,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     <SeamuxMark size={32} />
                   </span>
                   <span className="truncate text-xl font-bold tracking-tight text-foreground">
-                    {name}
+                    seamux
                   </span>
                 </span>
                 <ConfigDialog

@@ -137,16 +137,6 @@
   --sidebar-ring: oklch(0.63 0.18 272);
 }
 
-/* No SEAMUX_USER / SEAMUX_PASS: the board is open to anything that can
-   reach its port, so the ground turns from navy to red. Light mode gets a
-   pale red, so its dark text stays readable. */
-html[data-unsecured] {
-  --background: oklch(0.93 0.045 25);
-}
-html[data-unsecured].dark {
-  --background: oklch(0.23 0.085 25);
-}
-
 @layer base {
   * {
     @apply border-border outline-ring/50;

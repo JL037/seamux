@@ -1,6 +1,6 @@
 // The board's HTTP Basic credentials: SEAMUX_USER and SEAMUX_PASS from the
 // environment, else from the checkout's gitignored .env. Both must be set;
-// with either missing the board runs unsecured and says so.
+// with either missing the board answers only this Mac.
 //
 // Read on every call rather than once at startup, so editing .env takes
 // effect without restarting the board.

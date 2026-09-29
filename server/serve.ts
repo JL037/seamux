@@ -4,8 +4,8 @@
 //   node dist/serve.js --port 54321
 //
 // It serves what `npm run build` made, behind the same checks the dev server
-// makes: the Host allowlist Vite's allowedHosts gives in dev, then the
-// remote-access gate, ahead of the static files and the board alike. Like the
+// makes: the remote-access gate, ahead of the static files and the board
+// alike. Like the
 // dev server, it binds 127.0.0.1 unless mDNS is on, and reads the tunnel's
 // hostname and the mDNS switch once, at startup; the supervisor restarts it
 // when mDNS changes.
@@ -20,7 +20,6 @@ import type { ServerBuild } from "react-router";
 
 import { packagePath, SEAMUX_HOME } from "../app/lib/paths.server.ts";
 import {
-  hostAllowed,
   lanWanted,
   LISTEN_ENV,
   remoteDomain,
@@ -63,10 +62,6 @@ const domain = remoteDomain(SEAMUX_HOME);
 
 const app = express();
 app.disable("x-powered-by");
-app.use((req, res, next) => {
-  if (hostAllowed(SEAMUX_HOME, req.headers.host ?? null)) return next();
-  res.status(403).type("text").send("Blocked request: unknown host");
-});
 app.use(remoteGate(SEAMUX_HOME));
 // Hashed file names, so they can be kept for good.
 app.use(
