@@ -170,15 +170,32 @@ describe("sendMessage", () => {
     ]);
   });
 
+  it("types a carriage return once Enter has been pressed four times to no effect", async () => {
+    const { surface } = cmux.addSession("s");
+    cmux.onInput((s, i) => {
+      if (i.kind === "text")
+        s.screen = promptBox(i.value === "\r\n" ? "" : i.value);
+    });
+    await sendMessage("s", "fix the login");
+    expect(input(surface).slice(-2)).toEqual(["key:enter", "text:\r\n"]);
+  });
+
   it("says so when the message never leaves the prompt box", async () => {
     const { surface } = cmux.addSession("s");
     cmux.onInput((s, i) => {
-      if (i.kind === "text") s.screen = promptBox(i.value);
+      if (i.kind === "text" && i.value !== "\r\n")
+        s.screen = promptBox(i.value);
     });
     await expect(sendMessage("s", "fix the login")).rejects.toBeInstanceOf(
       UnsentError,
     );
-    expect(input(surface).filter((i) => i === "key:enter")).toHaveLength(4);
+    expect(input(surface).slice(-5)).toEqual([
+      "key:enter",
+      "key:enter",
+      "key:enter",
+      "key:enter",
+      "text:\r\n",
+    ]);
   });
 
   it("always pastes into Codex, which folds long typed input", async () => {
