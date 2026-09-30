@@ -2,6 +2,10 @@ name: Feature request
 description: Something seamux should do, or do differently.
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: Before you write it up, read [what makes a proposal fit](https://github.com/thecodedrift/seamux/blob/main/CONTRIBUTING.md#proposing-a-change) seamux.
+
   - type: textarea
     id: problem
     attributes:
@@ -14,7 +18,7 @@ body:
     id: idea
     attributes:
       label: What would help
-      description: How you'd like seamux to handle it, if you have an idea.
+      description: How you'd like seamux to handle it, if you have an idea. Say if it needs something cmux doesn't provide today, new stored state, or a change to how the board is laid out.
 
   - type: dropdown
     id: agent
@@ -25,4 +29,5 @@ body:
         - Claude Code
         - Codex
         - Both
+        - Another agent
         - Neither

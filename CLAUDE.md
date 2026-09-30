@@ -1,6 +1,6 @@
 # seamux
 
-A board over every Claude Code session on this Mac, and the tools to drive and dispatch them. `README.md` covers how it works and links to `docs/getting-started.md` (setup and every setting) and `docs/remote-connections.md` (mDNS and the tunnel); keep them current when behaviour changes. Prose is checked with Taskless.
+A board over every Claude Code session on this Mac, and the tools to drive and dispatch them. `README.md` covers how it works and links to `docs/getting-started.md` (setup and every setting) and `docs/remote-connections.md` (mDNS and the tunnel); keep them current when behaviour changes. `CONTRIBUTING.md` says what makes a proposal fit seamux; read it before drafting an issue or weighing one. Prose is checked with Taskless.
 
 ## Rules
 

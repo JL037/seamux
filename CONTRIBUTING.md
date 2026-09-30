@@ -2,6 +2,21 @@
 
 Issues and pull requests are welcome. For anything bigger than a fix, open an issue first so we can agree on the shape before you build it.
 
+## Proposing a change
+
+seamux is a board over cmux: it reads what cmux, Claude Code and Codex already record, and drives sessions through cmux. A proposal fits when it:
+
+- **Meets a distinct need.** Say what you can't do today, or what the board doesn't show. A need described well is worth more than a solution.
+- **Reworks the board rather than bolting onto it.** If a feature doesn't fit the board as it is, propose how the board should change to hold it, rather than adding a mode, a toggle or a second kind of card beside what's there.
+- **Drives cmux.** seamux learns which sessions exist, and where, from cmux and its hooks. If cmux can't see or do something, ask the cmux team first. A workaround in seamux, such as reading state off the screen, is the last resort.
+- **Justifies any new architecture.** New stored state, a new process, a new config format or a new dependency each need a reason the existing pieces can't cover. The store holds only what nothing else records.
+
+One issue, one feature. If a proposal covers two things that need different approaches, split it.
+
+A new agent arrives measured, not configured: findings in [docs/findings.md](docs/findings.md) first (what cmux reports for it, where its transcripts are, how it takes input, and the versions measured), then the engine. A pull request that only adds findings is welcome on its own.
+
+If an agent drafts your issue or pull request, point it at this file and `CLAUDE.md`.
+
 ## Setting up
 
 Follow [Getting started](docs/getting-started.md): macOS, cmux, Claude Code and Node 24 or later, then `npm install` and `npm run seamux`.
