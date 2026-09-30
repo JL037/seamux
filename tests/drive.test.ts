@@ -139,62 +139,52 @@ describe("sendMessage", () => {
       "  ⏸ manual mode on",
     ].join("\n");
 
-  it("presses Enter again while the message still sits in the prompt box", async () => {
+  // A typed carriage return, as each try after the first Enter is, sends.
+  const sends = (s: { screen: string }, i: { kind: string; value: string }) => {
+    if (i.kind === "text")
+      s.screen = promptBox(i.value === "\r" ? "" : i.value);
+  };
+
+  it("types a carriage return while the message still sits in the prompt box", async () => {
     const { surface } = cmux.addSession("s");
-    let enters = 0;
-    cmux.onInput((s, i) => {
-      if (i.kind === "text") s.screen = promptBox(i.value);
-      // The first Enter is lost, as it is while Claude Code takes a paste in.
-      if (i.value === "enter" && ++enters > 1) s.screen = promptBox("");
-    });
+    // The Enter is lost, as it is while Claude Code takes a paste in.
+    cmux.onInput(sends);
     await sendMessage("s", "fix the login");
     expect(input(surface)).toEqual([
       "text:fix the login",
       "key:enter",
-      "key:enter",
+      "text:\r",
     ]);
   });
 
-  it("presses Enter again when Claude Code holds a message it stripped invisible characters from", async () => {
+  it("tries again when Claude Code holds a message it stripped invisible characters from", async () => {
     const { surface } = cmux.addSession("s");
-    let enters = 0;
+    let tries = 0;
     cmux.onInput((s, i) => {
-      if (i.value !== "enter") return;
-      s.screen = promptBox(++enters > 1 ? "" : "fix the login");
+      if (i.value !== "enter" && i.value !== "\r") return;
+      s.screen = promptBox(++tries > 1 ? "" : "fix the login");
     });
     await sendMessage("s", "fix the\u200b login\u00ad");
     expect(input(surface)).toEqual([
       "text:fix the\u200b login\u00ad",
       "key:enter",
-      "key:enter",
+      "text:\r",
     ]);
-  });
-
-  it("types a carriage return once Enter has been pressed four times to no effect", async () => {
-    const { surface } = cmux.addSession("s");
-    cmux.onInput((s, i) => {
-      if (i.kind === "text")
-        s.screen = promptBox(i.value === "\r\n" ? "" : i.value);
-    });
-    await sendMessage("s", "fix the login");
-    expect(input(surface).slice(-2)).toEqual(["key:enter", "text:\r\n"]);
   });
 
   it("says so when the message never leaves the prompt box", async () => {
     const { surface } = cmux.addSession("s");
     cmux.onInput((s, i) => {
-      if (i.kind === "text" && i.value !== "\r\n")
-        s.screen = promptBox(i.value);
+      if (i.kind === "text" && i.value !== "\r") s.screen = promptBox(i.value);
     });
     await expect(sendMessage("s", "fix the login")).rejects.toBeInstanceOf(
       UnsentError,
     );
-    expect(input(surface).slice(-5)).toEqual([
+    expect(input(surface).slice(-4)).toEqual([
       "key:enter",
-      "key:enter",
-      "key:enter",
-      "key:enter",
-      "text:\r\n",
+      "text:\r",
+      "text:\r",
+      "text:\r",
     ]);
   });
 

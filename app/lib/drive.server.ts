@@ -168,7 +168,7 @@ export class UnsentError extends Error {
 }
 
 // How long to give Claude Code to take a message in before checking it went,
-// and how many more Enters to press when it didn't.
+// and how many more times to try sending it when it didn't.
 const SUBMIT_WAIT_MS = 300;
 const SUBMIT_RETRIES = 3;
 
@@ -194,22 +194,18 @@ export async function sendMessage(sessionId: string, text: string) {
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
 }
 
-// Press Enter again while the message still sits in Claude Code's prompt
-// box, and give up with an UnsentError if it stays there. The last try is a
-// carriage return and line feed typed as text, which reaches Claude Code as
-// written rather than through cmux's key encoding: a chat has been seen
-// taking cmux's Enter as a line break while a real one sent. Where Enter
-// works, the carriage return sends and the line feed lands in an empty box.
+// Try again while the message still sits in Claude Code's prompt box, and
+// give up with an UnsentError if it stays there. Each try is a carriage
+// return typed on its own, which reaches Claude Code as written rather than
+// through cmux's key encoding: a chat has been seen ignoring cmux's Enter, or
+// taking it as a line break, while a typed carriage return sent. Typed with
+// anything after it, it is taken for a paste and becomes a line break.
 async function confirmSent(surface: Surface, text: string) {
   for (let tries = 0; ; tries++) {
     await pause(SUBMIT_WAIT_MS);
     if (!endsPromptBox(await readScreen(surface), text)) return;
-    if (tries > SUBMIT_RETRIES) throw new UnsentError();
-    if (tries === SUBMIT_RETRIES) {
-      await rpc("surface.send_text", { ...target(surface), text: "\r\n" });
-    } else {
-      await rpc("surface.send_key", { ...target(surface), key: "enter" });
-    }
+    if (tries === SUBMIT_RETRIES) throw new UnsentError();
+    await rpc("surface.send_text", { ...target(surface), text: "\r" });
   }
 }
 
