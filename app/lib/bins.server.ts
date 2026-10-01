@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 // cmux's app bundle, which holds the wrappers that launch each agent. In
 // /Applications unless SEAMUX_CMUX_APP says otherwise, or installed for this
 // user alone in ~/Applications.
-const CMUX_APP =
+export const CMUX_APP =
   [
     process.env.SEAMUX_CMUX_APP,
     "/Applications/cmux.app",

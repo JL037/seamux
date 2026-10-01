@@ -238,12 +238,14 @@ export interface CmuxProblem {
   home: string;
 }
 
-// What keeps seamux from cmux: cmux isn't installed, or isn't running,
-// seamux was started outside it, which cmux's socket refuses by default, or
-// cmux wants a socket password seamux wasn't given.
+// What keeps seamux from cmux: cmux isn't installed, or isn't running, or
+// runs with its socket off, seamux was started outside it, which cmux's
+// socket refuses by default, or cmux wants a socket password seamux wasn't
+// given.
 export type CmuxTrouble =
   | "not_installed"
   | "not_running"
+  | "socket_off"
   | "outside_cmux"
   | "password";
 

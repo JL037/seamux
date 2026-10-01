@@ -2,11 +2,13 @@
 // it has to load before Claude Code has ever run, and with only Codex
 // installed, which seamux supports as much as Claude Code.
 
+import { spawn } from "node:child_process";
 import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -67,6 +69,24 @@ it("says cmux isn't running when nothing listens on its socket", async () => {
   expect(board.cmux).toMatchObject({ trouble: "not_running" });
   expect(board.warnings).toEqual([]);
   await cmux.start();
+});
+
+it("says cmux's socket is off when cmux runs but nothing listens", async () => {
+  // A stand-in for cmux's app, running from where the real one would.
+  const exe = join(process.env.SEAMUX_CMUX_APP!, "Contents/MacOS/cmux");
+  mkdirSync(dirname(exe), { recursive: true });
+  copyFileSync("/bin/sleep", exe);
+  const app = spawn(exe, ["30"]);
+  await cmux.stop();
+  try {
+    const board = await loadBoard();
+    expect(board.cmux).toMatchObject({ trouble: "socket_off" });
+    expect(board.warnings).toEqual([]);
+  } finally {
+    app.kill();
+    rmSync(dirname(exe), { recursive: true });
+    await cmux.start();
+  }
 });
 
 it("runs the `cmux` command from cmux's app bundle when it isn't on PATH", async () => {

@@ -59,7 +59,25 @@ function explain({ trouble, start, home }: Problem): {
       return {
         title: "seamux was started outside cmux",
         why: "seamux sends messages by typing into each chat's cmux terminal, and cmux only lets programs started inside it do that. This seamux was started from another terminal, so it can list your chats but not send them anything.",
-        steps: restart,
+        steps: [
+          ...restart,
+          <>
+            Or, to keep starting seamux from another terminal:{" "}
+            <SocketMode mode="Automation mode" />, which lets in programs you
+            run, wherever you start them.
+          </>,
+        ],
+      };
+    case "socket_off":
+      return {
+        title: "cmux's socket is off",
+        why: "seamux sends messages by typing into each chat's cmux terminal, through cmux's control socket, and that socket is turned off.",
+        steps: [
+          <>
+            Turn the socket on: <SocketMode mode="cmux processes only" />.
+          </>,
+          ...restart,
+        ],
       };
     case "not_running":
       return {
@@ -101,6 +119,16 @@ function explain({ trouble, start, home }: Problem): {
         ],
       };
   }
+}
+
+// Setting cmux's socket mode, in the words cmux's Settings use.
+function SocketMode({ mode }: { mode: string }) {
+  return (
+    <>
+      in cmux's Settings, under <b>Automation</b>, set{" "}
+      <b>Socket Control Mode</b> to <b>{mode}</b>
+    </>
+  );
 }
 
 function Command({ text }: { text: string }) {

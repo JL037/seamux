@@ -47,7 +47,7 @@ import {
   type LiveSession,
   type Surface,
 } from "./drive.server";
-import { cmuxRpc, cmuxTrouble } from "./cmux.server";
+import { cmuxAppRunning, cmuxRpc, cmuxTrouble } from "./cmux.server";
 import {
   IS_CHECKOUT,
   PACKAGE_ROOT,
@@ -760,6 +760,10 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     }
     return new Map<string, LiveSession>();
   });
+  // Set in the callbacks above, which TypeScript doesn't follow.
+  let trouble = cmux as CmuxTrouble | null;
+  if (trouble === "not_running" && (await cmuxAppRunning().catch(() => false)))
+    trouble = "socket_off";
   const surfaces = new Map(
     [...live]
       .filter(([, l]) => l.engine === "claude")
@@ -1027,8 +1031,8 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       return [];
     }),
     warnings,
-    cmux: cmux && {
-      trouble: cmux,
+    cmux: trouble && {
+      trouble,
       start:
         IS_CHECKOUT && PACKAGE_ROOT
           ? `cd ${PACKAGE_ROOT} && npm run seamux`

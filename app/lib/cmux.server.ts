@@ -29,7 +29,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import type { CmuxTrouble } from "./board.ts";
-import { CMUX_BIN } from "./bins.server.ts";
+import { CMUX_APP, CMUX_BIN } from "./bins.server.ts";
 
 const run = promisify(execFile);
 
@@ -187,7 +187,9 @@ export async function cmuxCli(
 }
 
 // Why seamux can't reach cmux, from what reaching it threw, for the board to
-// explain. Null when it isn't cmux's doing.
+// explain. Null when it isn't cmux's doing. Nothing listening on the socket
+// is cmux not running, or running with its socket turned off, which
+// cmuxAppRunning tells apart.
 export function cmuxTrouble(err: unknown): CmuxTrouble | null {
   const { code, syscall } = (err ?? {}) as { code?: unknown; syscall?: unknown };
   // The `cmux` command, on neither PATH nor in an app bundle.
@@ -197,4 +199,11 @@ export function cmuxTrouble(err: unknown): CmuxTrouble | null {
   if (code === "password") return "password";
   if (code === "ENOENT" || code === "ECONNREFUSED") return "not_running";
   return null;
+}
+
+// Whether cmux's app is running, by its executable's path.
+export async function cmuxAppRunning(): Promise<boolean> {
+  const app = join(CMUX_APP, "Contents/MacOS/cmux");
+  const { stdout } = await run("ps", ["-axo", "comm="]);
+  return stdout.split("\n").some((line) => line.trim() === app);
 }

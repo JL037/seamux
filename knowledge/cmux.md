@@ -24,10 +24,10 @@ A request is `{"id","method","params"}` and a newline, and the reply `{"id","ok"
 
 ## cmux refuses a process it didn't start, in plain text
 
-In cmux's default socket mode (`automation.socketControlMode`, "cmuxOnly"), seamux started from another terminal gets the line `Access denied - only processes started inside cmux can connect` rather than a JSON reply, so it used to report "unreadable reply". `cmux sessions list` still works, since it doesn't use the socket, so the board listed every chat and failed every send. A terminal that isn't cmux's also lacks the `cmux` command on its `PATH`; it is in the app bundle at `Contents/Resources/bin/cmux`.
+cmux's Settings, under Automation, set its Socket Control Mode (`automation.socketControlMode`): Off, cmux processes only (the default), Automation mode (any process of this macOS user), Password mode, and Full open access. In the default mode, seamux started from another terminal gets the line `Access denied - only processes started inside cmux can connect` rather than a JSON reply, so it used to report "unreadable reply". `cmux sessions list` still works, since it doesn't use the socket, so the board listed every chat and failed every send. A terminal that isn't cmux's also lacks the `cmux` command on its `PATH`; it is in the app bundle at `Contents/Resources/bin/cmux`. With the socket Off nothing listens, just as when cmux isn't running, so seamux tells the two apart by whether cmux's app is in `ps`.
 
-- **Measured:** cmux 0.64. The refusal's wording is from the cmux binary and a user's report; it is unmeasured from outside cmux here.
-- **In seamux:** `ACCESS_DENIED`, `cmuxTrouble` and `cmuxCommand` in [cmux.server.ts](../app/lib/cmux.server.ts), and the board's explanation in [cmux-problem.tsx](../app/components/cmux-problem.tsx).
+- **Measured:** cmux 0.64. The mode names are from cmux's English strings. The refusal's wording is from the cmux binary and a user's report; it is unmeasured from outside cmux here.
+- **In seamux:** `ACCESS_DENIED`, `cmuxTrouble`, `cmuxAppRunning` and `cmuxCommand` in [cmux.server.ts](../app/lib/cmux.server.ts), and the board's explanation in [cmux-problem.tsx](../app/components/cmux-problem.tsx).
 - **See also:** [cmux's control socket speaks one JSON line each way](#cmuxs-control-socket-speaks-one-json-line-each-way).
 
 ## cmux RPCs default to the caller's own surface

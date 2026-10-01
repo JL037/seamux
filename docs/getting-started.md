@@ -35,7 +35,7 @@ A clone keeps its settings and state in the clone itself, all gitignored. `npm s
 
 ### Running the board
 
-Run the board in its own cmux workspace. Started from any other terminal it can list your chats but not send them anything, since cmux only lets programs started inside it type into its terminals; the board then covers itself with what's wrong and how to fix it. It supervises the server: it restarts it if it exits or stops answering, and refuses to run twice.
+Run the board in its own cmux workspace. Started from any other terminal it can list your chats but not send them anything, since cmux only lets programs started inside it type into its terminals, unless its Settings, under Automation, set Socket Control Mode to Automation mode; the board then covers itself with what's wrong and how to fix it. It supervises the server: it restarts it if it exits or stops answering, and refuses to run twice.
 
 The same command is `bin/seamux`, the package's `seamux` bin: in a clone, run `npm link` once and `seamux` starts the board from anywhere. With a command, such as `seamux list`, it's the fan-out CLI the README describes.
 
