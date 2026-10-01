@@ -8,7 +8,11 @@
 // waits its turn, then rebases onto main as it is at that moment.
 //
 // 1. Rebases the branch onto main in its own worktree, so main only ever
-//    fast-forwards. A conflict stops here, with main untouched.
+//    fast-forwards. A conflict stops here, with main untouched. A branch
+//    already on top of main isn't rebased, and one with a merge commit never
+//    is: a rebase flattens the merge into copies of the commits it brought
+//    in, so a merge of origin/main would leave main with copies of GitHub's
+//    commits, which it could then never be pushed over.
 // 2. Typechecks the rebased branch in its worktree.
 // 3. Fast-forwards main. The board picks the change up by hot reload.
 // 4. If dependencies changed, reinstalls them and restarts the board. It
@@ -118,6 +122,16 @@ function worktreeFor(branch: string): string | null {
 }
 
 // Tracked changes only; untracked files do not block a fast-forward.
+// Whether `commit` is in `of`'s history.
+function isAncestor(cwd: string, commit: string, of: string): boolean {
+  try {
+    git(cwd, "merge-base", "--is-ancestor", commit, of);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isClean(cwd: string): boolean {
   return git(cwd, "status", "--porcelain", "--untracked-files=no") === "";
 }
@@ -169,14 +183,22 @@ async function main() {
   const worktree = worktreeFor(branch);
   if (worktree) {
     if (!isClean(worktree)) fail(`${worktree} has uncommitted changes.`);
-    step(`Rebasing ${branch} onto main in ${worktree}`);
-    try {
-      git(worktree, "rebase", "main");
-    } catch {
-      git(worktree, "rebase", "--abort");
+    if (isAncestor(worktree, "main", "HEAD")) {
+      step(`${branch} is already on top of main`);
+    } else if (git(worktree, "rev-list", "--merges", "main..HEAD") !== "") {
       fail(
-        `${branch} conflicts with main. Rebase it by hand in ${worktree}, then land again.`,
+        `${branch} has a merge commit and main has moved since, and a rebase would flatten the merge into copies of what it merged. Merge main into it in ${worktree} (git merge --no-edit main), then land again.`,
       );
+    } else {
+      step(`Rebasing ${branch} onto main in ${worktree}`);
+      try {
+        git(worktree, "rebase", "main");
+      } catch {
+        git(worktree, "rebase", "--abort");
+        fail(
+          `${branch} conflicts with main. Rebase it by hand in ${worktree}, then land again.`,
+        );
+      }
     }
 
     step("Typechecking");

@@ -61,7 +61,7 @@ Then land the merge, which typechecks it, fast-forwards main, and restarts the b
 npm run land
 ```
 
-If land reports that main moved meanwhile and it rebased away the merge, start step 3 again.
+Land never rebases a merge, since that would turn origin's commits into copies that main could never be pushed over. If main moved since the merge, land stops and says so: `git merge --no-edit main` on this branch, and land again.
 
 ## 5. Push
 
