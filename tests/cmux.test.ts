@@ -6,7 +6,7 @@ import { rmSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { CmuxError, cmuxCli, cmuxRpc } from "~/lib/cmux.server";
+import { CmuxError, cmuxCli, cmuxRpc, cmuxTrouble } from "~/lib/cmux.server";
 import { FakeCmux } from "./fake-cmux";
 
 let cmux: FakeCmux;
@@ -61,7 +61,7 @@ describe("cmuxRpc", () => {
     cmux.password = "hunter2";
     process.env.CMUX_SOCKET_PASSWORD = "wrong";
     await expect(cmuxRpc("system.ping")).rejects.toThrow(
-      "cmux refused the socket password: ERROR: Invalid password",
+      "cmux system.ping: refused the socket password: ERROR: Invalid password (password)",
     );
   });
 
@@ -70,6 +70,14 @@ describe("cmuxRpc", () => {
     expect(err).toBeInstanceOf(CmuxError);
     expect(err).toMatchObject({ method: "no.such_method", code: "method_not_found" });
     expect(err.message).toBe("cmux no.such_method: Unknown method (method_not_found)");
+  });
+
+  it("names cmux's refusal of a process it didn't start", async () => {
+    cmux.outsideCmux = true;
+    const err = (await cmuxRpc("system.ping").catch((e) => e)) as CmuxError;
+    expect(err).toBeInstanceOf(CmuxError);
+    expect(err.code).toBe("access_denied");
+    expect(cmuxTrouble(err)).toBe("outside_cmux");
   });
 
   it("fails when nothing listens on the socket", async () => {

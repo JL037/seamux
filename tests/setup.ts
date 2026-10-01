@@ -6,7 +6,7 @@
 // got through would type into a live session. So the socket path is always
 // replaced, and the token and password removed.
 
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,3 +27,9 @@ delete process.env.CMUX_SOCKET_PASSWORD;
 process.env.SEAMUX_TEST_CMUX_STATE = join(root, "cmux-sessions.json");
 process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
 mkdirSync(process.env.HOME, { recursive: true });
+// cmux's app bundle, which seamux runs the `cmux` command from when it isn't
+// on PATH, holds the fake one too, so no test runs the real one.
+process.env.SEAMUX_CMUX_APP = join(root, "cmux.app");
+const bundled = join(process.env.SEAMUX_CMUX_APP, "Contents/Resources/bin");
+mkdirSync(bundled, { recursive: true });
+copyFileSync(join(bin, "cmux"), join(bundled, "cmux"));

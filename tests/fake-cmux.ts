@@ -97,6 +97,9 @@ export class FakeCmux {
   capability: string | null = null;
   // When set, the connection must open with "auth <password>".
   password: string | null = null;
+  // When set, every connection is refused as cmux refuses a process it
+  // didn't start, in its default socket mode: a line of plain text.
+  outsideCmux = false;
 
   private server: Server | null = null;
   private listeners: InputListener[] = [];
@@ -213,6 +216,12 @@ export class FakeCmux {
       while ((newline = buffer.indexOf("\n")) >= 0) {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
+        if (this.outsideCmux) {
+          socket.end(
+            "Access denied - only processes started inside cmux can connect\n",
+          );
+          return;
+        }
         if (!authenticated) {
           if (line === `auth ${this.password}`) {
             authenticated = true;

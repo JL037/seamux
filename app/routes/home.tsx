@@ -42,6 +42,7 @@ import {
 } from "~/components/attention";
 import { EDGE, EDGE_FRAME, ENGINE_CORNER } from "~/components/card-edge";
 import { ChatModal } from "~/components/chat-modal";
+import { CmuxProblem } from "~/components/cmux-problem";
 import {
   attachmentLabel,
   kindOf,
@@ -1831,6 +1832,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </div>
             <DispatchStrip sets={board.dispatches} />
             <Warnings warnings={board.warnings} />
+            {board.cmux && <CmuxProblem problem={board.cmux} />}
 
             {/* Below md, a carousel of columns under the header and a sticky strip of tabs,
                 filling the screen once scrolled to, each column scrolling on

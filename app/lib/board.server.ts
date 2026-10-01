@@ -18,6 +18,7 @@ import {
   SUBAGENT_VISIBLE_MS,
   type BackgroundSession,
   type Board,
+  type CmuxTrouble,
   type Card,
   type ChatMessage,
   type Column,
@@ -46,8 +47,13 @@ import {
   type LiveSession,
   type Surface,
 } from "./drive.server";
-import { cmuxRpc } from "./cmux.server";
-import { IS_CHECKOUT, PACKAGE_ROOT, packageVersion } from "./paths.server";
+import { cmuxRpc, cmuxTrouble } from "./cmux.server";
+import {
+  IS_CHECKOUT,
+  PACKAGE_ROOT,
+  packageVersion,
+  SEAMUX_HOME,
+} from "./paths.server";
 import { dispatchStatus, listDispatches } from "./protocol.server";
 import { serviceNotices } from "./service.server";
 import {
@@ -713,6 +719,9 @@ function settlePins(
 
 export async function loadBoard(now = Date.now()): Promise<Board> {
   const warnings: string[] = [];
+  // Why seamux can't reach cmux at all, which the board explains in place of
+  // the warnings below.
+  let cmux: CmuxTrouble | null = null;
 
   const [agents, attached, workspaces, transcripts, codexTranscripts, names] =
     await Promise.all([
@@ -728,9 +737,12 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         return null;
       }),
       cmuxWorkspaces().catch((err) => {
-        warnings.push(
-          `cmux unavailable, workspace refs missing: ${err.message}`,
-        );
+        cmux ??= cmuxTrouble(err);
+        if (!cmux) {
+          warnings.push(
+            `cmux unavailable, workspace refs missing: ${err.message}`,
+          );
+        }
         return [] as Workspace[];
       }),
       indexTranscripts(),
@@ -740,9 +752,12 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   let liveKnown = true;
   const live = await listLive().catch((err) => {
     liveKnown = false;
-    warnings.push(
-      `cmux sessions unavailable, replies disabled: ${err.message}`,
-    );
+    cmux = cmuxTrouble(err) ?? cmux;
+    if (!cmux) {
+      warnings.push(
+        `cmux sessions unavailable, replies disabled: ${err.message}`,
+      );
+    }
     return new Map<string, LiveSession>();
   });
   const surfaces = new Map(
@@ -1012,6 +1027,14 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       return [];
     }),
     warnings,
+    cmux: cmux && {
+      trouble: cmux,
+      start:
+        IS_CHECKOUT && PACKAGE_ROOT
+          ? `cd ${PACKAGE_ROOT} && npm run seamux`
+          : "npx seamux",
+      home: SEAMUX_HOME,
+    },
   };
 }
 

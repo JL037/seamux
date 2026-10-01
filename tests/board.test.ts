@@ -2,7 +2,13 @@
 // it has to load before Claude Code has ever run, and with only Codex
 // installed, which seamux supports as much as Claude Code.
 
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,6 +52,42 @@ it("loads with only Codex installed, and no claude to run", async () => {
   const board = await loadBoard();
   expect(board.cards).toEqual([]);
   expect(board.warnings).toEqual([]);
+});
+
+it("says why when seamux was started outside cmux, in place of cmux's words", async () => {
+  cmux.outsideCmux = true;
+  const board = await loadBoard();
+  expect(board.cmux).toMatchObject({ trouble: "outside_cmux" });
+  expect(board.warnings).toEqual([]);
+});
+
+it("says cmux isn't running when nothing listens on its socket", async () => {
+  await cmux.stop();
+  const board = await loadBoard();
+  expect(board.cmux).toMatchObject({ trouble: "not_running" });
+  expect(board.warnings).toEqual([]);
+  await cmux.start();
+});
+
+it("runs the `cmux` command from cmux's app bundle when it isn't on PATH", async () => {
+  cmux.addSession("3f0e8c1a-5b2d-4c3e-9f41-2a7d6b8e0c16");
+  process.env.PATH = [dirname(process.execPath), "/usr/bin", "/bin"].join(":");
+  const board = await loadBoard();
+  expect(board.cmux).toBeNull();
+  expect(board.warnings).toEqual([]);
+});
+
+it("says cmux isn't installed when there is no `cmux` command at all", async () => {
+  const bundled = join(process.env.SEAMUX_CMUX_APP!, "Contents/Resources/bin/cmux");
+  const away = `${bundled}.away`;
+  renameSync(bundled, away);
+  process.env.PATH = [dirname(process.execPath), "/usr/bin", "/bin"].join(":");
+  try {
+    const board = await loadBoard();
+    expect(board.cmux).toMatchObject({ trouble: "not_installed" });
+  } finally {
+    renameSync(away, bundled);
+  }
 });
 
 it("shows `!` commands, and what a backgrounded one wrote", async () => {

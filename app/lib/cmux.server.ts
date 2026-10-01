@@ -11,6 +11,9 @@
 //               answered "OK: Authenticated" or "ERROR: <why>".
 //     reply     one line: {"id","ok":true,"result"} or
 //               {"id","ok":false,"error":{"code","message"}}.
+//   A process cmux didn't start is refused, in cmux's default socket mode,
+//   with one line of plain text instead: "Access denied - only processes
+//   started inside cmux can connect".
 // - The `cmux` command, for `cmux sessions list`, which reads cmux's saved
 //   hook records without the socket and works out from them which sessions
 //   are live. That logic is cmux's, so seamux asks for its answer.
@@ -19,11 +22,14 @@
 // relative imports with extensions.
 
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+
+import type { CmuxTrouble } from "./board.ts";
+import { CMUX_BIN } from "./bins.server.ts";
 
 const run = promisify(execFile);
 
@@ -43,7 +49,10 @@ export function socketPath(): string {
 }
 
 // A refusal from cmux, with its error code (`not_found`, `method_not_found`,
-// …) in the message, so callers can match on it.
+// …) in the message, so callers can match on it. seamux gives a code of its
+// own to the refusals cmux sends as plain text, `access_denied` and
+// `password`, and to a socket it can't reach, the system's (`ENOENT`,
+// `ECONNREFUSED`).
 export class CmuxError extends Error {
   readonly method: string;
   readonly code: string;
@@ -53,6 +62,9 @@ export class CmuxError extends Error {
     this.code = code;
   }
 }
+
+// cmux's refusal of a process it didn't start.
+const ACCESS_DENIED = /Access denied/;
 
 let nextId = 0;
 
@@ -101,7 +113,13 @@ export function cmuxRpc<T = unknown>(
         if (!line) continue;
         if (authenticating) {
           if (!line.startsWith("OK")) {
-            return finish(new Error(`cmux refused the socket password: ${line}`));
+            return finish(
+              new CmuxError(
+                method,
+                ACCESS_DENIED.test(line) ? "access_denied" : "password",
+                `refused the socket password: ${line}`,
+              ),
+            );
           }
           authenticating = false;
           socket.write(request);
@@ -116,7 +134,11 @@ export function cmuxRpc<T = unknown>(
         try {
           reply = JSON.parse(line);
         } catch {
-          return finish(new Error(`cmux ${method}: unreadable reply`));
+          return finish(
+            ACCESS_DENIED.test(line)
+              ? new CmuxError(method, "access_denied", line)
+              : new Error(`cmux ${method}: unreadable reply: ${line}`),
+          );
         }
         if (reply.id !== id) continue;
         if (reply.ok) return finish(null, reply.result as T);
@@ -129,8 +151,12 @@ export function cmuxRpc<T = unknown>(
         );
       }
     });
-    socket.on("error", (err) =>
-      finish(new Error(`cmux ${method}: ${err.message}`)),
+    socket.on("error", (err: NodeJS.ErrnoException) =>
+      finish(
+        err.code
+          ? new CmuxError(method, err.code, err.message)
+          : new Error(`cmux ${method}: ${err.message}`),
+      ),
     );
     socket.on("close", () =>
       finish(new Error(`cmux ${method}: the socket closed before replying`)),
@@ -138,14 +164,37 @@ export function cmuxRpc<T = unknown>(
   });
 }
 
-// The `cmux` command, from PATH, for what it works out without the socket.
+// The `cmux` command, from PATH, else from cmux's app bundle: a terminal
+// that isn't cmux's needn't have it on PATH.
+function cmuxCommand(): string {
+  const bundled = join(CMUX_BIN, "cmux");
+  const onPath = (process.env.PATH ?? "")
+    .split(":")
+    .some((d) => d && existsSync(join(d, "cmux")));
+  return onPath || !existsSync(bundled) ? "cmux" : bundled;
+}
+
+// The `cmux` command, for what it works out without the socket.
 export async function cmuxCli(
   args: string[],
   options: { timeout?: number; maxBuffer?: number } = {},
 ): Promise<string> {
-  const { stdout } = await run("cmux", args, {
+  const { stdout } = await run(cmuxCommand(), args, {
     timeout: 10_000,
     ...options,
   });
   return stdout;
+}
+
+// Why seamux can't reach cmux, from what reaching it threw, for the board to
+// explain. Null when it isn't cmux's doing.
+export function cmuxTrouble(err: unknown): CmuxTrouble | null {
+  const { code, syscall } = (err ?? {}) as { code?: unknown; syscall?: unknown };
+  // The `cmux` command, on neither PATH nor in an app bundle.
+  if (code === "ENOENT" && String(syscall).startsWith("spawn"))
+    return "not_installed";
+  if (code === "access_denied") return "outside_cmux";
+  if (code === "password") return "password";
+  if (code === "ENOENT" || code === "ECONNREFUSED") return "not_running";
+  return null;
 }

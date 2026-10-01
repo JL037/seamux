@@ -225,7 +225,27 @@ export interface Board {
   // Service problems, for the Attention column; empty when all is well.
   attention: ServiceNotice[];
   warnings: string[];
+  // Why seamux can't reach cmux, which leaves it unable to drive any chat;
+  // null when it can.
+  cmux: CmuxProblem | null;
 }
+
+export interface CmuxProblem {
+  trouble: CmuxTrouble;
+  // The command that starts this seamux, to run again from a cmux terminal.
+  start: string;
+  // Where seamux's .env is.
+  home: string;
+}
+
+// What keeps seamux from cmux: cmux isn't installed, or isn't running,
+// seamux was started outside it, which cmux's socket refuses by default, or
+// cmux wants a socket password seamux wasn't given.
+export type CmuxTrouble =
+  | "not_installed"
+  | "not_running"
+  | "outside_cmux"
+  | "password";
 
 export type ChatMessage =
   | { role: "user" | "assistant"; text: string; at: string | null }
