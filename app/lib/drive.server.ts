@@ -176,7 +176,7 @@ export async function sendMessage(sessionId: string, text: string) {
   const live = (await listLive()).get(sessionId);
   if (!live) throw new Error("This session is not running in a cmux surface");
   const { surface, engine } = live;
-  if (engine === "claude") await refuseShellMode(surface);
+  await clearPromptBox(surface);
   if (engine === "codex" || /\t/.test(text)) {
     await enterText(surface, text, true);
   } else {
@@ -210,15 +210,50 @@ async function confirmSent(surface: Surface, text: string) {
   }
 }
 
-// A prompt box led by "!" is in shell mode, where Enter runs what it holds
-// as a shell command, the user's draft and anything seamux typed after it.
-// So nothing goes in until the user clears it.
-async function refuseShellMode(surface: Surface) {
-  if (readPromptBox(await readScreen(surface))?.shell) {
+// Empty the prompt box before anything is typed into it, so a draft left
+// there is neither sent with the message nor sends it somewhere else: a box
+// led by "!" is in shell mode, where Enter runs what it holds as shell
+// commands. Claude Code and Codex both take the same keys: Ctrl+E to the end
+// of the line, Ctrl+U to delete back to its start, and Backspace to join it
+// to the line above, or, in an empty box, to leave shell mode. None of them
+// stops a turn the way Esc or Ctrl+C would. Each round empties one line, so
+// rounds go on until the input area stops changing. Claude Code keeps what
+// was deleted for Ctrl+Y.
+const CLEAR_KEYS = ["\x05", "\x15", "\x7f"];
+const CLEAR_KEY_GAP_MS = 50;
+const CLEAR_WAIT_MS = 200;
+const CLEAR_ROUNDS = 40;
+
+async function clearPromptBox(surface: Surface) {
+  let area = inputArea(await readScreen(surface));
+  if (area === null) return;
+  for (let round = 0; round < CLEAR_ROUNDS; round++) {
+    for (const [i, key] of CLEAR_KEYS.entries()) {
+      if (i) await pause(CLEAR_KEY_GAP_MS);
+      await rpc("surface.send_text", { ...target(surface), text: key });
+    }
+    await pause(CLEAR_WAIT_MS);
+    const next = inputArea(await readScreen(surface));
+    if (next === area) break;
+    area = next;
+  }
+  if (area?.startsWith("!")) {
     throw new Error(
-      "The chat's prompt box is in shell mode (it starts with !), where this would run as a shell command. Clear the box in the chat, then try again",
+      "The chat's prompt box is still in shell mode (it starts with !), where this would run as a shell command. Clear the box in the chat, then try again",
     );
   }
+}
+
+// The bottom of the screen from the input line on: the last line led by
+// "❯" (Claude Code), "›" (Codex) or "!" (either, in shell mode), through
+// everything under it. A line the box wraps onto is indented, so it never
+// matches. Null when no input line shows, such as while a dialog is open.
+export function inputArea(screen: string): string | null {
+  const lines = screen.split("\n").map((l) => l.trimEnd());
+  for (let at = lines.length - 1; at >= 0; at--) {
+    if (/^[❯›!]/.test(lines[at])) return lines.slice(at).join("\n").trimEnd();
+  }
+  return null;
 }
 
 // What the comparison leaves out: whitespace, since the box wraps lines, and
@@ -440,10 +475,8 @@ export async function answerDialog(
 const EXIT_WAIT_MS = 10_000;
 
 export async function closeChat(sessionId: string) {
-  const live = (await listLive()).get(sessionId);
-  if (!live) throw new Error("This session is not running in a cmux surface");
-  const { surface, engine } = live;
-  if (engine === "claude") await refuseShellMode(surface);
+  const surface = await surfaceFor(sessionId);
+  await clearPromptBox(surface);
   await rpc("terminal.paste", { ...target(surface), text: "/exit" });
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
 
@@ -861,6 +894,7 @@ export async function resume(
 // The rename has happened by then, so a failure there is not reported.
 export async function renameLive(sessionId: string, name: string) {
   const surface = await surfaceFor(sessionId);
+  await clearPromptBox(surface);
   await rpc("terminal.paste", { ...target(surface), text: `/rename ${name}` });
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
   try {

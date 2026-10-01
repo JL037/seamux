@@ -188,13 +188,68 @@ describe("sendMessage", () => {
     ]);
   });
 
-  it("refuses a prompt box in shell mode, where Enter would run it as a shell command", async () => {
+  // A draft in the prompt box, which takes the clearing keys as Claude Code
+  // and Codex do: Ctrl+U empties the line, Backspace on an empty one joins
+  // it to the one above, or leaves shell mode in an empty box.
+  const draft = (
+    surface: { screen: string },
+    lines: string[],
+    { shell = false, lead = "❯", stuck = false } = {},
+  ) => {
+    const draw = () => {
+      const [first, ...rest] = lines;
+      surface.screen = [
+        "⏺ ok",
+        `${shell ? "!" : lead} ${first}`,
+        ...rest.map((l) => `  ${l}`),
+        "",
+        "  footer",
+      ].join("\n");
+    };
+    draw();
+    cmux.onInput((s, i) => {
+      if (s !== surface || i.kind !== "text") return;
+      if (i.value === "\x15") lines[lines.length - 1] = "";
+      else if (i.value === "\x7f") {
+        if (lines.length > 1) lines.pop();
+        else if (!stuck) shell = false;
+      } else return;
+      draw();
+    });
+  };
+
+  it("clears a draft from the prompt box a line at a time before typing", async () => {
     const { surface } = cmux.addSession("s");
-    surface.screen = promptBox("x").replace("❯ x", "! Any thoughts?");
+    draft(surface, ["half a thought", "and more"]);
+    await sendMessage("s", "fix the login");
+    const round = ["text:\x05", "text:\x15", "text:\x7f"];
+    expect(input(surface)).toEqual([
+      ...round,
+      ...round,
+      ...round,
+      "text:fix the login",
+      "key:enter",
+    ]);
+  });
+
+  it("takes the prompt box out of shell mode, where Enter would run it as shell commands", async () => {
+    const { surface } = cmux.addSession("s");
+    draft(surface, ["Any thoughts?"], { shell: true });
+    await sendMessage("s", "fix the login");
+    expect(input(surface).slice(-2)).toEqual([
+      "text:fix the login",
+      "key:enter",
+    ]);
+    expect(surface.screen).toContain("❯");
+  });
+
+  it("refuses a prompt box that stays in shell mode", async () => {
+    const { surface } = cmux.addSession("s");
+    draft(surface, ["Any thoughts?"], { shell: true, stuck: true });
     await expect(sendMessage("s", "fix the login")).rejects.toThrow(
       /shell mode/,
     );
-    expect(surface.input).toEqual([]);
+    expect(input(surface)).not.toContain("text:fix the login");
   });
 
   it("always pastes into Codex, which folds long typed input", async () => {
@@ -359,14 +414,25 @@ describe("closeChat", () => {
     expect(workspace.surfaces).toEqual([other]);
   });
 
-  it("refuses a prompt box in shell mode rather than type /exit into it", async () => {
+  it("clears the prompt box before typing /exit", async () => {
     const { surface } = cmux.addSession("s");
-    surface.screen = ["─".repeat(40), "! Any thoughts?", "─".repeat(40)].join(
-      "\n",
-    );
-    await expect(closeChat("s")).rejects.toThrow(/shell mode/);
-    expect(surface.input).toEqual([]);
-    expect(cmux.calls("workspace.close")).toEqual([]);
+    surface.screen = "› a draft";
+    cmux.onInput((s, i) => {
+      if (i.value === "\x15") s.screen = "›";
+      if (i.kind === "key" && s.input.at(-2)?.value === "/exit")
+        cmux.endSession("s");
+    });
+    await closeChat("s");
+    expect(input(surface)).toEqual([
+      "text:\x05",
+      "text:\x15",
+      "text:\x7f",
+      "text:\x05",
+      "text:\x15",
+      "text:\x7f",
+      "paste:/exit",
+      "key:enter",
+    ]);
   });
 
   it("leaves nothing to close once the workspace closed itself", async () => {
