@@ -252,6 +252,24 @@ describe("sendMessage", () => {
     expect(input(surface)).not.toContain("text:fix the login");
   });
 
+  it("types one message at a time into a chat, never interleaving two", async () => {
+    const { surface } = cmux.addSession("s");
+    await Promise.all([
+      sendMessage("s", "first\nline"),
+      sendMessage("s", "second\nline"),
+    ]);
+    expect(input(surface)).toEqual([
+      "text:first",
+      "key:shift+enter",
+      "text:line",
+      "key:enter",
+      "text:second",
+      "key:shift+enter",
+      "text:line",
+      "key:enter",
+    ]);
+  });
+
   it("always pastes into Codex, which folds long typed input", async () => {
     const { surface } = cmux.addSession("s", {
       agent: "codex",
@@ -415,7 +433,10 @@ describe("closeChat", () => {
   });
 
   it("clears the prompt box before typing /exit", async () => {
-    const { surface } = cmux.addSession("s");
+    const { surface } = cmux.addSession("s", {
+      agent: "codex",
+      active_for_surface: false,
+    });
     surface.screen = "› a draft";
     cmux.onInput((s, i) => {
       if (i.value === "\x15") s.screen = "›";

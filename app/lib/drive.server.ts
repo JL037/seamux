@@ -11,7 +11,6 @@ import { promisify } from "node:util";
 
 import {
   ASKED_IN_REPLY,
-  hasPreviews,
   type Answer,
   type Card,
   type Dialog,
@@ -21,17 +20,24 @@ import { forgetCommands } from "./commands.server.ts";
 import { parseCodexApproval, renameCodexSession } from "./codex.server.ts";
 import { ENGINES, renderMacro, usesVariable, type Engine } from "./config.ts";
 import { configOrDefaults } from "./config.server.ts";
-import { BIN_DIRS, CMUX_BIN, findBin, SHELL } from "./bins.server.ts";
+import { BIN_DIRS, findBin, SHELL } from "./bins.server.ts";
 import { cmuxCli, cmuxRpc } from "./cmux.server.ts";
+import {
+  exclusive,
+  HARNESSES,
+  pause,
+  readScreen,
+  Session,
+  target,
+  type Surface,
+} from "./harness.server.ts";
+import * as macros from "./macros.server.ts";
 import { projectOf } from "./project-colors.ts";
 import { recordDispatch } from "./store.server.ts";
 
 const run = promisify(execFile);
 
-export interface Surface {
-  surfaceId: string;
-  workspaceId: string;
-}
+export type { Surface };
 
 const rpc = cmuxRpc;
 
@@ -110,283 +116,52 @@ export async function listSurfaces(): Promise<Map<string, Surface>> {
   return new Map([...live].map(([id, l]) => [id, l.surface]));
 }
 
-// Always resolve the surface server-side, and always pass it explicitly:
-// cmux defaults to the caller's own surface when none is given.
-async function surfaceFor(sessionId: string): Promise<Surface> {
-  const surface = (await listSurfaces()).get(sessionId);
-  if (!surface)
-    throw new Error("This session is not running in a cmux surface");
-  return surface;
-}
+export { UnsentError } from "./harness.server.ts";
 
-function target(s: Surface) {
-  return { surface_id: s.surfaceId, workspace_id: s.workspaceId };
-}
-
-// Claude Code folds a long paste into a "[Pasted text #1]" placeholder and
-// hands it to the model wrapped in <pasted_content>, so a message for it is
-// typed, with Shift+Enter between its lines, since a typed line break
-// submits. A tab counts as needing a paste: typed, one would autocomplete.
-// Codex is the other way round: it folds long typed input into
-// "[Pasted Content N chars]" but shows a paste in full, so it always gets
-// one. A separate Enter submits it.
-const MUST_PASTE = /[\r\n\t]/;
-const LINE_BREAK = /\r\n|\r|\n/;
-
-const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// Claude Code takes typed input arriving faster than about ten characters a
-// millisecond for a paste: it drops pieces of it, and an Enter that comes
-// while it is still taking it in is lost, leaving the message unsent in its
-// prompt box. So text is typed a little at a time.
-const TYPE_CHUNK = 100;
-const TYPE_GAP_MS = 20;
-
-async function typeText(surface: Surface, text: string) {
-  const chars = Array.from(text);
-  for (let at = 0; at < chars.length; at += TYPE_CHUNK) {
-    if (at) await pause(TYPE_GAP_MS);
-    await rpc("surface.send_text", {
-      ...target(surface),
-      text: chars.slice(at, at + TYPE_CHUNK).join(""),
-    });
-  }
-}
-
-async function enterText(surface: Surface, text: string, paste: boolean) {
-  if (paste) await rpc("terminal.paste", { ...target(surface), text });
-  else await typeText(surface, text);
-}
-
-// The message is still in the prompt box after its Enter.
-export class UnsentError extends Error {
-  constructor() {
-    super(
-      "The message is in the chat's prompt box but didn't send; press Enter there",
-    );
-  }
-}
-
-// How long to give Claude Code to take a message in before checking it went,
-// and how many more times to try sending it when it didn't.
-const SUBMIT_WAIT_MS = 300;
-const SUBMIT_RETRIES = 3;
-
-export async function sendMessage(sessionId: string, text: string) {
+// Drive a live chat through a macro, as the one writer to its terminal
+// until the macro is done. The surface is always resolved server-side.
+async function driving<T>(
+  sessionId: string,
+  macro: (s: Session) => Promise<T>,
+): Promise<T> {
   const live = (await listLive()).get(sessionId);
   if (!live) throw new Error("This session is not running in a cmux surface");
-  const { surface, engine } = live;
-  await clearPromptBox(surface);
-  if (engine === "codex" || /\t/.test(text)) {
-    await enterText(surface, text, true);
-  } else {
-    for (const [i, line] of text.split(LINE_BREAK).entries()) {
-      if (i)
-        await rpc("surface.send_key", {
-          ...target(surface),
-          key: "shift+enter",
-        });
-      await typeText(surface, line);
-    }
-  }
-  await rpc("surface.send_key", { ...target(surface), key: "enter" });
-  if (engine === "claude") await confirmSent(surface, text);
+  const s = new Session(live.surface, HARNESSES[live.engine]);
+  return exclusive(live.surface, () => macro(s));
+}
+
+export async function sendMessage(sessionId: string, text: string) {
+  await driving(sessionId, (s) => macros.send(s, text));
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
 }
 
-// Try again while the message still sits in Claude Code's prompt box, and
-// give up with an UnsentError if it stays there. Each try is a carriage
-// return typed on its own, which reaches Claude Code as written rather than
-// through cmux's key encoding: a chat has been seen ignoring cmux's Enter, or
-// taking it as a line break, while a typed carriage return sent. Typed with
-// anything after it, it is taken for a paste and becomes a line break.
-async function confirmSent(surface: Surface, text: string) {
-  for (let tries = 0; ; tries++) {
-    await pause(SUBMIT_WAIT_MS);
-    if (!endsPromptBox(await readScreen(surface), text)) return;
-    if (tries === SUBMIT_RETRIES) throw new UnsentError();
-    await rpc("surface.send_text", { ...target(surface), text: "\r" });
-  }
-}
-
-// Empty the prompt box before anything is typed into it, so a draft left
-// there is neither sent with the message nor sends it somewhere else: a box
-// led by "!" is in shell mode, where Enter runs what it holds as shell
-// commands. Claude Code and Codex both take the same keys: Ctrl+E to the end
-// of the line, Ctrl+U to delete back to its start, and Backspace to join it
-// to the line above, or, in an empty box, to leave shell mode. None of them
-// stops a turn the way Esc or Ctrl+C would. Each round empties one line, so
-// rounds go on until the input area stops changing. Claude Code keeps what
-// was deleted for Ctrl+Y.
-const CLEAR_KEYS = ["\x05", "\x15", "\x7f"];
-const CLEAR_KEY_GAP_MS = 50;
-const CLEAR_WAIT_MS = 200;
-const CLEAR_ROUNDS = 40;
-
-async function clearPromptBox(surface: Surface) {
-  let area = inputArea(await readScreen(surface));
-  if (area === null) return;
-  for (let round = 0; round < CLEAR_ROUNDS; round++) {
-    for (const [i, key] of CLEAR_KEYS.entries()) {
-      if (i) await pause(CLEAR_KEY_GAP_MS);
-      await rpc("surface.send_text", { ...target(surface), text: key });
-    }
-    await pause(CLEAR_WAIT_MS);
-    const next = inputArea(await readScreen(surface));
-    if (next === area) break;
-    area = next;
-  }
-  if (area?.startsWith("!")) {
-    throw new Error(
-      "The chat's prompt box is still in shell mode (it starts with !), where this would run as a shell command. Clear the box in the chat, then try again",
-    );
-  }
-}
-
-// The bottom of the screen from the input line on: the last line led by
-// "❯" (Claude Code), "›" (Codex) or "!" (either, in shell mode), through
-// everything under it. A line the box wraps onto is indented, so it never
-// matches. Null when no input line shows, such as while a dialog is open.
-export function inputArea(screen: string): string | null {
-  const lines = screen.split("\n").map((l) => l.trimEnd());
-  for (let at = lines.length - 1; at >= 0; at--) {
-    if (/^[❯›!]/.test(lines[at])) return lines.slice(at).join("\n").trimEnd();
-  }
-  return null;
-}
-
-// What the comparison leaves out: whitespace, since the box wraps lines, and
-// invisible characters, since Claude Code strips a lone one from the box and
-// holds the message for another Enter, saying "Removed 1 invisible character".
-const UNSEEN = /[\s\p{Cf}\p{Mn}\p{Me}\u115F\u1160\u3164\uFFA0]/gu;
-
-// Claude Code's prompt box: the lines between the last two rules on the
-// screen, the first led by "❯", or by "!" in shell mode. Its text leaves out
-// what UNSEEN matches.
-export function readPromptBox(
-  screen: string,
-): { shell: boolean; text: string } | null {
-  const lines = screen.split("\n").map((l) => l.trim());
-  const rules = lines.flatMap((l, i) => (/^[─━▔]{8,}/.test(l) ? [i] : []));
-  const [top, bottom] = rules.slice(-2);
-  const lead = lines[top + 1]?.[0];
-  if (bottom === undefined || (lead !== "❯" && lead !== "!")) return null;
-  const text = lines
-    .slice(top + 1, bottom)
-    .join("")
-    .slice(1)
-    .replace(UNSEEN, "");
-  return { shell: lead === "!", text };
-}
-
-// Whether Claude Code's prompt box ends with the end of `text`.
-export function endsPromptBox(screen: string, text: string): boolean {
-  const box = readPromptBox(screen);
-  const tail = Array.from(text.replace(UNSEEN, "")).slice(-20).join("");
-  return box !== null && tail.length > 0 && box.text.endsWith(tail);
-}
-
-// Esc: stops the current turn, keeps the session and its history.
 export async function interrupt(sessionId: string) {
-  const surface = await surfaceFor(sessionId);
-  await rpc("surface.send_key", { ...target(surface), key: "escape" });
+  await driving(sessionId, macros.interrupt);
 }
 
-// Long enough for the question dialog to redraw between keys.
-const KEY_GAP_MS = 400;
-
-// Answer an open AskUserQuestion by driving its dialog, so the model gets a
-// real answer rather than an interrupted turn. Measured against Claude Code
-// 2.1.281 and 2.1.282:
-// - a digit picks an option on a single-select question and moves on,
-//   submitting outright when there is only one question;
-// - on a multi-select question digits toggle, and Tab moves on;
-// - the row after the last option is "Type something". On a single-select
-//   question its digit puts the cursor in it; on a multi-select one the
-//   digit only ticks it, so the cursor walks down to it instead. Pasted text
-//   there is taken as the answer and moves on. Typed text, which Claude Code
-//   shows in full rather than folded, needs an Enter, or on a multi-select
-//   question a Tab down to "Next" and an Enter;
-// - a question whose options have previews shows each beside the list, has
-//   no "Type something" row, and a digit there only moves the cursor, so an
-//   Enter picks. Before it, n opens a note on the option under the cursor,
-//   and typed text fills it; the Enter then picks with the note;
-// - with several questions, or any multi-select one, a review screen comes
-//   last, and 1 submits it.
 export async function answerQuestion(
   sessionId: string,
   questions: Question[],
   answers: Answer[],
 ) {
-  const surface = await surfaceFor(sessionId);
-  const key = async (k: string) => {
-    await rpc("surface.send_key", { ...target(surface), key: k });
-    await pause(KEY_GAP_MS);
-  };
-  const digit = async (n: number) => {
-    await rpc("surface.send_text", { ...target(surface), text: String(n) });
-    await pause(KEY_GAP_MS);
-  };
-  for (const [i, q] of questions.entries()) {
-    const a = answers[i];
-    if ("text" in a) {
-      if (q.multiSelect)
-        for (let n = 0; n < q.options.length; n++) await key("down");
-      else await digit(q.options.length + 1);
-      const paste = MUST_PASTE.test(a.text);
-      await enterText(surface, a.text, paste);
-      await pause(KEY_GAP_MS);
-      if (!paste) {
-        if (q.multiSelect) await key("tab");
-        await key("enter");
-      }
-    } else if (hasPreviews(q)) {
-      await digit(a.picks[0] + 1);
-      if (a.notes) {
-        await rpc("surface.send_text", { ...target(surface), text: "n" });
-        await pause(KEY_GAP_MS);
-        await enterText(surface, a.notes, false);
-        await pause(KEY_GAP_MS);
-      }
-      await key("enter");
-    } else if (q.multiSelect) {
-      for (const pick of a.picks) await digit(pick + 1);
-      await key("tab");
-    } else {
-      await digit(a.picks[0] + 1);
-    }
-  }
-  if (questions.length > 1 || questions.some((q) => q.multiSelect))
-    await digit(1);
+  await driving(sessionId, (s) =>
+    macros.answerQuestion(s, questions, answers),
+  );
 }
 
-// Answer an open permission prompt. Measured against Claude Code 2.1.281:
-// 1 is always "Yes", while "No" moves with the options offered, so a denial
-// is Esc, which refuses the call and ends the turn for the user to reply to.
-// Codex 0.156.1 approves on `y`, and Esc refuses there too.
+// Answer an open permission prompt, as read off `engine`'s screen. Measured
+// against Claude Code 2.1.281 and Codex 0.156.1.
 export async function answerApproval(
   sessionId: string,
   allow: boolean,
   engine: Engine,
 ) {
-  const surface = await surfaceFor(sessionId);
-  if (allow) {
-    await rpc("surface.send_text", {
-      ...target(surface),
-      text: engine === "codex" ? "y" : "1",
-    });
-  } else {
-    await rpc("surface.send_key", { ...target(surface), key: "escape" });
-  }
-}
-
-async function readScreen(surface: Surface): Promise<string> {
-  const { text } = await rpc<{ text: string }>(
-    "surface.read_text",
-    target(surface),
-  );
-  return text;
+  await driving(sessionId, (s) => {
+    if (s.harness.engine !== engine)
+      throw new Error("That approval is no longer open");
+    return allow ? macros.approve(s) : macros.deny(s);
+  });
 }
 
 const OPTION = /^(?:❯\s*)?([1-9])\.\s+(.+)$/;
@@ -447,19 +222,17 @@ export async function answerDialog(
   key: string,
   option: number,
 ) {
-  const surface = await surfaceFor(sessionId);
-  const dialog = await readDialog(surface);
-  if (!dialog || dialog.key !== key)
-    throw new Error("That dialog is no longer open");
-  if (
-    !Number.isInteger(option) ||
-    option < 0 ||
-    option >= dialog.options.length
-  )
-    throw new Error("No such option");
-  await rpc("surface.send_text", {
-    ...target(surface),
-    text: String(option + 1),
+  await driving(sessionId, async (s) => {
+    const dialog = parseDialog(await s.screen());
+    if (!dialog || dialog.key !== key)
+      throw new Error("That dialog is no longer open");
+    if (
+      !Number.isInteger(option) ||
+      option < 0 ||
+      option >= dialog.options.length
+    )
+      throw new Error("No such option");
+    await macros.pick(s, option);
   });
 }
 
@@ -475,10 +248,10 @@ export async function answerDialog(
 const EXIT_WAIT_MS = 10_000;
 
 export async function closeChat(sessionId: string) {
-  const surface = await surfaceFor(sessionId);
-  await clearPromptBox(surface);
-  await rpc("terminal.paste", { ...target(surface), text: "/exit" });
-  await rpc("surface.send_key", { ...target(surface), key: "enter" });
+  const surface = await driving(sessionId, async (s) => {
+    await macros.exit(s);
+    return s.surface;
+  });
 
   const deadline = Date.now() + EXIT_WAIT_MS;
   while ((await listSurfaces()).has(sessionId)) {
@@ -729,41 +502,14 @@ async function finishClose(
 // the session with cmux (so the board can find its surface), and put the
 // agents' install directories first on PATH, in case those files do not.
 
-interface EngineSpec {
-  bin: string;
-  wrapper: string;
-  // The dialog a new folder opens on, the keys that trust it, and what
-  // shows once the agent is up, past any dialog.
-  trust: { prompt: string; keys: string[] };
-  ready: string;
-}
-
-// Measured against Claude Code 2.1.281 and codex-cli 0.156.1.
-const ENGINE_SPECS: Record<Engine, EngineSpec> = {
-  claude: {
-    bin: "claude",
-    wrapper: join(CMUX_BIN, "cmux-claude-wrapper"),
-    // Its default is "No, exit", so Enter alone would refuse.
-    trust: { prompt: "Yes, I trust this folder", keys: ["down", "enter"] },
-    ready: "Claude Code v",
-  },
-  codex: {
-    bin: "codex",
-    wrapper: join(CMUX_BIN, "cmux-codex-wrapper"),
-    // Its default is "Trust and continue".
-    trust: { prompt: "Trust this folder?", keys: ["enter"] },
-    ready: "OpenAI Codex",
-  },
-};
-
 // Which agents this Mac can launch: cmux's wrapper for it, and the agent
 // itself where a launch would look.
 export function installedEngines(): Record<Engine, boolean> {
   return Object.fromEntries(
     ENGINES.map((e) => [
       e,
-      existsSync(ENGINE_SPECS[e].wrapper) &&
-        findBin(ENGINE_SPECS[e].bin) !== null,
+      existsSync(HARNESSES[e].wrapper) &&
+        findBin(HARNESSES[e].bin) !== null,
     ]),
   ) as Record<Engine, boolean>;
 }
@@ -777,7 +523,7 @@ async function launch(
   args: string[],
   focus: boolean,
 ): Promise<Surface> {
-  const spec = ENGINE_SPECS[engine];
+  const harness = HARNESSES[engine];
   const created = await rpc<{ surface_id: string; workspace_id: string }>(
     "workspace.create",
     {
@@ -786,7 +532,7 @@ async function launch(
       initial_command: `exec ${shq(SHELL)} -ic ${shq(
         [
           `PATH=${BIN_DIRS.map(shq).join(":")}:"$PATH"`,
-          shq(spec.wrapper),
+          shq(harness.wrapper),
           ...args.map(shq),
         ].join(" "),
       )}`,
@@ -798,29 +544,8 @@ async function launch(
     workspaceId: created.workspace_id,
   };
   // Not awaited: the dialog, if any, shows up seconds after the launch.
-  void acceptTrust(surface, spec).catch(() => {});
+  void macros.acceptTrust(new Session(surface, harness)).catch(() => {});
   return surface;
-}
-
-const TRUST_WAIT_MS = 30_000;
-
-// Both agents stop on a new folder to ask whether the user trusts it, before
-// the session exists anywhere the board could see it. Choosing the folder
-// to dispatch into is that decision, so seamux answers yes.
-async function acceptTrust(surface: Surface, spec: EngineSpec) {
-  const deadline = Date.now() + TRUST_WAIT_MS;
-  while (Date.now() < deadline) {
-    await pause(1000);
-    const screen = await readScreen(surface);
-    if (screen.includes(spec.trust.prompt)) {
-      for (const [i, key] of spec.trust.keys.entries()) {
-        if (i > 0) await pause(KEY_GAP_MS);
-        await rpc("surface.send_key", { ...target(surface), key });
-      }
-      return;
-    }
-    if (screen.includes(spec.ready)) return;
-  }
 }
 
 // Codex picks its own session id, and cmux files it under the surface once
@@ -869,18 +594,9 @@ export async function resume(
     if ((await listSurfaces()).has(sessionId)) {
       throw new Error("This chat is already open in cmux");
     }
-    if (engine === "codex") {
-      const surface = await launch(
-        "codex",
-        cwd,
-        title,
-        ["resume", sessionId],
-        true,
-      );
-      codexResumed.set(sessionId, surface);
-    } else {
-      await launch("claude", cwd, title, ["--resume", sessionId], true);
-    }
+    const args = HARNESSES[engine].resumeArgs(sessionId);
+    const surface = await launch(engine, cwd, title, args, true);
+    if (engine === "codex") codexResumed.set(sessionId, surface);
   } catch (err) {
     resuming.delete(sessionId);
     throw err;
@@ -893,10 +609,10 @@ export async function resume(
 // chat is the workspace's one tab: otherwise the title covers other chats.
 // The rename has happened by then, so a failure there is not reported.
 export async function renameLive(sessionId: string, name: string) {
-  const surface = await surfaceFor(sessionId);
-  await clearPromptBox(surface);
-  await rpc("terminal.paste", { ...target(surface), text: `/rename ${name}` });
-  await rpc("surface.send_key", { ...target(surface), key: "enter" });
+  const surface = await driving(sessionId, async (s) => {
+    await macros.rename(s, name);
+    return s.surface;
+  });
   try {
     const { surfaces } = await rpc<{ surfaces: { id: string }[] }>(
       "surface.list",
