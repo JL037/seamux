@@ -11,6 +11,8 @@ import { useFetcher, useRevalidator } from "react-router";
 import { toast } from "sonner";
 import {
   GitBranch,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CircleCheck,
   Ellipsis,
   Globe,
@@ -114,10 +116,7 @@ import {
   type Spawning,
 } from "~/lib/optimistic";
 import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
-import {
-  useLocalStorage,
-  useSessionStorage,
-} from "~/lib/use-session-storage";
+import { useLocalStorage, useSessionStorage } from "~/lib/use-session-storage";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -152,8 +151,7 @@ function usePoll(ms: number) {
   const last = useRef(0);
   useEffect(() => {
     const id = setInterval(() => {
-      const wait =
-        document.visibilityState === "visible" ? ms : HIDDEN_POLL_MS;
+      const wait = document.visibilityState === "visible" ? ms : HIDDEN_POLL_MS;
       if (revalidator.state === "idle" && Date.now() - last.current >= wait) {
         last.current = Date.now();
         revalidator.revalidate();
@@ -199,9 +197,7 @@ function ago(ms: number | null, now: number): string {
 
 function firstWords(text: string, count: number): string {
   const words = text.split(/\s+/);
-  return words.length > count
-    ? `${words.slice(0, count).join(" ")}…`
-    : text;
+  return words.length > count ? `${words.slice(0, count).join(" ")}…` : text;
 }
 
 function shortPath(cwd: string): string {
@@ -517,11 +513,7 @@ function ChatInput({
         queueing={queueing}
         pending={pending}
         error={error ?? forker.error}
-        onFork={
-          card.engine === "claude"
-            ? fork
-            : null
-        }
+        onFork={card.engine === "claude" ? fork : null}
         forking={forker.pending}
         title={<SessionName card={card} inModal />}
       />
@@ -669,10 +661,10 @@ function OrphanBadge({ orphan }: { orphan: Board["orphans"][number] }) {
             claude rm {orphan.id}
           </pre>
           <p className="text-sm text-muted-foreground">
-            Resume brings it back in a new cmux workspace with its
-            conversation. Delete starts a chat that runs this command, which
-            removes the session and its worktree, and stops to ask before
-            discarding unpushed work. seamux never deletes on its own.
+            Resume brings it back in a new cmux workspace with its conversation.
+            Delete starts a chat that runs this command, which removes the
+            session and its worktree, and stops to ask before discarding
+            unpushed work. seamux never deletes on its own.
           </p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
@@ -825,6 +817,34 @@ function PinToggle({ card }: { card: BoardCard }) {
   );
 }
 
+// Folds a card to its title, for a chat worth keeping in view but not now,
+// or opens it back up. Kept in this browser only, like the board's other
+// view preferences.
+function MinimizeToggle({
+  minimized,
+  setMinimized,
+}: {
+  minimized: boolean;
+  setMinimized: (minimized: boolean) => void;
+}) {
+  return (
+    <Button
+      size="icon-xs"
+      variant="ghost"
+      title={
+        minimized
+          ? "Restore: show the whole card"
+          : "Minimize: fold the card to its title"
+      }
+      aria-label={minimized ? "Restore" : "Minimize"}
+      aria-expanded={!minimized}
+      onClick={() => setMinimized(!minimized)}
+    >
+      {minimized ? <ChevronsUpDown /> : <ChevronsDownUp />}
+    </Button>
+  );
+}
+
 // Clipped to its box, and faded on the side where there is more. `from`
 // says which end stays in view: a prompt reads from its start, a reply from
 // its end, so the two fade toward each other.
@@ -920,6 +940,10 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
     window.addEventListener(CHAT_CARRIED, onCarried);
     return () => window.removeEventListener(CHAT_CARRIED, onCarried);
   }, [card.sessionId, setChatOpen]);
+  const [minimized, setMinimized] = useLocalStorage(
+    `seamux:minimized:${card.sessionId}`,
+    false,
+  );
   const { errors, report } = useCardErrors();
   return (
     <CardErrorsContext.Provider value={report}>
@@ -951,107 +975,123 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             </span>
             <span className="flex shrink-0 items-center gap-1">
               <PinToggle card={card} />
+              <MinimizeToggle
+                minimized={minimized}
+                setMinimized={setMinimized}
+              />
               <CardControl card={card} />
             </span>
           </CardTitle>
-          <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs max-md:text-sm">
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <PathSwatch cwd={card.cwd} />
-              <span className="sensitive truncate font-mono">
-                {shortPath(card.cwd)}
+          {!minimized && (
+            <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs max-md:text-sm">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <PathSwatch cwd={card.cwd} />
+                <span className="sensitive truncate font-mono">
+                  {shortPath(card.cwd)}
+                </span>
               </span>
-            </span>
-            {card.branch && (
-              <span className="sensitive inline-flex items-center gap-1 font-mono">
-                <GitBranch className="size-3" />
-                {card.branch}
-              </span>
-            )}
-            <span className="sensitive">{ago(card.lastActivityAt, now)}</span>
-            {card.engine !== "claude" && (
-              <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
-                {ENGINE_LABELS[card.engine]}
-              </Badge>
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2 text-xs max-md:text-sm">
-          {errors.map((e) => (
-            <ActionError key={e} error={e} />
-          ))}
-          {card.worker && (
-            <p className="flex items-center gap-1.5 font-mono text-muted-foreground">
-              <WorkerStatus status={card.worker.reported} />
-              worker {card.worker.key} · {card.worker.dispatchId}
-            </p>
-          )}
-          {card.intent && (
-            <p className="sensitive line-clamp-2 rounded-md bg-muted px-2 py-1">
-              <span className="font-medium">
-                {card.forkedFrom ? "Tangent: " : "Goal: "}
-              </span>
-              {card.intent}
-            </p>
-          )}
-          {card.lastPrompt && card.lastPrompt !== card.intent && (
-            <Faded
-              from="start"
-              className="sensitive max-h-12 text-muted-foreground"
-            >
-              <span className="font-medium text-foreground">You: </span>
-              {shortenAttachments(card.lastPrompt)}
-            </Faded>
-          )}
-          {card.lastReply &&
-            (card.apiError ? (
-              // Claude Code's words for a failed request, not a reply.
-              <p className="sensitive text-xs break-words text-muted-foreground italic">
-                {card.lastReply}
-              </p>
-            ) : (
-              <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />
-            ))}
-          {card.closing && (
-            <p
-              className={cn(
-                "sensitive rounded-md px-2 py-1",
-                card.closing.state === "held"
-                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                  : "bg-muted text-muted-foreground",
+              {card.branch && (
+                <span className="sensitive inline-flex items-center gap-1 font-mono">
+                  <GitBranch className="size-3" />
+                  {card.branch}
+                </span>
               )}
-            >
-              {card.closing.state === "cleaning"
-                ? "Closing: running the close-session macro, then it exits."
-                : card.closing.note}
-            </p>
-          )}
-          <WaitingPanel card={card} />
-          <SubagentSummary subagents={card.subagents} now={now} />
-          {card.background.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {card.background.map((b) => (
-                <Badge
-                  key={b.id}
-                  variant={
-                    b.state === "blocked" || b.state === "failed"
-                      ? "destructive"
-                      : "secondary"
-                  }
-                  title={b.needs ?? undefined}
-                >
-                  <Layers />
-                  <span className="sensitive">{b.name}</span> · {b.state}
+              <span className="sensitive">{ago(card.lastActivityAt, now)}</span>
+              {card.engine !== "claude" && (
+                <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                  {ENGINE_LABELS[card.engine]}
                 </Badge>
-              ))}
-            </div>
+              )}
+            </CardDescription>
           )}
-          <CardState
-            column={card.column}
-            queued={card.terminalQueue.length + card.boardQueue.length}
-            onOpen={() => setChatOpen(true)}
-          />
-          <ChatInput card={card} open={chatOpen} setOpen={setChatOpen} />
-        </CardContent>
+        </CardHeader>
+        {minimized ? (
+          errors.length > 0 && (
+            <CardContent className="flex flex-col gap-2 text-xs max-md:text-sm">
+              {errors.map((e) => (
+                <ActionError key={e} error={e} />
+              ))}
+            </CardContent>
+          )
+        ) : (
+          <CardContent className="flex flex-col gap-2 text-xs max-md:text-sm">
+            {errors.map((e) => (
+              <ActionError key={e} error={e} />
+            ))}
+            {card.worker && (
+              <p className="flex items-center gap-1.5 font-mono text-muted-foreground">
+                <WorkerStatus status={card.worker.reported} />
+                worker {card.worker.key} · {card.worker.dispatchId}
+              </p>
+            )}
+            {card.intent && (
+              <p className="sensitive line-clamp-2 rounded-md bg-muted px-2 py-1">
+                <span className="font-medium">
+                  {card.forkedFrom ? "Tangent: " : "Goal: "}
+                </span>
+                {card.intent}
+              </p>
+            )}
+            {card.lastPrompt && card.lastPrompt !== card.intent && (
+              <Faded
+                from="start"
+                className="sensitive max-h-12 text-muted-foreground"
+              >
+                <span className="font-medium text-foreground">You: </span>
+                {shortenAttachments(card.lastPrompt)}
+              </Faded>
+            )}
+            {card.lastReply &&
+              (card.apiError ? (
+                // Claude Code's words for a failed request, not a reply.
+                <p className="sensitive text-xs break-words text-muted-foreground italic">
+                  {card.lastReply}
+                </p>
+              ) : (
+                <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />
+              ))}
+            {card.closing && (
+              <p
+                className={cn(
+                  "sensitive rounded-md px-2 py-1",
+                  card.closing.state === "held"
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                {card.closing.state === "cleaning"
+                  ? "Closing: running the close-session macro, then it exits."
+                  : card.closing.note}
+              </p>
+            )}
+            <WaitingPanel card={card} />
+            <SubagentSummary subagents={card.subagents} now={now} />
+            {card.background.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {card.background.map((b) => (
+                  <Badge
+                    key={b.id}
+                    variant={
+                      b.state === "blocked" || b.state === "failed"
+                        ? "destructive"
+                        : "secondary"
+                    }
+                    title={b.needs ?? undefined}
+                  >
+                    <Layers />
+                    <span className="sensitive">{b.name}</span> · {b.state}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <CardState
+              column={card.column}
+              queued={card.terminalQueue.length + card.boardQueue.length}
+              onOpen={() => setChatOpen(true)}
+            />
+            <ChatInput card={card} open={chatOpen} setOpen={setChatOpen} />
+          </CardContent>
+        )}
       </Card>
     </CardErrorsContext.Provider>
   );
@@ -1159,7 +1199,11 @@ function startPinDrag(e: React.DragEvent<HTMLElement>, sessionId: string) {
   const card = e.currentTarget.closest<HTMLElement>("[data-pin-card]");
   if (card) {
     const box = card.getBoundingClientRect();
-    e.dataTransfer.setDragImage(card, e.clientX - box.left, e.clientY - box.top);
+    e.dataTransfer.setDragImage(
+      card,
+      e.clientX - box.left,
+      e.clientY - box.top,
+    );
   }
 }
 
@@ -1187,7 +1231,9 @@ function PinnedCards({ cards, now }: { cards: BoardCard[]; now: number }) {
         String(moving.get("before")),
       )
     : ids;
-  const shown = order.flatMap((id) => cards.find((c) => c.sessionId === id) ?? []);
+  const shown = order.flatMap(
+    (id) => cards.find((c) => c.sessionId === id) ?? [],
+  );
   const isPinDrag = (e: React.DragEvent) =>
     e.dataTransfer.types.includes(PIN_DRAG);
 
@@ -1420,9 +1466,7 @@ function BoardMenu({
             </button>
           )}
           <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            {version && (
-              <span className="font-mono">{version.hash} · </span>
-            )}
+            {version && <span className="font-mono">{version.hash} · </span>}
             updated {new Date(now).toLocaleTimeString()}
           </p>
         </PopoverContent>
@@ -1510,7 +1554,9 @@ function ColumnTabs({
       {columns.map((column) => {
         const count = counts[column];
         const alert =
-          column === "attention" ? actions > 0 : column === "waiting" && count > 0;
+          column === "attention"
+            ? actions > 0
+            : column === "waiting" && count > 0;
         return (
           <button
             key={column}
@@ -1521,7 +1567,8 @@ function ColumnTabs({
             onClick={() => onPick(column)}
             className={cn(
               "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs text-muted-foreground",
-              column === active && "border-foreground/30 bg-muted text-foreground",
+              column === active &&
+                "border-foreground/30 bg-muted text-foreground",
             )}
           >
             <span className={cn("size-2 rounded-full", columnAccent(column))} />
@@ -1532,7 +1579,9 @@ function ColumnTabs({
                 alert
                   ? cn(
                       "font-medium text-white",
-                      column === "attention" ? ATTENTION_ACCENT : "bg-amber-500",
+                      column === "attention"
+                        ? ATTENTION_ACCENT
+                        : "bg-amber-500",
                     )
                   : "bg-muted",
               )}
@@ -1561,9 +1610,7 @@ function useCarousel(
   const scrollTo = useCallback(
     (column: BoardColumnKey, behavior: ScrollBehavior) => {
       const root = carousel.current;
-      const el = root?.querySelector<HTMLElement>(
-        `[data-column="${column}"]`,
-      );
+      const el = root?.querySelector<HTMLElement>(`[data-column="${column}"]`);
       if (!root || !el) return;
       const pad = parseFloat(getComputedStyle(root).scrollPaddingLeft) || 0;
       root.scrollTo({ left: el.offsetLeft - pad, behavior });
@@ -1693,9 +1740,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       const { [sessionId]: _, ...rest } = d;
       return draft ? { ...rest, [sessionId]: draft } : rest;
     });
-  const [attachments, setAttachments] = useState<
-    Record<string, Attachment[]>
-  >({});
+  const [attachments, setAttachments] = useState<Record<string, Attachment[]>>(
+    {},
+  );
   const updateAttachments = useCallback(
     (sessionId: string, update: (list: Attachment[]) => Attachment[]) =>
       setAttachments((all) => {
