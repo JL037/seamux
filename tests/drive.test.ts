@@ -19,6 +19,7 @@ import {
   listLive,
   readDialog,
   renameLive,
+  resumeTurn,
   sendMessage,
   UnsentError,
 } from "~/lib/drive.server";
@@ -284,6 +285,14 @@ describe("sendMessage", () => {
       "This session is not running in a cmux surface",
     );
     expect(cmux.requests).toEqual([]);
+  });
+});
+
+describe("resumeTurn", () => {
+  it("sends Claude Code one line telling it to carry on", async () => {
+    const { surface } = cmux.addSession("s");
+    await resumeTurn("s");
+    expect(input(surface)).toEqual(["text:continue", "key:enter"]);
   });
 });
 

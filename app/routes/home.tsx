@@ -99,6 +99,7 @@ import { ENGINE_LABELS, type Engine } from "~/lib/config";
 import { configOrDefaults } from "~/lib/config.server";
 import { installedEngines } from "~/lib/drive.server";
 import { startQueue } from "~/lib/queue.server";
+import { startReconnect } from "~/lib/reconnect.server";
 import { SEAMUX_HOME } from "~/lib/paths.server";
 import { remoteStatus, type RemoteStatus } from "~/lib/remote.server";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
@@ -132,6 +133,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   startQueue();
+  startReconnect();
   return {
     board: await loadBoard(),
     config: configOrDefaults(),
@@ -1000,7 +1002,15 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
               {shortenAttachments(card.lastPrompt)}
             </Faded>
           )}
-          {card.lastReply && <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />}
+          {card.lastReply &&
+            (card.apiError ? (
+              // Claude Code's words for a failed request, not a reply.
+              <p className="sensitive text-xs break-words text-muted-foreground italic">
+                {card.lastReply}
+              </p>
+            ) : (
+              <ReplyExcerpt text={card.lastReply} cwd={card.cwd} />
+            ))}
           {card.closing && (
             <p
               className={cn(
@@ -1650,7 +1660,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     ...Object.fromEntries(COLUMNS.map((c) => [c, byColumn(c).length])),
     working: byColumn("working").length + starting.length,
   } as Record<BoardColumnKey, number>;
-  // Only what asks something of the user; an outage alone is news.
+  // Only what asks something of the user.
   const actions = attentionCount(attention);
   const { carousel, active, pick } = useCarousel(
     mobileColumns,

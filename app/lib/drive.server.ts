@@ -119,21 +119,27 @@ export async function listSurfaces(): Promise<Map<string, Surface>> {
 export { UnsentError } from "./harness.server.ts";
 
 // Drive a live chat through a macro, as the one writer to its terminal
-// until the macro is done. The surface is always resolved server-side.
-async function driving<T>(
+// until the macro is done. The surface is always resolved server-side, once
+// it is this macro's turn, so macros asked for together run in that order.
+function driving<T>(
   sessionId: string,
   macro: (s: Session) => Promise<T>,
 ): Promise<T> {
-  const live = (await listLive()).get(sessionId);
-  if (!live) throw new Error("This session is not running in a cmux surface");
-  const s = new Session(live.surface, HARNESSES[live.engine]);
-  return exclusive(live.surface, () => macro(s));
+  return exclusive(sessionId, async () => {
+    const live = (await listLive()).get(sessionId);
+    if (!live) throw new Error("This session is not running in a cmux surface");
+    return macro(new Session(live.surface, HARNESSES[live.engine]));
+  });
 }
 
 export async function sendMessage(sessionId: string, text: string) {
   await driving(sessionId, (s) => macros.send(s, text));
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
+}
+
+export async function resumeTurn(sessionId: string) {
+  await driving(sessionId, macros.resume);
 }
 
 export async function interrupt(sessionId: string) {

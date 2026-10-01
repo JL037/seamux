@@ -16,6 +16,12 @@ export async function send(s: Session, text: string) {
   await s.submit(text);
 }
 
+// Picks a turn back up where something outside the chat cut it short, an
+// expired login or a failed request: one line telling the model to carry on.
+export async function resume(s: Session) {
+  await send(s, "continue");
+}
+
 // A slash command, such as /exit or /rename. Pasted, since typing it would
 // open the slash menu, whose Enter picks whatever it has highlighted.
 export async function command(s: Session, line: string) {

@@ -220,20 +220,20 @@ export class Session {
 }
 
 // One writer per chat: two macros typing into the same box would interleave
-// their keys, so each waits for the one before it on that surface.
+// their keys, so each waits for the one before it on that chat, in the
+// order they were asked for.
 const writing = new Map<string, Promise<unknown>>();
 
 export function exclusive<T>(
-  surface: Surface,
+  sessionId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const before = writing.get(surface.surfaceId) ?? Promise.resolve();
+  const before = writing.get(sessionId) ?? Promise.resolve();
   const run = before.then(fn, fn);
   const settled = run.catch(() => {});
-  writing.set(surface.surfaceId, settled);
+  writing.set(sessionId, settled);
   void settled.then(() => {
-    if (writing.get(surface.surfaceId) === settled)
-      writing.delete(surface.surfaceId);
+    if (writing.get(sessionId) === settled) writing.delete(sessionId);
   });
   return run;
 }

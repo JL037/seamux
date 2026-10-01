@@ -183,12 +183,10 @@ export interface ServiceNotice {
   // Live chats whose last turn ended on an expired login.
   stopped: { sessionId: string; name: string }[];
   login: ServiceLogin | null;
-  // Live chats whose last turn ended on a server-side error, recently.
-  outage: { text: string; sessions: { sessionId: string; name: string }[] } | null;
 }
 
 // Whether the notice asks something of the user, so it counts like a waiting
-// chat. An outage alone is only news.
+// chat.
 export function needsAction(n: ServiceNotice): boolean {
   return (
     n.needsLogin || n.stopped.length > 0 || n.login?.state === "running"

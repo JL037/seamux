@@ -70,13 +70,13 @@ function summary(n: ServiceNotice): string {
   if (n.needsLogin) return "Login expired";
   if (n.stopped.length > 0)
     return `${plural(n.stopped.length, "chat")} stopped on an expired login`;
-  return n.outage?.text ?? "";
+  return "";
 }
 
 // A card per service in trouble, in the service's own color: a full border
 // of it, over the card's color mixed with it.
 function ServiceCard({ notice }: { notice: ServiceNotice }) {
-  const { service, login, stopped, outage } = notice;
+  const { service, login, stopped } = notice;
   const action = useServiceAction(service);
   const label = ENGINE_LABELS[service];
   const running = login?.state === "running";
@@ -91,11 +91,11 @@ function ServiceCard({ notice }: { notice: ServiceNotice }) {
       className="flex flex-col gap-3 rounded-xl border-2 border-(--service) bg-[color-mix(in_oklch,var(--service)_14%,var(--card))] p-3 text-sm text-card-foreground shadow-sm dark:bg-[color-mix(in_oklch,var(--service)_18%,var(--card))] dark:shadow-black/20"
     >
       <header className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex shrink-0 items-center gap-2">
           <span className="size-2.5 shrink-0 rounded-full bg-(--service)" />
-          <span className="truncate text-base font-semibold">{label}</span>
+          <span className="text-base font-semibold">{label}</span>
         </span>
-        <span className="shrink-0 text-xs text-muted-foreground">
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
           {status}
         </span>
       </header>
@@ -121,13 +121,6 @@ function ServiceCard({ notice }: { notice: ServiceNotice }) {
         <SessionList
           lead="Stopped on an expired login"
           sessions={stopped}
-        />
-      )}
-
-      {outage && (
-        <SessionList
-          lead={`${outage.text} Hit in the last 15m by`}
-          sessions={outage.sessions}
         />
       )}
 
@@ -182,7 +175,7 @@ function SessionList({
         {sessions.map((s) => (
           <li
             key={s.sessionId}
-            className="max-w-full truncate rounded-md bg-background/60 px-1.5 py-0.5"
+            className="sensitive max-w-full truncate rounded-md bg-background/60 px-1.5 py-0.5"
           >
             {s.name}
           </li>

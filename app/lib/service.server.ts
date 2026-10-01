@@ -1,8 +1,8 @@
-// The services behind the chats: whether each is signed in, a sign-in the
-// board runs for it, and outages the chats ran into. Nothing is scraped
-// from a status page: sign-in comes from the tools' own status commands,
-// and errors from the transcripts, where Claude Code writes each failed
-// request in place of a reply.
+// The services behind the chats: whether each is signed in, and a sign-in
+// the board runs for it. Nothing is scraped from a status page: sign-in
+// comes from the tools' own status commands, and expired logins from the
+// transcripts, where Claude Code writes each failed request in place of a
+// reply. Other failed requests are reconnect.server.ts's to pick up.
 //
 // A sign-in runs without a terminal, so it can be finished from any device.
 // Measured against Claude Code 2.1.283 and Codex 0.156.1, in knowledge/signing-in.md:
@@ -29,6 +29,7 @@ import { packagePath } from "./paths.server";
 import {
   installedEngines,
   listLive,
+  resumeTurn,
   sendMessage,
 } from "./drive.server";
 
@@ -42,11 +43,6 @@ const LOGIN_TIMEOUT_MS = 15 * 60 * 1000;
 // a hidden one included, to see how it went.
 const DONE_VISIBLE_MS = 20_000;
 const FAILED_VISIBLE_MS = 10 * 60 * 1000;
-// A server error this recent still counts as an outage.
-const OUTAGE_WINDOW_MS = 15 * 60 * 1000;
-// What each chat stopped on an expired login is sent once signed in again.
-const RESUME_PROMPT = "continue";
-
 // Stands in for a browser: writes the URL it is given to a file.
 const LOGIN_BROWSER = packagePath("scripts/login-browser.sh");
 
@@ -267,27 +263,6 @@ function stoppedOnLogin(cards: Card[]): Card[] {
   );
 }
 
-// A request that failed on Anthropic's side, or never reached it: an
-// overloaded or failing server, or no route to the API.
-const SERVER_ERROR = /^API Error: (5\d\d|Can't reach)/;
-
-function outageOf(cards: Card[], now: number): ServiceNotice["outage"] {
-  const hit = cards.filter(
-    (c) =>
-      live(c) &&
-      c.apiError != null &&
-      SERVER_ERROR.test(c.apiError.text) &&
-      now - c.apiError.at < OUTAGE_WINDOW_MS,
-  );
-  if (hit.length === 0) return null;
-  const latest = hit.reduce((a, b) =>
-    (a.apiError?.at ?? 0) >= (b.apiError?.at ?? 0) ? a : b,
-  );
-  // Its first sentence: "API Error: 529 Overloaded."
-  const text = latest.apiError!.text.replace(/(\.)\s.*$/s, "$1");
-  return { text, sessions: hit.map(named) };
-}
-
 // Each installed service with something to show. Codex writes no errors
 // the board reads, so only its own status speaks for it.
 export async function serviceNotices(
@@ -310,12 +285,11 @@ export async function serviceNotices(
           status === false || stopped.some((c) => c.apiError!.at > since),
         stopped: stopped.map(named),
         login: currentLogin(service, now),
-        outage: service === "claude" ? outageOf(cards, now) : null,
       };
     }),
   );
   return notices.filter(
-    (n) => n.needsLogin || n.stopped.length > 0 || n.login || n.outage,
+    (n) => n.needsLogin || n.stopped.length > 0 || n.login,
   );
 }
 
@@ -329,7 +303,7 @@ export async function resumeStopped(cards: Card[]): Promise<string[]> {
       continue;
     }
     try {
-      await sendMessage(card.sessionId, RESUME_PROMPT);
+      await resumeTurn(card.sessionId);
     } catch {
       failed.push(card.name);
     }

@@ -9,8 +9,16 @@ In seamux, all of it is [service.server.ts](../app/lib/service.server.ts).
 Claude Code writes it as an assistant message of its own: `"isApiErrorMessage": true, "error": "authentication_failed"`, model `<synthetic>`, text "Login expired · Please run /login". Server errors take the same form with `"error": "server_error"`, such as "API Error: 529 Overloaded. ..." and "API Error: Can't reach the API server ...". So do a few that are not the service's fault: "Your computer went to sleep mid-response" and "Could not refresh your login because another Claude Code process is refreshing it".
 
 - **Measured:** Claude Code 2.1.283.
-- **In seamux:** `apiErrorOf` in [board.server.ts](../app/lib/board.server.ts); `stoppedOnLogin`, `SERVER_ERROR` and `outageOf` in [service.server.ts](../app/lib/service.server.ts).
-- **See also:** [Transcripts](transcripts.md).
+- **In seamux:** `apiErrorOf` in [board.server.ts](../app/lib/board.server.ts); `stoppedOnLogin` in [service.server.ts](../app/lib/service.server.ts); `due` in [reconnect.server.ts](../app/lib/reconnect.server.ts), which resumes the `server_error` ones.
+- **See also:** [Transcripts](transcripts.md), [The API answers whenever it can be reached](#the-api-answers-whenever-it-can-be-reached).
+
+## The API answers whenever it can be reached
+
+A `HEAD` or `GET` to `https://api.anthropic.com` with no key comes back `404` in well under a second. With no route, Node's `fetch` fails with `ENOTFOUND` within a few milliseconds. So any answer at all means a chat stopped on "Can't reach the API server" can be tried again. An overloaded server answers the same way, so the answer says nothing about a 529.
+
+- **Measured:** Node 24, 2026-09-30, online and against an unresolvable host.
+- **In seamux:** `probe` in [reconnect.server.ts](../app/lib/reconnect.server.ts).
+- **See also:** [An expired login is in the transcript](#an-expired-login-is-in-the-transcript).
 
 ## `claude auth status --json` exits 1 when signed out
 
