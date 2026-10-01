@@ -59,3 +59,10 @@ It answers `Cannot close the last surface`, so for the last tab seamux calls `wo
 
 - **Measured:** not recorded.
 - **In seamux:** `closeChat` in [drive.server.ts](../app/lib/drive.server.ts).
+
+## `cmux sessions list` can lose a live Claude session's pid
+
+A live Claude Code session in a cmux surface can come back with `pid: null`, `stored_pid_exists: null`, `launch_backed: false` and empty `launch_arguments`, while `active_for_surface` is still `true` and the process, with that surface's `CMUX_SURFACE_ID`, is running. Its record in `~/.cmuxterm/claude-hook-sessions.json` has only the fields the `Stop` hook writes (`lastBody`, `lastSubtitle`, `hadPendingBackgroundWorkAtStop`) and none of `pid`, `pidStartSeconds` or `launchCommand`; the other 24 records at the time had them. `null` means cmux doesn't know, not that the process is gone, and treating it as dead left the chat's card saying "Not in a cmux surface". `claude agents --json` still lists the session with its pid, so seamux asks it about those rows.
+
+- **Measured:** cmux 0.64.23, Claude Code 2.1.286, on one dispatched session; what drops the pid is unknown.
+- **In seamux:** `listLive` and `runningClaudeSessions` in [drive.server.ts](../app/lib/drive.server.ts); the fake's `stored_pid_exists: null` in [tests/fake-cmux.ts](../tests/fake-cmux.ts), and the contract in [tests-cmux/contract.test.ts](../tests-cmux/contract.test.ts).

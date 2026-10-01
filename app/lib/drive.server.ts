@@ -45,7 +45,8 @@ interface CmuxSession {
   session_id: string;
   agent: string;
   active_for_surface: boolean;
-  stored_pid_exists: boolean;
+  // null when cmux's record of the session has lost its pid.
+  stored_pid_exists: boolean | null;
   surface_id: string;
   workspace_id: string;
   cwd?: string;
@@ -71,16 +72,24 @@ const codexResumed = ((globalThis as any).__seamuxCodexResumed ??= new Map<
 
 // sessionId -> every live Claude or Codex session cmux hosts. Claude is live
 // while cmux marks it active for its surface. Codex never gets that mark,
-// so a Codex session is live while its process is.
+// so a Codex session is live while its process is. cmux sometimes loses a
+// Claude session's pid and can't tell, so `claude agents` decides those.
 export async function listLive(): Promise<Map<string, LiveSession>> {
   const stdout = await cmuxCli(["sessions", "list", "--json"], {
     maxBuffer: 16 * 1024 * 1024,
   });
   const { sessions } = JSON.parse(stdout) as { sessions: CmuxSession[] };
+  const pidless = sessions.some(
+    (s) =>
+      s.agent === "claude" && s.active_for_surface && s.stored_pid_exists == null,
+  );
+  const running = pidless ? await runningClaudeSessions() : new Set<string>();
   const map = new Map<string, LiveSession>();
   for (const s of sessions) {
-    if (!s.stored_pid_exists) continue;
     if (s.agent === "claude" && !s.active_for_surface) continue;
+    if (s.stored_pid_exists == null) {
+      if (s.agent !== "claude" || !running.has(s.session_id)) continue;
+    } else if (!s.stored_pid_exists) continue;
     if (s.agent !== "claude" && s.agent !== "codex") continue;
     map.set(s.session_id, {
       engine: s.agent,
@@ -108,6 +117,33 @@ export async function listLive(): Promise<Map<string, LiveSession>> {
     }
   }
   return map;
+}
+
+// The session ids of every Claude Code process still running.
+async function runningClaudeSessions(): Promise<Set<string>> {
+  const agents = await run("claude", ["agents", "--json", "--all"], {
+    maxBuffer: 32 * 1024 * 1024,
+    timeout: 10_000,
+  }).then(
+    ({ stdout }) =>
+      JSON.parse(stdout) as { pid?: number | null; sessionId?: string | null }[],
+    () => [],
+  );
+  return new Set(
+    agents
+      .filter((a) => a.sessionId && a.pid && processAlive(a.pid))
+      .map((a) => a.sessionId!),
+  );
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM: alive, but someone else's.
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 // sessionId -> the cmux surface a live session is running in.

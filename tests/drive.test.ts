@@ -3,7 +3,7 @@
 // board depends on, and each was measured against cmux and Claude Code by
 // hand first (knowledge/); these keep it from drifting.
 
-import { mkdtempSync, realpathSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -89,6 +89,35 @@ describe("listLive", () => {
       transcript: "/codex/rollout.jsonl",
     });
     expect(live.get("codex-live")!.surface.surfaceId).toBe(codex.surface.id);
+  });
+
+  it("asks claude agents about a Claude session whose pid cmux lost", async () => {
+    const agents = process.env.SEAMUX_TEST_CLAUDE_AGENTS!;
+    // claude agents lists this test's own process, which is alive, and a pid
+    // no process has.
+    writeFileSync(
+      agents,
+      JSON.stringify([
+        { sessionId: "claude-pidless", pid: process.pid },
+        { sessionId: "claude-pidless-dead", pid: 2 ** 22 + 1 },
+      ]),
+    );
+    try {
+      const claude = cmux.addSession("claude-pidless", {
+        stored_pid_exists: null,
+      });
+      cmux.addSession("claude-pidless-dead", { stored_pid_exists: null });
+      cmux.addSession("claude-pidless-unlisted", { stored_pid_exists: null });
+
+      const live = await listLive();
+
+      expect([...live.keys()]).toEqual(["claude-pidless"]);
+      expect(live.get("claude-pidless")!.surface.surfaceId).toBe(
+        claude.surface.id,
+      );
+    } finally {
+      rmSync(agents, { force: true });
+    }
   });
 });
 

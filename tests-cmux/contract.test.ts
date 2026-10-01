@@ -226,10 +226,13 @@ describe("the cmux command", () => {
         session_id: expect.any(String),
         agent: expect.any(String),
         active_for_surface: expect.any(Boolean),
-        stored_pid_exists: expect.any(Boolean),
         surface_id: expect.any(String),
         workspace_id: expect.any(String),
       });
+      // null when cmux's record has lost the session's pid.
+      expect(s.stored_pid_exists).toSatisfy(
+        (v: unknown) => v === null || typeof v === "boolean",
+      );
       expect(s.transcript_path ?? null).toSatisfy(
         (v: unknown) => v === null || typeof v === "string",
       );

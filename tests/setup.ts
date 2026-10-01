@@ -25,6 +25,7 @@ delete process.env.CMUX_SOCKET;
 delete process.env.CMUX_SOCKET_CAPABILITY;
 delete process.env.CMUX_SOCKET_PASSWORD;
 process.env.SEAMUX_TEST_CMUX_STATE = join(root, "cmux-sessions.json");
+process.env.SEAMUX_TEST_CLAUDE_AGENTS = join(root, "claude-agents.json");
 process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
 mkdirSync(process.env.HOME, { recursive: true });
 // cmux's app bundle, which seamux runs the `cmux` command from when it isn't

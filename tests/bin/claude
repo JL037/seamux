@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 // The fake `claude` command, first on PATH in the tests (tests/setup.ts), so no
 // test reads the real Claude Code's sessions. `claude agents --json` lists
-// none; anything else is refused.
+// what a test wrote to SEAMUX_TEST_CLAUDE_AGENTS, else none; anything else is
+// refused.
+import { existsSync, readFileSync } from "node:fs";
+
 const args = process.argv.slice(2);
 if (args[0] === "agents" && args.includes("--json")) {
-  process.stdout.write("[]\n");
+  const state = process.env.SEAMUX_TEST_CLAUDE_AGENTS;
+  process.stdout.write(
+    state && existsSync(state) ? readFileSync(state, "utf8") : "[]\n",
+  );
   process.exit(0);
 }
 process.stderr.write(`fake claude: unsupported command: ${args.join(" ")}\n`);
