@@ -33,7 +33,7 @@ export function ContextBar({
       aria-valuetext={label}
       title={label}
       className={cn(
-        "relative h-1.5 overflow-hidden rounded-b-lg border border-t-0 bg-clip-padding bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500",
+        "relative h-1.5 overflow-hidden rounded-b-lg border border-t-0 bg-clip-padding bg-gradient-to-r from-success via-warning to-attention",
         className,
       )}
     >

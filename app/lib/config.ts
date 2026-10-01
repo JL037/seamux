@@ -91,8 +91,8 @@ export const ENGINE_LABELS: Record<Engine, string> = {
 // Each service's own color, for what the board shows about it: Anthropic's
 // clay for Claude Code, OpenAI's teal for Codex.
 export const ENGINE_COLORS: Record<Engine, string> = {
-  claude: "#d97757",
-  codex: "#4ba281",
+  claude: "var(--engine-claude)",
+  codex: "var(--engine-codex)",
 };
 
 export function isEngine(name: string): name is Engine {

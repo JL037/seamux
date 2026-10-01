@@ -13,9 +13,9 @@ function StatusIcon({ agent }: { agent: Subagent }) {
   if (agent.stale) return <CircleDashed className="size-3 shrink-0" />;
   if (agent.running)
     return (
-      <LoaderCircle className="size-3 shrink-0 animate-spin text-sky-500" />
+      <LoaderCircle className="size-3 shrink-0 animate-spin text-info" />
     );
-  return <Check className="size-3 shrink-0 text-emerald-500" />;
+  return <Check className="size-3 shrink-0 text-success" />;
 }
 
 function label(agent: Subagent): string {
@@ -56,7 +56,7 @@ export function SubagentSummary({
       ))}
       {finished > 0 && (
         <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Check className="size-3 shrink-0 text-emerald-500" />
+          <Check className="size-3 shrink-0 text-success" />
           {finished} subagent{finished === 1 ? "" : "s"} finished in the last
           30m
         </div>

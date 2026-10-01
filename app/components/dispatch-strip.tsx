@@ -5,7 +5,7 @@ import type { DispatchSet } from "~/lib/board";
 import { cn } from "~/lib/utils";
 
 export function WorkerStatus({ status }: { status: "ok" | "failed" | null }) {
-  if (status === "ok") return <Check className="size-3 text-emerald-500" />;
+  if (status === "ok") return <Check className="size-3 text-success" />;
   if (status === "failed") return <X className="size-3 text-destructive" />;
   return <CircleDashed className="size-3 text-muted-foreground" />;
 }

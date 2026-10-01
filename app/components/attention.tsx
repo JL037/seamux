@@ -10,7 +10,7 @@ import { ENGINE_COLORS, ENGINE_LABELS, type Engine } from "~/lib/config";
 import { cn } from "~/lib/utils";
 import type { ServiceActionResult } from "~/routes/service-action";
 
-export const ATTENTION_ACCENT = "bg-red-500";
+export const ATTENTION_ACCENT = "bg-attention";
 
 // Posts one of a service's verbs: sign in, paste a code, stop, resume.
 function useServiceAction(service: Engine) {
@@ -131,7 +131,7 @@ function ServiceCard({ notice }: { notice: ServiceNotice }) {
               size="sm"
               disabled={action.pending}
               onClick={() => action.submit("login")}
-              className="bg-(--service) text-white hover:bg-(--service)/85"
+              className="bg-(--service) text-engine-foreground hover:bg-(--service)/85"
             >
               {action.pending ? (
                 <LoaderCircle className="animate-spin" />
@@ -226,7 +226,7 @@ function SignIn({
       rel="noreferrer"
       className={cn(
         buttonVariants({ size: "sm" }),
-        "bg-(--service) text-white hover:bg-(--service)/85",
+        "bg-(--service) text-engine-foreground hover:bg-(--service)/85",
       )}
     >
       <ExternalLink />

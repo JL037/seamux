@@ -17,7 +17,7 @@ export function CmuxProblem({ problem }: { problem: Problem }) {
       className="fixed inset-0 z-50 overflow-y-auto bg-background"
     >
       <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center gap-5 px-4 py-12">
-        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+        <div className="flex items-center gap-2 text-warning-text">
           <TriangleAlert className="size-5 shrink-0" />
           <span className="text-sm font-medium">
             seamux can't drive your chats

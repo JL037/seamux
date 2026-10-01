@@ -115,7 +115,13 @@ import {
   useOptimisticBoard,
   type Spawning,
 } from "~/lib/optimistic";
-import { hashedColor, PALETTE, projectOf } from "~/lib/project-colors";
+import {
+  hashedSlot,
+  PROJECT_COLOR_SLOTS,
+  projectColor,
+  projectOf,
+  storedSlot,
+} from "~/lib/project-colors";
 import { useLocalStorage, useSessionStorage } from "~/lib/use-session-storage";
 import { cn } from "~/lib/utils";
 
@@ -181,9 +187,9 @@ function useDoneToasts(cards: BoardCard[]) {
 
 const COLUMN_ACCENT: Record<Column, string> = {
   idle: "bg-muted-foreground/40",
-  waiting: "bg-amber-500",
-  working: "bg-brand-cyan",
-  done: "bg-emerald-500/60",
+  waiting: "bg-warning",
+  working: "bg-brand-primary",
+  done: "bg-success/60",
 };
 
 function ago(ms: number | null, now: number): string {
@@ -204,21 +210,23 @@ function shortPath(cwd: string): string {
   return cwd.replace(/^\/Users\/[^/]+/, "~");
 }
 
-// Colours picked for projects, keyed by project path. Kept in this browser
-// for now, until seamux has a config of its own.
+// Colour slots picked for projects, keyed by project path. Kept in this
+// browser for now, until seamux has a config of its own. An older browser
+// kept the colour itself, which storedSlot reads as its slot.
 const ProjectColorsContext = createContext<{
-  colors: Record<string, string>;
-  setColor: (project: string, color: string | null) => void;
+  colors: Record<string, number | string>;
+  setColor: (project: string, slot: number | null) => void;
 }>({ colors: {}, setColor: () => {} });
 
 // The project's colour, and a picker for it on click.
 function PathSwatch({ cwd }: { cwd: string }) {
   const { colors, setColor } = useContext(ProjectColorsContext);
   const project = projectOf(cwd);
-  const current = colors[project] ?? hashedColor(project);
+  const picked = storedSlot(colors[project]);
+  const current = picked ?? hashedSlot(project);
   const [open, setOpen] = useState(false);
-  const pick = (color: string | null) => {
-    setColor(project, color);
+  const pick = (slot: number | null) => {
+    setColor(project, slot);
     setOpen(false);
   };
   return (
@@ -228,26 +236,26 @@ function PathSwatch({ cwd }: { cwd: string }) {
         title={shortPath(project)}
         // A 10px square is too small to tap; the hit area reaches past it.
         className="relative size-2.5 shrink-0 cursor-pointer rounded-[2px] outline-offset-2 after:absolute after:-inset-2"
-        style={{ backgroundColor: current }}
+        style={{ backgroundColor: projectColor(current) }}
       />
       <PopoverContent align="start" className="w-auto gap-2">
         <div className="grid grid-cols-6 gap-1.5">
-          {PALETTE.map((color) => (
+          {PROJECT_COLOR_SLOTS.map((slot) => (
             <button
               type="button"
-              key={color}
-              aria-label={color}
-              onClick={() => pick(color)}
+              key={slot}
+              aria-label={`Colour ${slot}`}
+              onClick={() => pick(slot)}
               className={cn(
                 "size-6 cursor-pointer rounded-sm outline-offset-2",
-                color === current &&
+                slot === current &&
                   "ring-2 ring-foreground ring-offset-2 ring-offset-popover",
               )}
-              style={{ backgroundColor: color }}
+              style={{ backgroundColor: projectColor(slot) }}
             />
           ))}
         </div>
-        {colors[project] && (
+        {picked !== undefined && (
           <button
             type="button"
             onClick={() => pick(null)}
@@ -1055,7 +1063,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
                 className={cn(
                   "sensitive rounded-md px-2 py-1",
                   card.closing.state === "held"
-                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    ? "bg-warning/10 text-warning-text"
                     : "bg-muted text-muted-foreground",
                 )}
               >
@@ -1127,7 +1135,7 @@ function StartingCard({ spawn }: { spawn: Spawning }) {
           </span>
           {spawn.intent}
         </p>
-        <span className="flex items-center gap-1.5 text-brand-cyan">
+        <span className="flex items-center gap-1.5 text-brand-primary">
           <LoaderCircle className="size-3.5 animate-spin" />
           starting
         </span>
@@ -1161,7 +1169,7 @@ function CardState({
       </>
     ) : null;
   const tone =
-    column === "working" ? "text-brand-cyan" : "text-muted-foreground";
+    column === "working" ? "text-brand-primary" : "text-muted-foreground";
   if (queued === 0) {
     return (
       state && (
@@ -1309,7 +1317,7 @@ function DropLine({ edge }: { edge: "top" | "bottom" }) {
 // Attention sits left of Pinned, while a service needs looking at.
 type BoardColumnKey = Column | "pinned" | "attention";
 
-const PINNED_ACCENT = "bg-violet-500";
+const PINNED_ACCENT = "bg-pinned";
 
 // Spelled out so Tailwind sees each class.
 const XL_GRID_COLS: Record<number, string> = {
@@ -1495,7 +1503,7 @@ function BoardMenu({
 function Warnings({ warnings }: { warnings: string[] }) {
   const [open, setOpen] = useState(false);
   if (warnings.length === 0) return null;
-  const tone = "text-sm text-amber-600 dark:text-amber-400";
+  const tone = "text-sm text-warning-text";
   return (
     <div className="flex flex-col gap-1">
       <button
@@ -1578,10 +1586,10 @@ function ColumnTabs({
                 "rounded-full px-1.5 py-px text-[0.7rem] tabular-nums",
                 alert
                   ? cn(
-                      "font-medium text-white",
+                      "font-medium",
                       column === "attention"
-                        ? ATTENTION_ACCENT
-                        : "bg-amber-500",
+                        ? cn(ATTENTION_ACCENT, "text-attention-foreground")
+                        : "bg-warning text-warning-foreground",
                     )
                   : "bg-muted",
               )}
@@ -1752,14 +1760,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       }),
     [],
   );
-  const [colors, setColors] = useLocalStorage<Record<string, string>>(
+  const [colors, setColors] = useLocalStorage<Record<string, number | string>>(
     "seamux:project-colors",
     {},
   );
-  const setColor = (project: string, color: string | null) =>
+  const setColor = (project: string, slot: number | null) =>
     setColors((c) => {
       const { [project]: _, ...rest } = c;
-      return color ? { ...rest, [project]: color } : rest;
+      return slot !== null ? { ...rest, [project]: slot } : rest;
     });
 
   return (
@@ -1798,7 +1806,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 <Button
                   size="sm"
                   onClick={() => setDispatchOpen(true)}
-                  className="bg-brand-ramp text-white shadow-sm hover:opacity-90"
+                  className="bg-brand-ramp text-brand-foreground shadow-sm hover:opacity-90"
                 >
                   <Plus />
                   New

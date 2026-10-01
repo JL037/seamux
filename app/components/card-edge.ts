@@ -20,6 +20,6 @@ export const EDGE: Partial<Record<Column, string>> = {
 // Which agent runs the chat, as its top-right corner: Anthropic's orange for
 // Claude Code, OpenAI's teal for Codex.
 export const ENGINE_CORNER: Record<Engine, string> = {
-  claude: "[--corner:#d97757]",
-  codex: "[--corner:#4ba281]",
+  claude: "[--corner:var(--engine-claude)]",
+  codex: "[--corner:var(--engine-codex)]",
 };

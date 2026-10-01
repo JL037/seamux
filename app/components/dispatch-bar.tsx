@@ -201,7 +201,7 @@ export function DispatchBar({
         <Button
           disabled={!canDispatch}
           onClick={submit}
-          className="bg-brand-ramp text-white shadow-sm hover:opacity-90"
+          className="bg-brand-ramp text-brand-foreground shadow-sm hover:opacity-90"
         >
           <SendHorizontal />
           {pending ? "Starting…" : "Dispatch"}

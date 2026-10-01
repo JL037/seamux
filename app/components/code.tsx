@@ -66,7 +66,7 @@ export function Code({
             ref={i + 1 === line ? target : undefined}
             className={cn(
               "col-span-full grid grid-cols-subgrid",
-              i + 1 === line && "rounded-sm bg-amber-400/25 dark:bg-amber-300/20",
+              i + 1 === line && "rounded-sm bg-line-highlight",
             )}
           >
             {lineNumbers && (

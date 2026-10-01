@@ -68,7 +68,7 @@ function QuestionForm({
 
   return (
     <form
-      className="flex flex-col gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-2"
+      className="flex flex-col gap-3 rounded-md border border-warning/40 bg-warning/5 p-2"
       onSubmit={(e) => {
         e.preventDefault();
         if (ready) {
@@ -86,7 +86,7 @@ function QuestionForm({
         return (
           <fieldset key={i} className="flex flex-col gap-1.5">
             <legend className="mb-1.5 flex items-start gap-1.5 font-medium">
-              <CircleHelp className="mt-px size-3.5 shrink-0 text-amber-500" />
+              <CircleHelp className="mt-px size-3.5 shrink-0 text-warning" />
               <span className="sensitive">
                 {q.question}
                 {q.multiSelect && (
@@ -108,14 +108,14 @@ function QuestionForm({
                   title={o.description ?? undefined}
                   className={cn(
                     "flex cursor-pointer items-start gap-2 rounded-md border bg-background px-2 py-1 text-left",
-                    picked && "border-amber-500 bg-amber-500/10",
+                    picked && "border-warning bg-warning/10",
                   )}
                 >
                   <span
                     className={cn(
                       "mt-0.5 flex size-3 shrink-0 items-center justify-center border",
                       q.multiSelect ? "rounded-[3px]" : "rounded-full",
-                      picked && "border-amber-500 bg-amber-500 text-white",
+                      picked && "border-warning bg-warning text-warning-foreground",
                     )}
                   >
                     {picked && <Check className="size-2.5" />}
@@ -255,8 +255,8 @@ export function WaitingPanel({ card }: { card: Card }) {
   // Answered with the reply box, like any message.
   if (w.reason === ASKED_IN_REPLY) {
     return (
-      <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2 py-1">
-        <CircleHelp className="mt-px size-3.5 shrink-0 text-amber-500" />
+      <div className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/5 px-2 py-1">
+        <CircleHelp className="mt-px size-3.5 shrink-0 text-warning" />
         <span className="min-w-0 break-words">
           <span className="font-medium">Asked: </span>
           <span className="sensitive">{w.detail}</span>
@@ -266,9 +266,9 @@ export function WaitingPanel({ card }: { card: Card }) {
   }
   const approval = w.reason === "permission prompt";
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2 py-1">
+    <div className="flex flex-col gap-1.5 rounded-md border border-warning/40 bg-warning/5 px-2 py-1">
       <div className="flex items-start gap-1.5">
-        <ShieldQuestion className="mt-px size-3.5 shrink-0 text-amber-500" />
+        <ShieldQuestion className="mt-px size-3.5 shrink-0 text-warning" />
         <span className="min-w-0">
           <span className="font-medium">
             {approval
