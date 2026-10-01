@@ -1,6 +1,6 @@
 # Codex
 
-Codex is the second harness seamux drives, and it differs from Claude Code almost everywhere: it has no `claude agents`, cmux's view of it goes stale, and it takes input the other way round. So everything a card says about a Codex session comes from its transcript. Measured against codex-cli 0.156.1 under cmux 0.64.23, launched through `cmux-codex-wrapper` with cmux's Codex hooks installed (`cmux hooks setup codex`), unless an entry says otherwise.
+Codex is the second harness seamux drives, and it differs from [Claude Code](claude-code.md) almost everywhere: it has no `claude agents`, cmux's view of it goes stale, and it takes input the other way round. So everything a card says about a Codex session comes from its transcript. Measured against codex-cli 0.156.1 under cmux 0.64.23, launched through `cmux-codex-wrapper` with cmux's Codex hooks installed (`cmux hooks setup codex`), unless an entry says otherwise.
 
 In seamux, Codex's reading is [codex.server.ts](../app/lib/codex.server.ts), and its driving is the `codex` entry in `HARNESSES` in [harness.server.ts](../app/lib/harness.server.ts). A new harness follows the same shape, and arrives measured: its findings get a page like this one before its engine is written ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 

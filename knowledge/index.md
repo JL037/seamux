@@ -8,6 +8,7 @@ Read the domain before you touch the code that leans on it. When a tool surprise
 
 | Domain | What it covers |
 | --- | --- |
+| [Claude Code](claude-code.md) | The harness seamux was built around: `claude agents`, launching with a chosen id, and every Claude Code entry in the other domains |
 | [Session state](session-state.md) | Whether a Claude Code chat is working, waiting or gone: `claude agents`, its `status` and `waitingFor`, `/clear`, resuming |
 | [Background sessions](background-sessions.md) | Chats moved to the background, `claude attach`, and what `claude agents` can't tell apart |
 | [Transcripts](transcripts.md) | What Claude Code writes to its `.jsonl` transcripts, and what it leaves out |
@@ -59,9 +60,9 @@ expected instead. Exact strings, codes and key names in backticks.
 
 ### Where it goes
 
-Put an entry in the domain a reader would look in first, and link to it from any other domain it touches. If two would do equally well, choose the one whose code it changes.
+Put an entry in the domain a reader would look in first, and link to it from any other domain it touches. If two would do equally well, choose the one whose code it changes. An entry about one harness in a shared domain also gets a line on that harness's page, so [Claude Code](claude-code.md) and [Codex](codex.md) each list everything known about them.
 
-Start a new domain file when a topic has three or more entries that sit awkwardly where they are, or when a new tool arrives. A new agent harness gets its own file, as [Codex](codex.md) has, and [CONTRIBUTING.md](../CONTRIBUTING.md) asks for its findings before its engine. A new file opens with one paragraph on what it covers and which tools it was measured against, then the entries. Add it to the table above.
+Start a new domain file when a topic has three or more entries that sit awkwardly where they are, or when a new tool arrives. Each agent harness has its own file, as [Claude Code](claude-code.md) and [Codex](codex.md) do, holding what belongs to it alone and linking every entry about it in the shared domains. A new harness gets one too, and [CONTRIBUTING.md](../CONTRIBUTING.md) asks for its findings before its engine. A new file opens with one paragraph on what it covers and which tools it was measured against, then the entries. Add it to the table above.
 
 ### When a tool changes
 
