@@ -1,7 +1,7 @@
 // What seamux's write verbs (app/lib/drive.server.ts) send to cmux: which
 // methods, with which params, in which order. Each is the contract a working
 // board depends on, and each was measured against cmux and Claude Code by
-// hand first (docs/findings.md); these keep it from drifting.
+// hand first (knowledge/); these keep it from drifting.
 
 import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";

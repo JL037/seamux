@@ -79,7 +79,7 @@ export const MAX_MACRO = 20_000;
 
 // The agents seamux can launch and drive, each through its cmux wrapper.
 // cmux integrates more (`cmux hooks setup` lists them), but only these have
-// been measured end to end; docs/findings.md has what each one does.
+// been measured end to end; knowledge/ has what each one does.
 export const ENGINES = ["claude", "codex"] as const;
 export type Engine = (typeof ENGINES)[number];
 

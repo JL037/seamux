@@ -1,7 +1,7 @@
 // How seamux types into a chat: what each harness (Claude Code, Codex) needs
 // to know, and a Session, the handle every macro drives a chat through. The
 // key sequences live here and in macros.server.ts, nowhere else, so a fix to
-// one reaches every verb that uses it. docs/findings.md has the measurements
+// one reaches every verb that uses it. knowledge/prompt-box.md has the measurements
 // behind each.
 
 import { join } from "node:path";

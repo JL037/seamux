@@ -52,7 +52,7 @@ export function attachmentName(name: string): string {
 
 // The label as sent, with the file's own name, since the path is a random
 // one. Codex answered "I can't access the image from that path" to a bare
-// path, and opened it once told to: docs/findings.md.
+// path, and opened it once told to: knowledge/prompt-box.md.
 export function sentAttachment(
   kind: AttachmentKind,
   n: number,

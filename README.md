@@ -102,7 +102,7 @@ Whoever can reach the board can type into every session on your Mac, and those s
 
 ## Working on seamux
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setting up, checking a change, and how the board you run picks it up. `docs/findings.md` lists the Claude Code and cmux behaviours that turned out to differ from their docs; read it before relying on either tool's documentation.
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setting up, checking a change, and how the board you run picks it up. [knowledge/](knowledge/index.md) records what Claude Code, Codex, cmux and the rest actually do, measured, where it differs from their docs; read the domain you're touching before relying on any tool's documentation.
 
 ## License
 

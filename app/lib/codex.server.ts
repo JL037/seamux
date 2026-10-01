@@ -1,6 +1,6 @@
 // Reading Codex sessions from disk. Codex has no `claude agents --json`, and
 // cmux's lifecycle for it goes stale, so everything a card says about a
-// Codex session comes from its transcript. docs/findings.md has what was
+// Codex session comes from its transcript. knowledge/codex.md has what was
 // measured, against codex-cli 0.156.1. Imported by drive.server.ts, which
 // scripts/seamux.ts runs under plain Node: relative imports with extensions.
 

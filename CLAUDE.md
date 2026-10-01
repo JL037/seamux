@@ -10,7 +10,7 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 - **Always pass a surface to cmux.** cmux RPCs default to the caller's own surface, which is whatever terminal seamux runs in. The fake cmux in the tests refuses a surface call without one.
 - **Blur what a chat says.** Any element that shows a session's content or where it runs (names, paths, branches, how long ago, prompts, replies, questions, files) carries the `sensitive` class, which the Debug tab's screenshot blur covers.
 - **Ship a changeset with every change someone running seamux would notice.** See Release notes below: `patch` or `minor`, never `major` while seamux is `0.y.z`.
-- **Verify tool behaviour by running it.** Several documented cmux and Claude Code behaviours turned out wrong; `docs/findings.md` lists them, and new ones go there.
+- **Verify tool behaviour by running it.** Several documented cmux and Claude Code behaviours turned out wrong. `knowledge/` records what each tool actually does, one file per domain; read `knowledge/index.md` before adding to it, and add every new finding there, in the same commit as the code that depends on it.
 
 ## Layout
 
@@ -18,6 +18,7 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 - `app/lib/paths.server.ts`: where the package is, and `SEAMUX_HOME`, where `.env`, `.seamux.json` and `data/` live: the checkout, or `~/.seamux` for an installed package. Read state from there, never from `process.cwd()` or a path relative to a module.
 - `hooks/subagent-event.ts`, everything under `scripts/` and `server/serve.ts` run under plain Node with type stripping in a checkout, and so does everything they import: relative imports with `.ts` extensions, `import type`, no enums, no constructor parameter properties (`constructor(readonly x: T)`), which Node rejects and neither tsc nor the tests catch. `npm run build` bundles them into `dist/` (`scripts/build-dist.ts`) for an installed package, where Node won't strip types. `bin/seamux` runs the TypeScript in a checkout and `dist/` otherwise.
 - `server/serve.ts`: the compiled board, which the supervisor runs in place of the dev server for an installed package, or with `SEAMUX_COMPILED=1` (`npm start`).
+- `knowledge/`: what seamux has measured of Claude Code, Codex, cmux and the rest, one file per domain, cross-linked, with the code that depends on each finding. `knowledge/index.md` lists the domains and says how to keep them; `tests/knowledge.test.ts` checks its links and that every entry names the versions it was measured on.
 - `skills/seamux-dispatch/SKILL.md` is a template; `scripts/setup.ts` renders it into `~/.claude/skills`, with the subagent hooks, whenever the board starts (and on `seamux setup`).
 
 ## Working on seamux
@@ -52,5 +53,5 @@ On GitHub, `release-version.yml` keeps a "Version Packages" pull request open th
 ## Checking changes
 
 - `npm run typecheck` and `npm test`. `tests/` runs against `tests/fake-cmux.ts`, a stand-in for cmux's control socket and `cmux sessions list`, and never reaches the real cmux: `tests/setup.ts` replaces the socket path and drops the capability token. CI runs it.
-- `npm run test:cmux`, from a cmux terminal, checks the same contract against the real cmux: `tests-cmux/` is the vendor contract, and never runs in CI. Run it after cmux updates, and whenever you change a cmux call. When it fails, cmux changed: update seamux, the fake to match what cmux now does (its refusals use cmux's own codes and words), and `docs/findings.md`. A new cmux call gets all three: a contract test in `tests-cmux/`, the method in the fake, and a test in `tests/` of what seamux sends.
+- `npm run test:cmux`, from a cmux terminal, checks the same contract against the real cmux: `tests-cmux/` is the vendor contract, and never runs in CI. Run it after cmux updates, and whenever you change a cmux call. When it fails, cmux changed: update seamux, the fake to match what cmux now does (its refusals use cmux's own codes and words), and `knowledge/cmux.md`. A new cmux call gets all three: a contract test in `tests-cmux/`, the method in the fake, and a test in `tests/` of what seamux sends.
 - Try new cmux or Claude Code calls against a throwaway session in its own cmux workspace, never against the user's live sessions, and close the workspace afterwards.

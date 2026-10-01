@@ -5,7 +5,7 @@
 // request in place of a reply.
 //
 // A sign-in runs without a terminal, so it can be finished from any device.
-// Measured against Claude Code 2.1.283 and Codex 0.156.1, in docs/findings.md:
+// Measured against Claude Code 2.1.283 and Codex 0.156.1, in knowledge/signing-in.md:
 // - `claude auth login` with a pipe for stdin prints a sign-in URL whose
 //   page shows a code, then reads that code from stdin. It also hands
 //   `BROWSER` a second URL, whose callback is a port it listens on here, so

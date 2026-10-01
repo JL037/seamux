@@ -13,7 +13,7 @@ seamux is a board over cmux: it reads what cmux, Claude Code and Codex already r
 
 One issue, one feature. If a proposal covers two things that need different approaches, split it.
 
-A new agent arrives measured, not configured: findings in [docs/findings.md](docs/findings.md) first (what cmux reports for it, where its transcripts are, how it takes input, and the versions measured), then the engine. A pull request that only adds findings is welcome on its own.
+A new agent arrives measured, not configured: findings in a page of its own under [knowledge/](knowledge/index.md) first (what cmux reports for it, where its transcripts are, how it takes input, and the versions measured), as [Codex](knowledge/codex.md) has, then the engine. A pull request that only adds findings is welcome on its own.
 
 If an agent drafts your issue or pull request, point it at this file and `CLAUDE.md`.
 
@@ -38,7 +38,7 @@ For a pull request, push your branch and open the PR against `main` instead of l
   - **`tests-cmux/`** (`npm run test:cmux`) is the vendor contract: the same behaviour checked against a real cmux, from a cmux terminal. It works only in throwaway workspaces it creates and closes, and never runs in CI. Run it after updating cmux; a failure means cmux changed something seamux relies on.
 - A new cmux call needs a contract test in `tests-cmux/`, the method taught to the fake (which refuses methods it doesn't know), and a test in `tests/` of what seamux sends.
 - Try a new cmux or Claude Code call against a throwaway session in its own cmux workspace, never against sessions you care about, and close the workspace afterwards.
-- Several documented cmux and Claude Code behaviours turned out wrong when seamux ran them. [docs/findings.md](docs/findings.md) lists them. Add to it when a tool surprises you, and say which version you measured.
+- Several documented cmux and Claude Code behaviours turned out wrong when seamux ran them. [knowledge/](knowledge/index.md) records them by domain, and says how to add to it. Add to it when a tool surprises you, and say which version you measured.
 - Prose is checked with [Taskless](https://taskless.io); its rules are in `.taskless/`.
 
 ## Release notes
