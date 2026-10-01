@@ -49,3 +49,7 @@ Send a known amount and count what arrives: "a 1,503-character message arrived a
 ## Try it in Playwright's WebKit
 
 Safari's caching differs from Chrome's, and a phone is slow to iterate on. Playwright's WebKit stands in for Safari well enough to show a difference, as it did for [`Clear-Site-Data`](vite-and-react-router.md#safari-honours-clear-site-data-cache-and-chrome-ignored-it-on-127001). Confirm on the device before you rely on it.
+
+## Never build a stand-in cmux app
+
+A folder named `cmux.app`, or shaped like one, with an executable in `Contents/MacOS` is taken by macOS for cmux itself. Run anything from it, even a copy of `/bin/sleep`, and macOS kills it and tells the user "“cmux” is damaged and can't be opened. You should move it to the Trash.", which looks like cmux broke. To make cmux's app look like it is running, put a stand-in `ps` first on `PATH` instead, as `tests/board.test.ts` does.

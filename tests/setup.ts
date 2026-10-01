@@ -28,9 +28,10 @@ process.env.SEAMUX_TEST_CMUX_STATE = join(root, "cmux-sessions.json");
 process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
 mkdirSync(process.env.HOME, { recursive: true });
 // cmux's app bundle, which seamux runs the `cmux` command from when it isn't
-// on PATH, holds the fake one too, so no test runs the real one. Not named
-// ".app": once a test puts an app in it, macOS kills anything run from a
-// folder named like a bundle whose signature doesn't hold.
+// on PATH, holds the fake one too, so no test runs the real one. Never an
+// app: macOS takes an unsigned folder named cmux.app with an executable in
+// Contents/MacOS for cmux itself, says "cmux is damaged", and kills what
+// runs from it.
 process.env.SEAMUX_CMUX_APP = join(root, "cmux-app");
 const bundled = join(process.env.SEAMUX_CMUX_APP, "Contents/Resources/bin");
 mkdirSync(bundled, { recursive: true });
