@@ -176,6 +176,7 @@ export async function sendMessage(sessionId: string, text: string) {
   const live = (await listLive()).get(sessionId);
   if (!live) throw new Error("This session is not running in a cmux surface");
   const { surface, engine } = live;
+  if (engine === "claude") await refuseShellMode(surface);
   if (engine === "codex" || /\t/.test(text)) {
     await enterText(surface, text, true);
   } else {
@@ -209,25 +210,46 @@ async function confirmSent(surface: Surface, text: string) {
   }
 }
 
+// A prompt box led by "!" is in shell mode, where Enter runs what it holds
+// as a shell command, the user's draft and anything seamux typed after it.
+// So nothing goes in until the user clears it.
+async function refuseShellMode(surface: Surface) {
+  if (readPromptBox(await readScreen(surface))?.shell) {
+    throw new Error(
+      "The chat's prompt box is in shell mode (it starts with !), where this would run as a shell command. Clear the box in the chat, then try again",
+    );
+  }
+}
+
 // What the comparison leaves out: whitespace, since the box wraps lines, and
 // invisible characters, since Claude Code strips a lone one from the box and
 // holds the message for another Enter, saying "Removed 1 invisible character".
 const UNSEEN = /[\s\p{Cf}\p{Mn}\p{Me}\u115F\u1160\u3164\uFFA0]/gu;
 
-// Whether Claude Code's prompt box, the lines between the last two rules on
-// the screen with "❯" leading the first, ends with the end of `text`.
-export function endsPromptBox(screen: string, text: string): boolean {
+// Claude Code's prompt box: the lines between the last two rules on the
+// screen, the first led by "❯", or by "!" in shell mode. Its text leaves out
+// what UNSEEN matches.
+export function readPromptBox(
+  screen: string,
+): { shell: boolean; text: string } | null {
   const lines = screen.split("\n").map((l) => l.trim());
   const rules = lines.flatMap((l, i) => (/^[─━▔]{8,}/.test(l) ? [i] : []));
   const [top, bottom] = rules.slice(-2);
-  if (bottom === undefined || !lines[top + 1]?.startsWith("❯")) return false;
-  const box = lines
+  const lead = lines[top + 1]?.[0];
+  if (bottom === undefined || (lead !== "❯" && lead !== "!")) return null;
+  const text = lines
     .slice(top + 1, bottom)
     .join("")
-    .replace(/^❯/, "")
+    .slice(1)
     .replace(UNSEEN, "");
+  return { shell: lead === "!", text };
+}
+
+// Whether Claude Code's prompt box ends with the end of `text`.
+export function endsPromptBox(screen: string, text: string): boolean {
+  const box = readPromptBox(screen);
   const tail = Array.from(text.replace(UNSEEN, "")).slice(-20).join("");
-  return tail.length > 0 && box.endsWith(tail);
+  return box !== null && tail.length > 0 && box.text.endsWith(tail);
 }
 
 // Esc: stops the current turn, keeps the session and its history.
@@ -418,7 +440,10 @@ export async function answerDialog(
 const EXIT_WAIT_MS = 10_000;
 
 export async function closeChat(sessionId: string) {
-  const surface = await surfaceFor(sessionId);
+  const live = (await listLive()).get(sessionId);
+  if (!live) throw new Error("This session is not running in a cmux surface");
+  const { surface, engine } = live;
+  if (engine === "claude") await refuseShellMode(surface);
   await rpc("terminal.paste", { ...target(surface), text: "/exit" });
   await rpc("surface.send_key", { ...target(surface), key: "enter" });
 

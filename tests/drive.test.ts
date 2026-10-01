@@ -188,6 +188,15 @@ describe("sendMessage", () => {
     ]);
   });
 
+  it("refuses a prompt box in shell mode, where Enter would run it as a shell command", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = promptBox("x").replace("❯ x", "! Any thoughts?");
+    await expect(sendMessage("s", "fix the login")).rejects.toThrow(
+      /shell mode/,
+    );
+    expect(surface.input).toEqual([]);
+  });
+
   it("always pastes into Codex, which folds long typed input", async () => {
     const { surface } = cmux.addSession("s", {
       agent: "codex",
@@ -348,6 +357,16 @@ describe("closeChat", () => {
       }),
     ]);
     expect(workspace.surfaces).toEqual([other]);
+  });
+
+  it("refuses a prompt box in shell mode rather than type /exit into it", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = ["─".repeat(40), "! Any thoughts?", "─".repeat(40)].join(
+      "\n",
+    );
+    await expect(closeChat("s")).rejects.toThrow(/shell mode/);
+    expect(surface.input).toEqual([]);
+    expect(cmux.calls("workspace.close")).toEqual([]);
   });
 
   it("leaves nothing to close once the workspace closed itself", async () => {
