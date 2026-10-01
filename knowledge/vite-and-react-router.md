@@ -38,3 +38,12 @@ An immutable script came from the cache on reload, and after a page answering wi
 - **Measured:** Playwright's WebKit and Chromium; versions not recorded.
 - **In seamux:** [app/routes/reset.ts](../app/routes/reset.ts), the `/reset` page, sends the header, and the error page links to it.
 - **See also:** [Try it in Playwright's WebKit](measuring.md#try-it-in-playwrights-webkit).
+
+## Vite doesn't always move an import's `?t=` stamp
+
+The dev server rewrites `import "./app.css"` in `root.tsx` to `/app/app.css?t=<last hot update>`. A landing at 15:52 changed `app.css` and the stamp stayed at 14:57, the landing before, so the same URL served a different stylesheet. A fresh start of the dev server drops the stamp altogether, back to a URL served before.
+
+- **Measured:** Vite 8.3.0, React Router 7.18.4, `@tailwindcss/vite` 4.
+- **In seamux:** `bustStylesheet` in [vite.config.ts](../vite.config.ts) adds `?v=<server start>` to the import, in dev only; the compiled board's stylesheet is named by its hash.
+- **See also:** [Cloudflare's edge kept a stylesheet the board had changed](cloudflare-tunnel.md#cloudflares-edge-kept-a-stylesheet-the-board-had-changed).
+

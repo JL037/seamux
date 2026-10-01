@@ -54,3 +54,11 @@ Without one, a request reached the Mac with no login at all. Access is set up se
 
 - **Measured:** cloudflared 2026.9.3.
 - **In seamux:** `checkTunnelRequest` and `verifyAccessToken` in [remote.server.ts](../app/lib/remote.server.ts), in both `remoteGate` and the auth middleware. [CLAUDE.md](../CLAUDE.md) makes it a rule.
+
+## Cloudflare's edge kept a stylesheet the board had changed
+
+After a landing changed `app.css` without moving the stamp Vite puts on its import (see [Vite doesn't always move an import's `?t=` stamp](vite-and-react-router.md#vite-doesnt-always-move-an-imports-t-stamp)), a browser on the tunnel's hostname got the new page and the old stylesheet, stuck through full reloads, while `localhost` served the new one under the same URL. Vite answers with `Cache-Control: no-cache`; Cloudflare caches by extension, `.css` and `.js` among them, and a browser's reload doesn't reach past the edge. Not measured: the `cf-cache-status` of the stale response, since Access stands in front of every request from here.
+
+- **Measured:** cloudflared 2026.9.3, Vite 8.3.0, React Router 7.18.4.
+- **In seamux:** `remoteGate` in [remote.server.ts](../app/lib/remote.server.ts) sends `Cloudflare-CDN-Cache-Control: no-store` with everything it answers through the tunnel, which the edge reads ahead of `Cache-Control`. What the edge already holds stays until it expires or is purged, which `bustStylesheet` in [vite.config.ts](../vite.config.ts) gets past for the stylesheet.
+

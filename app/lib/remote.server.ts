@@ -407,6 +407,10 @@ export async function checkTunnelRequest(
 
 // --- The gate every request passes ---------------------------------------
 
+// The header only Cloudflare's edge reads, ahead of Cache-Control, and drops
+// before the response goes on to the browser.
+export const EDGE_CACHE_HEADER = "Cloudflare-CDN-Cache-Control";
+
 // checkRequest, then the Access token for a request through the tunnel. As
 // middleware ahead of everything that answers requests: in dev, Vite's own
 // (modules, assets, files under the checkout) before the board's auth
@@ -426,7 +430,10 @@ export function remoteGate(dir: string) {
     if (gate.verdict === "allowed") return next();
     if (gate.verdict === "login") {
       res.statusCode = 401;
-      res.setHeader("WWW-Authenticate", 'Basic realm="seamux", charset="UTF-8"');
+      res.setHeader(
+        "WWW-Authenticate",
+        'Basic realm="seamux", charset="UTF-8"',
+      );
       res.end("Authentication required");
       return;
     }
@@ -439,6 +446,10 @@ export function remoteGate(dir: string) {
       res.end(forbiddenPage(gate.reason, false));
       return;
     }
+    // Cloudflare's edge caches by extension, .css and .js among them, and
+    // went on serving a stylesheet the dev server had since changed under the
+    // same URL. The board is live: nothing it answers is stored there.
+    res.setHeader(EDGE_CACHE_HEADER, "no-store");
     const token = req.headers[ACCESS_HEADER];
     checkTunnelRequest(
       dir,

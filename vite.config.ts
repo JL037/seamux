@@ -61,6 +61,28 @@ function revalidateDeps(): Plugin {
   };
 }
 
+// Vite stamps an import with the time of its module's last hot update, and
+// a stylesheet can change without one: a landing changed app.css's tokens
+// and the stamp stayed put, so the same URL served new content, and a cache
+// keyed by URL, like Cloudflare's edge, kept the old. The stylesheet's
+// import carries the server's start time as well, so every start is a new
+// URL too.
+function bustStylesheet(): Plugin {
+  const started = Date.now().toString(36);
+  return {
+    name: "seamux-bust-stylesheet",
+    apply: "serve",
+    enforce: "pre",
+    transform(code, id) {
+      if (!id.endsWith("/app/root.tsx")) return;
+      return code.replace(
+        'import "./app.css";',
+        `import "./app.css?v=${started}";`,
+      );
+    },
+  };
+}
+
 // Before React Router loads .env again, so a variable deleted from it goes.
 forgetDotenv();
 
@@ -73,7 +95,13 @@ const lan = lanWanted(SEAMUX_HOME);
 process.env[LISTEN_ENV] = lan ? "lan" : "local";
 
 export default defineConfig({
-  plugins: [remoteAccess(), revalidateDeps(), tailwindcss(), reactRouter()],
+  plugins: [
+    remoteAccess(),
+    revalidateDeps(),
+    bustStylesheet(),
+    tailwindcss(),
+    reactRouter(),
+  ],
   // Bound to localhost only, unless mDNS is on: this server spawns processes
   // and reads every transcript. The Cloudflare tunnel connects from this Mac.
   server: {

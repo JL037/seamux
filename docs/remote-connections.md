@@ -65,6 +65,8 @@ While it's on, the supervisor runs `cloudflared`, restarts it if it exits, and w
 
 A request through the tunnel must carry a valid Cloudflare Access token for that team and application, including requests for Vite's own files. It's then let in without the HTTP Basic password. Without a valid token it gets a 403, so if the Access application is ever removed, the board stays shut. A refused request gets a Forbidden page that says why, and the board logs it.
 
+Everything the board answers through the tunnel tells Cloudflare not to cache it, since the board is live. If a page through the tunnel still looks older than the same page on `localhost`, purge the hostname's cache in the Cloudflare dashboard.
+
 ## Where the switches are kept
 
 In `.seamux.json`, so they survive restarts:
