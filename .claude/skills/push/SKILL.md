@@ -30,7 +30,7 @@ Go through those commits against CLAUDE.md's Release notes. A commit needs a cha
 
 A commit is covered when it, or another unpushed commit on the same change, adds or edits a `.changeset/*.md` that describes it. For each noticeable change that isn't covered:
 
-- In a worktree: write the changeset by hand (`patch` or `minor`, never `major`; extend an existing changeset for the same change rather than adding a second), commit it, and `npm run land`. Then continue.
+- In a worktree: write the changeset by hand (`patch` or `minor`, never `major`; extend an existing changeset for the same change rather than adding a second), commit it, and `npm run land`. Then continue. If land refuses because main is missing GitHub's commits, leave the changeset committed and go on to step 3: the merge there lands it along with them.
 - In the main checkout: stop, and tell the user which change needs one.
 
 Say in a line each which commits you judged noticeable and which not, so the user can overrule you.
@@ -51,6 +51,8 @@ git log --oneline main..origin/main   # what GitHub has that local main lacks
 
   If `BRANCH` is `main` (a session running in the main checkout), stop and ask the user instead: merging there edits what the board serves.
 
+`npm run land` does this check too: it fetches origin/main and refuses to land anything while local main lacks some of its commits, and points here. A branch that contains origin/main, such as this merge, is the exception, so this is also how to unblock a land refused that way.
+
 ## 4. Resolve conflicts, if any
 
 If the merge conflicts, resolve it when the right answer is clear from both sides (`git diff`, and `git log -p` of the commits involved): keep both intents, then `git add` and `git commit --no-edit`. If the right resolution is a judgement call, `git merge --abort` and ask the user; main is still untouched.
@@ -61,7 +63,7 @@ Then land the merge, which typechecks it, fast-forwards main, and restarts the b
 npm run land
 ```
 
-Land never rebases a merge, since that would turn origin's commits into copies that main could never be pushed over. If main moved since the merge, land stops and says so: `git merge --no-edit main` on this branch, and land again.
+Land lets this branch past its origin/main check, since main has everything GitHub has once it lands. It never rebases a merge, or any branch carrying origin's commits, since that would turn them into copies that main could never be pushed over. If main moved since the merge, land stops and says so: `git merge --no-edit main` on this branch, and land again. Land never merges or pulls by itself.
 
 ## 5. Push
 

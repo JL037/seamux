@@ -7,18 +7,26 @@
 // Landings are serialised by a lock, so many agents can land at once: each
 // waits its turn, then rebases onto main as it is at that moment.
 //
-// 1. Rebases the branch onto main in its own worktree, so main only ever
+// 1. Fetches origin/main and refuses to land while main lacks any of its
+//    commits, such as GitHub's release commit: landing on top of a main
+//    that's behind is how local main and GitHub drift apart. A branch that
+//    already contains origin/main, such as the push skill's merge of it,
+//    lands anyway, since main has everything once it does. Land never merges
+//    or pulls by itself; it only fast-forwards main. If the fetch fails, as
+//    it does offline, it warns and lands without the check.
+// 2. Rebases the branch onto main in its own worktree, so main only ever
 //    fast-forwards. A conflict stops here, with main untouched. A branch
-//    already on top of main isn't rebased, and one with a merge commit never
-//    is: a rebase flattens the merge into copies of the commits it brought
-//    in, so a merge of origin/main would leave main with copies of GitHub's
-//    commits, which it could then never be pushed over.
-// 2. Typechecks the rebased branch in its worktree.
-// 3. Fast-forwards main. The board picks the change up by hot reload.
-// 4. If dependencies changed, reinstalls them and restarts the board. It
+//    already on top of main isn't rebased, and one with a merge commit or
+//    origin/main's commits never is: a rebase flattens the merge into copies
+//    of the commits it brought in, so a merge of origin/main would leave main
+//    with copies of GitHub's commits, which it could then never be pushed
+//    over.
+// 3. Typechecks the rebased branch in its worktree.
+// 4. Fast-forwards main. The board picks the change up by hot reload.
+// 5. If dependencies changed, reinstalls them and restarts the board. It
 //    restarts it too when server modules changed, since hot reload keeps
 //    their in-memory state, such as the queue's timer, from before.
-// 5. Checks the board still answers.
+// 6. Checks the board still answers.
 //
 // It never deletes the branch or its worktree.
 
@@ -121,7 +129,6 @@ function worktreeFor(branch: string): string | null {
   return null;
 }
 
-// Tracked changes only; untracked files do not block a fast-forward.
 // Whether `commit` is in `of`'s history.
 function isAncestor(cwd: string, commit: string, of: string): boolean {
   try {
@@ -132,6 +139,7 @@ function isAncestor(cwd: string, commit: string, of: string): boolean {
   }
 }
 
+// Tracked changes only; untracked files do not block a fast-forward.
 function isClean(cwd: string): boolean {
   return git(cwd, "status", "--porcelain", "--untracked-files=no") === "";
 }
@@ -180,14 +188,43 @@ async function main() {
   }
   if (!isClean(REPO)) fail(`${REPO} has uncommitted changes.`);
 
+  step("Fetching origin/main");
+  let fetched = false;
+  try {
+    execFileSync("git", ["fetch", "origin", "main"], {
+      cwd: REPO,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    fetched = true;
+  } catch {
+    console.warn(
+      "! Couldn't fetch origin/main, so landing without checking main has everything GitHub has.",
+    );
+  }
+  // Whether the branch carries origin/main's commits, which a rebase would
+  // copy. Unknown, and taken as not, when the fetch fails.
+  let hasOrigin = false;
+  if (fetched) {
+    hasOrigin = isAncestor(REPO, "origin/main", branch);
+    const missing = git(REPO, "log", "--oneline", "main..origin/main");
+    if (missing && !hasOrigin) {
+      fail(
+        `main is missing commits GitHub has:\n\n${missing}\n\nBring them into main first, as the push skill's step 3 does: in a worktree, merge origin/main into a branch on main (git merge --ff-only main, then git merge --no-edit origin/main) and land that branch. Then land ${branch} again.`,
+      );
+    }
+  }
+
   const worktree = worktreeFor(branch);
   if (worktree) {
     if (!isClean(worktree)) fail(`${worktree} has uncommitted changes.`);
     if (isAncestor(worktree, "main", "HEAD")) {
       step(`${branch} is already on top of main`);
-    } else if (git(worktree, "rev-list", "--merges", "main..HEAD") !== "") {
+    } else if (
+      hasOrigin ||
+      git(worktree, "rev-list", "--merges", "main..HEAD") !== ""
+    ) {
       fail(
-        `${branch} has a merge commit and main has moved since, and a rebase would flatten the merge into copies of what it merged. Merge main into it in ${worktree} (git merge --no-edit main), then land again.`,
+        `${branch} has ${hasOrigin ? "origin/main's commits" : "a merge commit"} and main has moved since, and a rebase would turn ${hasOrigin ? "them" : "what it merged"} into copies. Merge main into it in ${worktree} (git merge --no-edit main), then land again.`,
       );
     } else {
       step(`Rebasing ${branch} onto main in ${worktree}`);
