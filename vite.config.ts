@@ -1,6 +1,7 @@
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, unwatchFile, watchFile } from "node:fs";
+import { join } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 
 import { forgetDotenv } from "./app/lib/credentials.ts";
@@ -12,6 +13,7 @@ import {
   remoteDomain,
   remoteGate,
 } from "./app/lib/remote.server.ts";
+import { landedFile, readLanding } from "./scripts/landed.ts";
 
 // WSL does not deliver file events for Windows drives under /mnt/, so hot
 // reload has to poll there. SEAMUX_POLL=1 forces it anywhere.
@@ -66,7 +68,8 @@ function revalidateDeps(): Plugin {
 // and the stamp stayed put, so the same URL served new content, and a cache
 // keyed by URL, like Cloudflare's edge, kept the old. The stylesheet's
 // import carries the server's start time as well, so every start is a new
-// URL too.
+// URL too. Not as `v=`, which Vite takes for a pre-bundled dependency's
+// version and serves as immutable for a year.
 function bustStylesheet(): Plugin {
   const started = Date.now().toString(36);
   return {
@@ -77,8 +80,33 @@ function bustStylesheet(): Plugin {
       if (!id.endsWith("/app/root.tsx")) return;
       return code.replace(
         'import "./app.css";',
-        `import "./app.css?v=${started}";`,
+        `import "./app.css?boot=${started}";`,
       );
+    },
+  };
+}
+
+// Vite's file watcher missed a landing altogether: main had the new files,
+// and the dev server kept serving the old modules, and the old stylesheet,
+// until it restarted. `npm run land` records what it changed, and this
+// replays each file to the watcher as a change, so hot reload sees every
+// landing. A file the watcher did see is updated twice, which costs nothing.
+// Polled rather than watched, since the watcher is what can't be trusted.
+function replayLandings(): Plugin {
+  return {
+    name: "seamux-replay-landings",
+    apply: "serve",
+    configureServer(server) {
+      const file = landedFile(SEAMUX_HOME);
+      const replay = (now: { mtimeMs: number }, then: { mtimeMs: number }) => {
+        if (now.mtimeMs === 0 || now.mtimeMs === then.mtimeMs) return;
+        for (const name of readLanding(SEAMUX_HOME)) {
+          const path = join(server.config.root, name);
+          server.watcher.emit(existsSync(path) ? "change" : "unlink", path);
+        }
+      };
+      watchFile(file, { interval: 500 }, replay);
+      server.httpServer?.once("close", () => unwatchFile(file, replay));
     },
   };
 }
@@ -99,6 +127,7 @@ export default defineConfig({
     remoteAccess(),
     revalidateDeps(),
     bustStylesheet(),
+    replayLandings(),
     tailwindcss(),
     reactRouter(),
   ],

@@ -22,10 +22,13 @@
 //    with copies of GitHub's commits, which it could then never be pushed
 //    over.
 // 3. Typechecks the rebased branch in its worktree.
-// 4. Fast-forwards main. The board picks the change up by hot reload.
+// 4. Fast-forwards main, and records the files it changed in
+//    data/board.landed, which the dev server replays as file changes: hot
+//    reload picks them up even when its file watcher missed the landing.
 // 5. If dependencies changed, reinstalls them and restarts the board. It
 //    restarts it too when server modules changed, since hot reload keeps
-//    their in-memory state, such as the queue's timer, from before.
+//    their in-memory state, such as the queue's timer, from before, and when
+//    the dev server's own config did.
 // 6. Checks the board still answers.
 //
 // It never deletes the branch or its worktree.
@@ -46,6 +49,7 @@ import {
   boardUrl,
   requestRestart,
 } from "./supervise.ts";
+import { recordLanding } from "./landed.ts";
 
 const LOCK_WAIT_MS = 20 * 60 * 1000;
 
@@ -266,17 +270,25 @@ async function main() {
   }
 
   const changed = git(REPO, "diff", "--name-only", before, after).split("\n");
+  recordLanding(REPO, changed);
   // The lockfile changes whenever dependencies do; package.json alone
   // also changes for scripts, which need no reinstall.
   const depsChanged = changed.includes("package-lock.json");
   // A hot-reloaded server module starts over beside the old one's timers
-  // and maps, which then disagree until the board restarts.
-  const serverChanged = changed.some((f) => f.endsWith(".server.ts"));
+  // and maps, which then disagree until the board restarts. Vite restarts
+  // itself over its config only if its watcher sees the change, which it
+  // can miss, and the config imports what replays a landing.
+  const serverChanged = changed.some(
+    (f) =>
+      f.endsWith(".server.ts") ||
+      f === "vite.config.ts" ||
+      f === "scripts/landed.ts",
+  );
   if (depsChanged) {
     step("Dependencies changed: reinstalling and restarting the board");
     run(REPO, "npm", "ci", "--no-audit", "--no-fund");
   } else if (serverChanged) {
-    step("Server modules changed: restarting the board");
+    step("Server code changed: restarting the board");
   }
   if (depsChanged || serverChanged) {
     // `npm run seamux` picks this up within a second.

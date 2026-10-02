@@ -44,6 +44,20 @@ An immutable script came from the cache on reload, and after a page answering wi
 The dev server rewrites `import "./app.css"` in `root.tsx` to `/app/app.css?t=<last hot update>`. A landing at 15:52 changed `app.css` and the stamp stayed at 14:57, the landing before, so the same URL served a different stylesheet. A fresh start of the dev server drops the stamp altogether, back to a URL served before.
 
 - **Measured:** Vite 8.3.0, React Router 7.18.4, `@tailwindcss/vite` 4.
-- **In seamux:** `bustStylesheet` in [vite.config.ts](../vite.config.ts) adds `?v=<server start>` to the import, in dev only; the compiled board's stylesheet is named by its hash.
-- **See also:** [Cloudflare's edge kept a stylesheet the board had changed](cloudflare-tunnel.md#cloudflares-edge-kept-a-stylesheet-the-board-had-changed).
+- **In seamux:** `bustStylesheet` in [vite.config.ts](../vite.config.ts) adds `?boot=<server start>` to the import, in dev only; the compiled board's stylesheet is named by its hash.
+- **See also:** [Cloudflare's edge kept a stylesheet the board had changed](cloudflare-tunnel.md#cloudflares-edge-kept-a-stylesheet-the-board-had-changed), and [Vite's file watcher missed a landing](#vites-file-watcher-missed-a-landing), which leaves every stamp where it was.
 
+## Vite's file watcher missed a landing
+
+After `npm run land` fast-forwarded main, the files on disk were new and the dev server kept serving the old ones: `dispatch-bar.tsx` without the landed change, its importers still stamped with the landing before, and a stylesheet without the Tailwind classes the change used. It stayed that way through reloads, on `localhost` as much as on a phone, until the board restarted. The landing before it, half an hour earlier on the same server, was picked up. A throwaway Vite project with its watcher off (`server.watch: null`) shows the cure: emitting `change` for a file on `server.watcher` updates it as an edit would, a new stamp on its importers and the stylesheet's, and a stylesheet regenerated with the file's classes.
+
+- **Measured:** macOS 26.5.1, Vite 8.3.0, React Router 7.18.4, `@tailwindcss/vite` 4.3.3. Why the watcher missed it is not known.
+- **In seamux:** [scripts/land.ts](../scripts/land.ts) records the files a landing changed in `data/board.landed` ([scripts/landed.ts](../scripts/landed.ts)); `replayLandings` in [vite.config.ts](../vite.config.ts) polls that file and emits a change for each.
+
+## Vite serves any `v=` query as immutable
+
+A module requested with a `v=` query goes out as `Cache-Control: max-age=31536000,immutable`, as the pre-bundled dependencies do: Vite's `DEP_VERSION_RE` matches `v=` anywhere in the query, whatever the module. `bustStylesheet`'s `?v=` put the stylesheet under it, so a browser was told to keep each start's stylesheet for a year. Any other name, such as `?boot=`, goes out as `no-cache`.
+
+- **Measured:** Vite 8.3.0, `@tailwindcss/vite` 4.3.3.
+- **In seamux:** `bustStylesheet` in [vite.config.ts](../vite.config.ts) uses `?boot=`.
+- **See also:** [Vite serves its pre-bundled dependencies as immutable](#vite-serves-its-pre-bundled-dependencies-as-immutable).
