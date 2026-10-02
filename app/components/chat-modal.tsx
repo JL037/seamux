@@ -25,7 +25,8 @@ import { useSlashMenu } from "~/components/slash-menu";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
 import {
-  MAX_ATTACHMENT_BYTES,
+  fitAttachments,
+  insertLabels,
   MAX_ATTACHMENTS,
   type Attachment,
 } from "~/lib/attachments";
@@ -157,27 +158,17 @@ export function ChatModal({
   // A pasted or dropped file goes in as a label where the cursor is.
   const [attachError, setAttachError] = useState<string | null>(null);
   const attach = (files: File[]) => {
-    const tooBig = files.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
-    const room = MAX_ATTACHMENTS - attachments.length;
-    const fit = files.filter((f) => !tooBig.includes(f)).slice(0, room);
-    setAttachError(
-      tooBig.length > 0
-        ? `Over ${MAX_ATTACHMENT_BYTES >> 20} MB: ${tooBig.map((f) => f.name).join(", ")}`
-        : fit.length < files.length
-          ? `At most ${MAX_ATTACHMENTS} attachments`
-          : null,
-    );
+    const { fit, error } = fitAttachments(files, attachments.length);
+    setAttachError(error);
     if (fit.length === 0) return;
     const el = input.current;
-    const start = el?.selectionStart ?? draft.length;
-    const end = el?.selectionEnd ?? draft.length;
-    const before = draft.slice(0, start);
-    const inserted =
-      (before && !/\s$/.test(before) ? " " : "") +
-      onAttach(fit).join(" ") +
-      " ";
-    onDraftChange(before + inserted + draft.slice(end));
-    const caret = before.length + inserted.length;
+    const { text, caret } = insertLabels(
+      draft,
+      el?.selectionStart ?? draft.length,
+      el?.selectionEnd ?? draft.length,
+      onAttach(fit),
+    );
+    onDraftChange(text);
     requestAnimationFrame(() => el?.setSelectionRange(caret, caret));
   };
 

@@ -1,13 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { SendHorizontal } from "lucide-react";
+import { Paperclip, SendHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
+import { AttachmentChips } from "~/components/attachments";
 import { DirectoryPicker } from "~/components/directory-picker";
 
 import { Button } from "~/components/ui/button";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  attachmentLabel,
+  fitAttachments,
+  insertLabels,
+  kindOf,
+  MAX_ATTACHMENTS,
+  type Attachment,
+} from "~/lib/attachments";
 import { ENGINE_LABELS, ENGINES, type Engine } from "~/lib/config";
 import { useOptimistic } from "~/lib/optimistic";
 import { releaseFocus } from "~/lib/use-focus-restore";
@@ -92,6 +101,52 @@ export function DispatchBar({
   const { spawn, started } = useOptimistic();
   const spawning = useRef("");
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+
+  // Files pasted, dropped or picked, held until the dispatch starts, like a
+  // chat's. Only those whose label is still in the prompt go with it; they
+  // don't outlast a reload, which leaves only their labels.
+  const [held, setHeld] = useState<Attachment[]>([]);
+  const attachments = held.filter((a) => prompt.includes(a.label));
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const attach = (files: File[]) => {
+    const { fit, error } = fitAttachments(files, attachments.length);
+    setAttachError(error);
+    if (fit.length === 0) return;
+    let n = held.reduce((max, a) => Math.max(max, a.n), 0);
+    const added = fit.map((file) => {
+      const kind = kindOf(file.type);
+      n += 1;
+      const label = attachmentLabel(kind, n);
+      return { label, n, kind, file, url: URL.createObjectURL(file) };
+    });
+    setHeld((list) => [...list, ...added]);
+    const el = promptRef.current;
+    const { text, caret } = insertLabels(
+      prompt,
+      el?.selectionStart ?? prompt.length,
+      el?.selectionEnd ?? prompt.length,
+      added.map((a) => a.label),
+    );
+    setPrompt(text);
+    requestAnimationFrame(() => el?.setSelectionRange(caret, caret));
+  };
+  const detach = (label: string) => {
+    setPrompt((p) => p.replace(`${label} `, "").replace(label, ""));
+    setHeld((list) =>
+      list.filter((a) => {
+        if (a.label !== label) return true;
+        URL.revokeObjectURL(a.url);
+        return false;
+      }),
+    );
+  };
+  const heldNow = useRef(held);
+  heldNow.current = held;
+  useEffect(
+    () => () => heldNow.current.forEach((a) => URL.revokeObjectURL(a.url)),
+    [],
+  );
 
   // An unsent directory from before a reload wins over the last one used.
   useEffect(() => {
@@ -101,6 +156,8 @@ export function DispatchBar({
     setCwd(readLastDir());
   }, [setCwd]);
 
+  const promptNow = useRef(prompt);
+  promptNow.current = prompt;
   const pending = dispatcher.state !== "idle";
   const result = dispatcher.data;
   useEffect(() => {
@@ -111,6 +168,14 @@ export function DispatchBar({
       toast.success(
         `Started “${sent.current.trim().split("\n")[0].slice(0, 80)}”`,
         { description: "It is in Working, and fills in once it is up." },
+      );
+      // What was sent goes; what a prompt written since holds stays.
+      setHeld((list) =>
+        list.filter((a) => {
+          if (promptNow.current.includes(a.label)) return true;
+          URL.revokeObjectURL(a.url);
+          return false;
+        }),
       );
       releaseFocus("dispatch:prompt");
       writeLastDir(cwd);
@@ -139,15 +204,21 @@ export function DispatchBar({
       engine: chosen,
       forked: false,
     });
-    dispatcher.submit(
-      {
-        prompt,
-        cwd: cwd.trim(),
-        engine: chosen,
-        ...(worktree ? { worktree: "on" } : {}),
-      },
-      { method: "post", action: "/dispatch" },
-    );
+    // Attachments go as files, each with the label it has in the prompt.
+    const form = new FormData();
+    form.set("prompt", prompt);
+    form.set("cwd", cwd.trim());
+    form.set("engine", chosen);
+    if (worktree) form.set("worktree", "on");
+    for (const a of attachments) {
+      form.append("attachment", a.file);
+      form.append("attachmentLabel", a.label);
+    }
+    dispatcher.submit(form, {
+      method: "post",
+      action: "/dispatch",
+      encType: "multipart/form-data",
+    });
   };
 
   return (
@@ -157,6 +228,23 @@ export function DispatchBar({
         data-focus-key="dispatch:prompt"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
+        // Files on the clipboard or dropped in are attached; a paste of
+        // anything else is text as usual.
+        onPaste={(e) => {
+          const files = [...e.clipboardData.files];
+          if (files.length === 0) return;
+          e.preventDefault();
+          attach(files);
+        }}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+        }}
+        onDrop={(e) => {
+          const files = [...e.dataTransfer.files];
+          if (files.length === 0) return;
+          e.preventDefault();
+          attach(files);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
@@ -167,6 +255,7 @@ export function DispatchBar({
         rows={2}
         className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
+      <AttachmentChips attachments={attachments} onDetach={detach} />
       <div className="flex flex-wrap items-center gap-2">
         <DirectoryPicker
           data-focus-key="dispatch:cwd"
@@ -193,6 +282,28 @@ export function DispatchBar({
             ))}
           </select>
         )}
+        {/* The file dialog, for what can't be pasted or dropped: on a
+            phone, nothing can. */}
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = [...(e.target.files ?? [])];
+            e.target.value = "";
+            if (files.length > 0) attach(files);
+          }}
+        />
+        <Button
+          variant="outline"
+          disabled={attachments.length >= MAX_ATTACHMENTS}
+          onClick={() => picker.current?.click()}
+          title="Attach files or images"
+        >
+          <Paperclip />
+          Attach
+        </Button>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
           <Switch
             checked={worktree}
@@ -209,6 +320,9 @@ export function DispatchBar({
           {pending ? "Starting…" : "Dispatch"}
         </Button>
       </div>
+      {attachError && (
+        <p className="px-1 text-sm text-destructive">{attachError}</p>
+      )}
       {result && !pending && !result.ok && (
         <p className="px-1 text-sm text-destructive">{result.error}</p>
       )}
