@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Check, CircleHelp, Plus, ShieldQuestion } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -10,25 +9,16 @@ import {
   type Question,
   type Waiting,
 } from "~/lib/board";
+import {
+  pickAnswer,
+  takesText,
+  useQuestionDrafts,
+} from "~/lib/question-drafts";
 import { useSessionAction } from "~/lib/use-session-action";
 import { cn } from "~/lib/utils";
 
-interface Draft {
-  picks: number[];
-  text: string;
-  // null until "Add a note" opens the box.
-  notes: string | null;
-}
-
-function answerOf(q: Question, d: Draft): Answer | null {
-  if (!q.multiSelect && d.text.trim()) return { text: d.text.trim() };
-  if (!d.picks.length) return null;
-  const notes = d.notes?.trim();
-  return notes ? { picks: d.picks, notes } : { picks: d.picks };
-}
-
-// Enter in a box inside the form leaves it be rather than answering: only
-// the Answer button sends.
+// Enter in the note box leaves it be rather than answering: only the Answer
+// button sends.
 const holdEnter = (e: React.KeyboardEvent) => {
   if (e.key === "Enter") e.preventDefault();
 };
@@ -37,7 +27,8 @@ const BOX =
   "rounded-md border bg-background px-2 py-1 outline-none placeholder:text-muted-foreground";
 
 // An open AskUserQuestion, answered from the card. The board drives the
-// same dialog the user would see in the terminal.
+// same dialog the user would see in the terminal. An answer of the user's
+// own goes in the chat's reply box, as in the terminal, not in the form.
 function QuestionForm({
   card,
   ask,
@@ -45,23 +36,21 @@ function QuestionForm({
   card: Card;
   ask: NonNullable<Waiting["ask"]>;
 }) {
-  const [drafts, setDrafts] = useState<Draft[]>(() =>
-    ask.questions.map(() => ({ picks: [], text: "", notes: null })),
+  const [drafts, update] = useQuestionDrafts(
+    ask.toolUseId,
+    ask.questions.length,
   );
   const { submit, pending, error } = useSessionAction(card.sessionId);
-  const update = (i: number, d: Draft) =>
-    setDrafts((all) => all.map((x, j) => (j === i ? d : x)));
-  const answers = ask.questions.map((q, i) => answerOf(q, drafts[i]));
+  const answers = drafts.map(pickAnswer);
   const ready = card.drivable && !pending && answers.every((a) => a != null);
 
   const toggle = (i: number, q: Question, option: number) => {
     const { picks, notes } = drafts[i];
-    if (!q.multiSelect) return update(i, { picks: [option], text: "", notes });
+    if (!q.multiSelect) return update(i, { picks: [option], notes });
     update(i, {
       picks: picks.includes(option)
         ? picks.filter((p) => p !== option)
         : [...picks, option].sort((a, b) => a - b),
-      text: "",
       notes,
     });
   };
@@ -115,7 +104,8 @@ function QuestionForm({
                     className={cn(
                       "mt-0.5 flex size-3 shrink-0 items-center justify-center border",
                       q.multiSelect ? "rounded-[3px]" : "rounded-full",
-                      picked && "border-warning bg-warning text-warning-foreground",
+                      picked &&
+                        "border-warning bg-warning text-warning-foreground",
                     )}
                   >
                     {picked && <Check className="size-2.5" />}
@@ -159,16 +149,10 @@ function QuestionForm({
                   className={cn("sensitive", BOX)}
                 />
               ))}
-            {!q.multiSelect && !previews && (
-              <input
-                value={draft.text}
-                onChange={(e) =>
-                  update(i, { picks: [], text: e.target.value, notes: null })
-                }
-                onKeyDown={holdEnter}
-                placeholder="Or type your own answer"
-                className={cn("sensitive", BOX)}
-              />
+            {takesText(q) && (
+              <p className="text-muted-foreground">
+                Or write your own answer in the reply box.
+              </p>
             )}
           </fieldset>
         );

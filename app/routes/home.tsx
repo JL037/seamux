@@ -109,6 +109,7 @@ import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useBlur } from "~/lib/use-blur";
 import { useDiagnostics } from "~/lib/use-diagnostics";
+import { textAnswers, useQuestionDrafts } from "~/lib/question-drafts";
 import { useSessionAction } from "~/lib/use-session-action";
 import {
   OptimisticContext,
@@ -429,15 +430,38 @@ function ChatInput({
     });
     forker.submit("fork", { text });
   };
-  const canSend = card.drivable && !pending && draft.trim().length > 0;
-  const queueing = card.column === "working" || card.boardQueue.length > 0;
-  const send = () =>
-    canSend &&
+  // An open question takes the reply as the user's own answer, with the
+  // picks made on its form, as Claude Code's "Type something" does.
+  const ask = card.waiting?.ask;
+  const [picks] = useQuestionDrafts(
+    ask?.toolUseId ?? "",
+    ask?.questions.length ?? 0,
+  );
+  const answers = ask ? textAnswers(ask.questions, picks, draft) : null;
+  const canSend =
+    card.drivable &&
+    !pending &&
+    (ask
+      ? answers != null && attachments.length === 0
+      : draft.trim().length > 0);
+  const queueing =
+    !ask && (card.column === "working" || card.boardQueue.length > 0);
+  const send = () => {
+    if (!canSend) return;
+    if (ask) {
+      takeDraft();
+      submit("answer", {
+        toolUseId: ask.toolUseId,
+        answers: JSON.stringify(answers),
+      });
+      return;
+    }
     submit(
       queueing ? "queue" : "send",
       { text: takeDraft() },
       attachments.map(({ label, file }) => ({ label, file })),
     );
+  };
 
   // A single-line input would flatten a multiline draft, and editing it there
   // would drop the line breaks for good. So a multiline draft is shown, read
@@ -507,9 +531,11 @@ function ChatInput({
               placeholder={
                 !card.drivable
                   ? "Not in a cmux surface"
-                  : queueing
-                    ? "Queue a reply"
-                    : "Reply"
+                  : ask
+                    ? "Your own answer"
+                    : queueing
+                      ? "Queue a reply"
+                      : "Reply"
               }
               disabled={!card.drivable}
               className={cn(
@@ -534,7 +560,13 @@ function ChatInput({
                 type="submit"
                 size="icon-xs"
                 disabled={!canSend}
-                title={queueing ? "Queue, to send once this turn ends" : "Send"}
+                title={
+                  ask
+                    ? "Answer the question"
+                    : queueing
+                      ? "Queue, to send once this turn ends"
+                      : "Send"
+                }
               >
                 <SendHorizontal />
               </Button>
@@ -558,6 +590,7 @@ function ChatInput({
         onSend={send}
         canSend={canSend}
         queueing={queueing}
+        answering={!!ask}
         pending={pending}
         error={error ?? forker.error}
         onFork={card.engine === "claude" ? fork : null}

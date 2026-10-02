@@ -56,6 +56,7 @@ export function ChatModal({
   onSend,
   canSend,
   queueing,
+  answering,
   pending,
   error,
   onFork,
@@ -75,6 +76,8 @@ export function ChatModal({
   onSend: () => void;
   canSend: boolean;
   queueing: boolean;
+  // An open question: what's written here is the user's own answer to it.
+  answering: boolean;
   pending: boolean;
   error: string | null;
   // null when the chat's agent can't fork: only Claude Code can.
@@ -285,17 +288,19 @@ export function ChatModal({
                 }
               }}
               placeholder={
-                !onFork
-                  ? card.drivable
-                    ? queueing
-                      ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}`
-                      : `Next message${keyHint(submitKey, " to send")}`
-                    : "Not running"
-                  : !card.drivable
-                    ? "Not running: write a tangent to fork from this chat"
-                    : queueing
-                      ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}, or a tangent to fork`
-                      : `Next message${keyHint(submitKey, " to send")}, or a tangent to fork`
+                answering && card.drivable
+                  ? `Your own answer${keyHint(submitKey, " to send")}`
+                  : !onFork
+                    ? card.drivable
+                      ? queueing
+                        ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}`
+                        : `Next message${keyHint(submitKey, " to send")}`
+                      : "Not running"
+                    : !card.drivable
+                      ? "Not running: write a tangent to fork from this chat"
+                      : queueing
+                        ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}, or a tangent to fork`
+                        : `Next message${keyHint(submitKey, " to send")}, or a tangent to fork`
               }
               className="sensitive max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none border-b-0 focus-visible:border-input focus-visible:ring-0 md:max-h-[40dvh] md:min-h-32"
             />
@@ -343,19 +348,25 @@ export function ChatModal({
               disabled={!canSend}
               onClick={send}
               title={
-                queueing
-                  ? `Queue, to send once this turn ends${keyHint(submitKey)}`
-                  : `Send${keyHint(submitKey)}`
+                answering
+                  ? `Answer the question${keyHint(submitKey)}`
+                  : queueing
+                    ? `Queue, to send once this turn ends${keyHint(submitKey)}`
+                    : `Send${keyHint(submitKey)}`
               }
             >
               <SendHorizontal />
-              {pending
-                ? queueing
-                  ? "Queueing…"
-                  : "Sending…"
-                : queueing
-                  ? "Queue"
-                  : "Send"}
+              {answering
+                ? pending
+                  ? "Answering…"
+                  : "Answer"
+                : pending
+                  ? queueing
+                    ? "Queueing…"
+                    : "Sending…"
+                  : queueing
+                    ? "Queue"
+                    : "Send"}
             </Button>
           </div>
         </div>
