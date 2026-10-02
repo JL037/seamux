@@ -215,6 +215,53 @@
   }
   html {
     @apply font-sans;
+    /* The browser's own parts, scrollbars among them, follow the theme
+       rather than the system's. */
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+}
+
+/* Scrollbars in the palette, in place of the system's grey ones: a slim
+   pill in the muted tone on no track, taking the mark's ramp under the
+   pointer. Chrome and Safari draw them from ::-webkit-scrollbar, which
+   Chrome ignores once scrollbar-color or scrollbar-width is set, so those
+   two are only for Firefox, which has nothing else. An element that hides
+   its scrollbar ([scrollbar-width:none]) is still hidden in Chrome, which
+   honours scrollbar-width: none over these. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--muted-foreground) 35%, transparent)
+    padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+      var(--brand-primary),
+      var(--brand-secondary)
+    )
+    padding-box;
+}
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent)
+      transparent;
+  }
+  * {
+    scrollbar-width: thin;
   }
 }
 
