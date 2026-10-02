@@ -255,47 +255,49 @@ export function DispatchBar({
         className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <AttachmentChips attachments={attachments} onDetach={detach} />
-      {/* Where and how it runs on the left, the directory taking what
-          room there is, and what goes with it on the right, well apart.
-          Below md the left takes a line of its own. */}
-      <div className="flex flex-wrap items-center gap-x-12 gap-y-2">
-        <div className="flex w-full min-w-0 items-center gap-3 md:w-auto md:flex-1">
-          {available.length > 1 && (
-            <select
-              value={chosen}
-              onChange={(e) => setEngine(e.target.value as Engine)}
-              title="The agent the new session runs"
-              className="shrink-0 rounded-lg border bg-background px-2 py-1.5 text-sm"
-            >
-              {available.map((e) => (
-                <option key={e} value={e}>
-                  {ENGINE_LABELS[e]}
-                </option>
-              ))}
-            </select>
-          )}
-          <DirectoryPicker
-            data-focus-key="dispatch:cwd"
-            value={cwd}
-            onValueChange={setCwd}
-            options={options}
-            onFocus={loadDirs}
-            onPicked={() => promptRef.current?.focus()}
-            placeholder="/dir pick"
-            className="min-w-0 flex-1"
-            inputClassName="sensitive text-sm"
+      {/* One row from md: the agent, the directory taking what room there
+          is and the worktree box, then, well apart, the paperclip and
+          Dispatch. Below md the directory and the worktree box take the
+          first line, and the agent the second, with the paperclip and
+          Dispatch at its far end. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {available.length > 1 && (
+          <select
+            value={chosen}
+            onChange={(e) => setEngine(e.target.value as Engine)}
+            title="The agent the new session runs"
+            className="order-3 shrink-0 rounded-lg border bg-background px-2 py-1.5 text-sm md:order-none"
+          >
+            {available.map((e) => (
+              <option key={e} value={e}>
+                {ENGINE_LABELS[e]}
+              </option>
+            ))}
+          </select>
+        )}
+        <DirectoryPicker
+          data-focus-key="dispatch:cwd"
+          value={cwd}
+          onValueChange={setCwd}
+          options={options}
+          onFocus={loadDirs}
+          onPicked={() => promptRef.current?.focus()}
+          placeholder="/dir pick"
+          className="order-1 min-w-0 flex-1 md:order-none"
+          inputClassName="sensitive text-sm"
+        />
+        <label className="order-2 flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground md:order-none">
+          <input
+            type="checkbox"
+            checked={worktree}
+            onChange={(e) => setWorktree(e.target.checked)}
+            className="size-4 cursor-pointer accent-brand-primary"
           />
-          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={worktree}
-              onChange={(e) => setWorktree(e.target.checked)}
-              className="size-4 cursor-pointer accent-brand-primary"
-            />
-            Worktree
-          </label>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+          Worktree
+        </label>
+        {/* Ends the first line below md. */}
+        <div className="order-2 h-0 basis-full md:hidden" />
+        <div className="order-4 ml-auto flex items-center gap-2 md:order-none md:ml-9">
           {/* The file dialog, for what can't be pasted or dropped: on a
               phone, nothing can. */}
           <input
