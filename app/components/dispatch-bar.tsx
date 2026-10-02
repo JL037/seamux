@@ -256,18 +256,29 @@ export function DispatchBar({
         className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <AttachmentChips attachments={attachments} onDetach={detach} />
-      <div className="flex flex-wrap items-center gap-2">
-        <DirectoryPicker
-          data-focus-key="dispatch:cwd"
-          value={cwd}
-          onValueChange={setCwd}
-          options={options}
-          onFocus={loadDirs}
-          onPicked={() => promptRef.current?.focus()}
-          placeholder="/dir pick"
-          className="flex-1 basis-64"
-          inputClassName="sensitive text-sm"
-        />
+      {/* Three groups, spaced apart: where it runs, which agent runs it,
+          and what goes with it. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="flex flex-1 basis-64 items-center gap-3">
+          <DirectoryPicker
+            data-focus-key="dispatch:cwd"
+            value={cwd}
+            onValueChange={setCwd}
+            options={options}
+            onFocus={loadDirs}
+            onPicked={() => promptRef.current?.focus()}
+            placeholder="/dir pick"
+            className="min-w-0 flex-1"
+            inputClassName="sensitive text-sm"
+          />
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <Switch
+              checked={worktree}
+              onCheckedChange={(on) => setWorktree(on)}
+            />
+            new worktree
+          </label>
+        </div>
         {available.length > 1 && (
           <select
             value={chosen}
@@ -282,43 +293,39 @@ export function DispatchBar({
             ))}
           </select>
         )}
-        {/* The file dialog, for what can't be pasted or dropped: on a
-            phone, nothing can. */}
-        <input
-          ref={picker}
-          type="file"
-          multiple
-          hidden
-          onChange={(e) => {
-            const files = [...(e.target.files ?? [])];
-            e.target.value = "";
-            if (files.length > 0) attach(files);
-          }}
-        />
-        <Button
-          variant="outline"
-          disabled={attachments.length >= MAX_ATTACHMENTS}
-          onClick={() => picker.current?.click()}
-          title="Attach files or images"
-        >
-          <Paperclip />
-          Attach
-        </Button>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-          <Switch
-            checked={worktree}
-            onCheckedChange={(on) => setWorktree(on)}
+        <div className="ml-auto flex items-center gap-2">
+          {/* The file dialog, for what can't be pasted or dropped: on a
+              phone, nothing can. */}
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])];
+              e.target.value = "";
+              if (files.length > 0) attach(files);
+            }}
           />
-          new worktree
-        </label>
-        <Button
-          disabled={!canDispatch}
-          onClick={submit}
-          className="bg-brand-ramp text-brand-foreground shadow-sm hover:opacity-90"
-        >
-          <SendHorizontal />
-          {pending ? "Starting…" : "Dispatch"}
-        </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            disabled={attachments.length >= MAX_ATTACHMENTS}
+            onClick={() => picker.current?.click()}
+            title="Attach files or images"
+            aria-label="Attach files or images"
+          >
+            <Paperclip />
+          </Button>
+          <Button
+            disabled={!canDispatch}
+            onClick={submit}
+            className="bg-brand-ramp text-brand-foreground shadow-sm hover:opacity-90"
+          >
+            <SendHorizontal />
+            {pending ? "Starting…" : "Dispatch"}
+          </Button>
+        </div>
       </div>
       {attachError && (
         <p className="px-1 text-sm text-destructive">{attachError}</p>
