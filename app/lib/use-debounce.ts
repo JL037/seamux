@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useRef } from "react";
 
-// Calls `fn` at most once every `ms`: a call after a quiet spell goes at
-// once, and the last call in each window goes as the window ends, so nothing
-// waits for the calls to stop. A call still waiting is sent on unmount and on
-// pagehide; `cancel` drops it instead.
-export function useThrottle<A extends unknown[]>(
+// Calls `fn` once calls have stopped for `ms`, with the last call's
+// arguments. A call still waiting is sent on unmount and on pagehide, which,
+// unlike beforeunload, fires on a phone too; `cancel` drops it instead.
+export function useDebounce<A extends unknown[]>(
   fn: (...args: A) => void,
   ms: number,
 ) {
   const fnRef = useRef(fn);
   fnRef.current = fn;
-  const last = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const waiting = useRef<A | null>(null);
 
@@ -23,17 +21,14 @@ export function useThrottle<A extends unknown[]>(
   const flush = useCallback(() => {
     const args = waiting.current;
     cancel();
-    if (!args) return;
-    last.current = Date.now();
-    fnRef.current(...args);
+    if (args) fnRef.current(...args);
   }, [cancel]);
 
   const call = useCallback(
     (...args: A) => {
       waiting.current = args;
-      const wait = last.current + ms - Date.now();
-      if (wait <= 0) flush();
-      else if (!timer.current) timer.current = setTimeout(flush, wait);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(flush, ms);
     },
     [ms, flush],
   );

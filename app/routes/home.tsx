@@ -124,7 +124,7 @@ import {
   storedSlot,
 } from "~/lib/project-colors";
 import { useLocalStorage, useSessionStorage } from "~/lib/use-session-storage";
-import { useThrottle } from "~/lib/use-throttle";
+import { useDebounce } from "~/lib/use-debounce";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -274,7 +274,7 @@ function PathSwatch({ cwd }: { cwd: string }) {
 // Unsent drafts by session, held above the columns so a draft survives its
 // card moving between them, with the files each holds. Files can't go into
 // session storage, so after a reload a draft's labels are only text.
-const DRAFT_SYNC_MS = 300;
+const DRAFT_SYNC_MS = 500;
 const NO_ATTACHMENTS: Attachment[] = [];
 const DraftsContext = createContext<{
   drafts: Record<string, string>;
@@ -304,13 +304,13 @@ function ChatInput({
   setOpen: (open: boolean) => void;
 }) {
   // What's typed stays here, and reaches the board's drafts, and session
-  // storage, at most every DRAFT_SYNC_MS: a keystroke re-renders this card,
-  // not every card on the board.
+  // storage, once typing pauses for DRAFT_SYNC_MS: a keystroke re-renders
+  // this card, not every card on the board.
   const { drafts, setDraft } = useContext(DraftsContext);
   const stored = drafts[card.sessionId] ?? "";
   const [draft, setLocalDraft] = useState(stored);
   const synced = useRef(stored);
-  const sync = useThrottle((d: string) => {
+  const sync = useDebounce((d: string) => {
     synced.current = d;
     setDraft(card.sessionId, d);
   }, DRAFT_SYNC_MS);
@@ -324,7 +324,7 @@ function ChatInput({
     setLocalDraft(d);
     sync.call(d);
   };
-  // Set at once, past the throttle.
+  // Set at once, without waiting for a pause.
   const { cancel: cancelSync } = sync;
   const putDraft = useCallback(
     (d: string) => {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkFrontmatter from "remark-frontmatter";
@@ -15,7 +16,9 @@ import { remarkFrontmatterAsCode } from "~/lib/highlight";
 // tab, so following one never navigates the board away. A link to a file on
 // disk, relative to `base` or absolute, opens it in the /file viewer, and so
 // does a path written bare.
-export function Markdown({
+// Memoized: parsing and highlighting is the costliest part of a render, and
+// the board renders every card again on each poll.
+export const Markdown = memo(function Markdown({
   children,
   base,
 }: {
@@ -63,4 +66,4 @@ export function Markdown({
       {children}
     </ReactMarkdown>
   );
-}
+});
