@@ -289,7 +289,7 @@ export function ChatModal({
               }}
               placeholder={
                 answering && card.drivable
-                  ? `Your own answer${keyHint(submitKey, " to send")}`
+                  ? `Provide an unstructured answer here${keyHint(submitKey, " to send")}`
                   : !onFork
                     ? card.drivable
                       ? queueing

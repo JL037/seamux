@@ -532,7 +532,7 @@ function ChatInput({
                 !card.drivable
                   ? "Not in a cmux surface"
                   : ask
-                    ? "Your own answer"
+                    ? "Provide an unstructured answer here (Enter to send)"
                     : queueing
                       ? "Queue a reply"
                       : "Reply"
