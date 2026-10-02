@@ -50,6 +50,10 @@ Send a known amount and count what arrives: "a 1,503-character message arrived a
 
 Safari's caching differs from Chrome's, and a phone is slow to iterate on. Playwright's WebKit stands in for Safari well enough to show a difference, as it did for [`Clear-Site-Data`](vite-and-react-router.md#safari-honours-clear-site-data-cache-and-chrome-ignored-it-on-127001). Confirm on the device before you rely on it.
 
+## Read a page in headless Chrome
+
+For how Chrome treats CSS, serve a test page from a small Node server on 127.0.0.1, not the board, and have its script write what it measured (`getComputedStyle` results, say) into the DOM. Run `Google Chrome --headless=new --user-data-dir=<a fresh directory> --virtual-time-budget=3000 --dump-dom <url>` in the background and stop it after a few seconds: on Chrome 154.0.8037.95 it printed the DOM and then never exited. The fresh profile keeps it away from your own Chrome. To see what the page requested, have the server append each URL to a file, as for [Themes](themes.md#a-css-escape-spells-url-past-a-ban-on-the-text).
+
 ## A stand-in cmux app belongs in an experiment, not a test
 
 A folder named `cmux.app`, or shaped like one, with an executable in `Contents/MacOS` is taken by macOS for cmux itself. Run anything from it, even a copy of `/bin/sleep`, and macOS kills it and tells the user "“cmux” is damaged and can't be opened. You should move it to the Trash." That's fine in an experiment, where you expect it and delete the folder afterwards. A test suite must never do it: it would reach past the test's own sandbox into what macOS shows the user, on every run. To make cmux's app look like it's running in a test, put a stand-in `ps` first on `PATH`, as `tests/board.test.ts` does.

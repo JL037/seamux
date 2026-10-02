@@ -24,6 +24,7 @@ Read the domain before you touch the code that leans on it. When a tool surprise
 | [Cloudflare Tunnel](cloudflare-tunnel.md) | cloudflared, its hostname, and Cloudflare Access |
 | [mDNS](mdns.md) | Reaching the board by this Mac's `.local` name |
 | [Vite and React Router](vite-and-react-router.md) | The dev server, `.env`, cross-origin actions, and what browsers cache |
+| [Themes](themes.md) | CSS custom properties in the browser: escapes, colours derived from other tokens, and how a theme meets light and dark |
 | [Measuring](measuring.md) | How to find these things out without touching anyone's real sessions |
 
 ## For agents: keeping this collection
