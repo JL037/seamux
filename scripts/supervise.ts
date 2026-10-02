@@ -9,7 +9,9 @@
 // - restarts it when it exits, backing off to 30s while it keeps failing;
 // - restarts it when it stops answering HTTP, even if the process lives;
 // - restarts it when asked: `npm run land` touches data/board.restart after
-//   reinstalling dependencies. Other changes go live by hot reload;
+//   reinstalling dependencies, and so does the /restart page, for a browser
+//   stuck on a board whose scripts don't run. Other changes go live by hot
+//   reload;
 // - on start, stops a board server orphaned by a supervisor that was killed;
 // - refuses to run twice;
 // - on start, sets seamux up when it isn't, or updates an old setup
@@ -57,6 +59,7 @@ import {
   tunnelPidFile,
   updateRunFile,
 } from "../app/lib/remote.server.ts";
+import { restartFile } from "../app/lib/restart.server.ts";
 import { installRuntime } from "./runtime.ts";
 import { ensureSetup, SETUP_COMMAND } from "./setup.ts";
 
@@ -65,7 +68,7 @@ import { ensureSetup, SETUP_COMMAND } from "./setup.ts";
 const REPO = SEAMUX_HOME;
 const DATA = join(REPO, "data");
 const COMPILED = !IS_CHECKOUT || process.env.SEAMUX_COMPILED === "1";
-export const RESTART_FILE = join(DATA, "board.restart");
+const RESTART_FILE = restartFile(REPO);
 const SUPERVISOR_PID = join(DATA, "serve.pid");
 const CHILD_PID = join(DATA, "board.pid");
 const TUNNEL_PID = tunnelPidFile(REPO);
@@ -78,17 +81,6 @@ const PROBE_EVERY_MS = 10_000;
 const PROBE_TIMEOUT_MS = 5_000;
 const PROBE_FAILURES = 3; // consecutive failures before a restart
 const KILL_AFTER_MS = 5_000;
-
-// Ask the supervisor serving `repo` to restart the board. `npm run land`
-// runs from a worktree, so it names the main checkout: the worktree's own
-// data/ is not the one the supervisor watches.
-export function requestRestart(repo = REPO) {
-  mkdirSync(join(repo, "data"), { recursive: true });
-  writeFileSync(
-    join(repo, "data", "board.restart"),
-    `${new Date().toISOString()}\n`,
-  );
-}
 
 // How the board in `repo` runs, kept in its gitignored .seamux.json.
 export interface RunConfig {

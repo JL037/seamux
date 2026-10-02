@@ -43,12 +43,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import {
-  boardHeaders,
-  boardPid,
-  boardUrl,
-  requestRestart,
-} from "./supervise.ts";
+import { requestRestart } from "../app/lib/restart.server.ts";
+import { boardHeaders, boardPid, boardUrl } from "./supervise.ts";
 import { recordLanding } from "./landed.ts";
 
 const LOCK_WAIT_MS = 20 * 60 * 1000;
@@ -291,7 +287,9 @@ async function main() {
     step("Server code changed: restarting the board");
   }
   if (depsChanged || serverChanged) {
-    // `npm run seamux` picks this up within a second.
+    // `npm run seamux` picks this up within a second. land runs from a
+    // worktree, so it names the main checkout: the worktree's own data/ is
+    // not the one the supervisor watches.
     const before = boardPid(REPO);
     requestRestart(REPO);
     await restarted(before);

@@ -37,6 +37,8 @@ A clone keeps its settings and state in the clone itself, all gitignored. `npm s
 
 Run the board in its own cmux workspace. Started from any other terminal it can list your chats but not send them anything, since cmux only lets programs started inside it type into its terminals, unless its Settings, under Automation, set Socket Control Mode to Automation mode; the board then covers itself with what's wrong and how to fix it. It supervises the server: it restarts it if it exits or stops answering, and refuses to run twice.
 
+When the board's page loads but none of its buttons work, its scripts never started in that browser. After ten seconds the page then shows **Buttons not working? Restart the board** at the bottom, a link to `/restart`. That page asks the supervisor to restart the board's server, clears the browser's cache for the board, and goes back to the board once the new server answers. Sessions keep running. It works from a phone over mDNS or the tunnel, as long as the browser is signed in to the board, and the error page links to it too.
+
 The same command is `bin/seamux`, the package's `seamux` bin: in a clone, run `npm link` once and `seamux` starts the board from anywhere. With a command, such as `seamux list`, it's the fan-out CLI the README describes.
 
 ### What setup changes outside seamux

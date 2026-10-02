@@ -8,6 +8,7 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { StuckBoard } from "~/components/stuck-board";
 import { THEME_KEY } from "~/components/theme-toggle";
 import { BLUR_KEY } from "~/lib/use-blur";
 import { Toaster } from "~/components/ui/sonner";
@@ -68,6 +69,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <StuckBoard />
         <ScrollRestoration />
         <Scripts />
       </body>

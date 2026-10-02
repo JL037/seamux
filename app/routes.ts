@@ -11,6 +11,7 @@ export default [
   route("config", "routes/config.ts"),
   route("diagnostics", "routes/diagnostics.ts"),
   route("reset", "routes/reset.ts"),
+  route("restart", "routes/restart.ts"),
   route("file", "routes/file.tsx"),
   route("file/stat", "routes/file-stat.ts"),
   route("file/raw/*", "routes/file-raw.ts", { id: "file-raw" }),
