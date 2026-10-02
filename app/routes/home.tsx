@@ -123,6 +123,13 @@ import {
   projectOf,
   storedSlot,
 } from "~/lib/project-colors";
+import {
+  chatOpenKey,
+  forgetStored,
+  minimizedKey,
+  storedSessionIds,
+  tallyMissing,
+} from "~/lib/sweep";
 import { useLocalStorage, useSessionStorage } from "~/lib/use-session-storage";
 import { useDebounce } from "~/lib/use-debounce";
 import { cn } from "~/lib/utils";
@@ -952,14 +959,14 @@ const CHAT_CARRIED = "seamux:chat-carried";
 function SessionCard({ card, now }: { card: BoardCard; now: number }) {
   // Kept across a reload, like the draft, so an open chat stays open.
   const [chatOpen, setChatOpen] = useSessionStorage(
-    `seamux:chat-open:${card.sessionId}`,
+    chatOpenKey(card.sessionId),
     false,
   );
   // A chat `/clear` carried on under this session opens here, in place of
   // the old one, if it was open in this tab.
   useEffect(() => {
     if (!card.clearedFrom) return;
-    const key = `seamux:chat-open:${card.clearedFrom}`;
+    const key = chatOpenKey(card.clearedFrom);
     try {
       if (sessionStorage.getItem(key) !== "true") return;
       sessionStorage.removeItem(key);
@@ -981,7 +988,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
     return () => window.removeEventListener(CHAT_CARRIED, onCarried);
   }, [card.sessionId, setChatOpen]);
   const [minimized, setMinimized] = useLocalStorage(
-    `seamux:minimized:${card.sessionId}`,
+    minimizedKey(card.sessionId),
     false,
   );
   const { errors, report } = useCardErrors();
@@ -1799,6 +1806,42 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     () => ({ drafts, setDraft, attachments, updateAttachments }),
     [drafts, setDraft, attachments, updateAttachments],
   );
+  // What this browser keeps for a chat, its draft, files, and stored view,
+  // goes once the chat has been gone from the board for long enough.
+  const kept = useRef({ drafts, attachments });
+  kept.current = { drafts, attachments };
+  const missing = useRef(new Map<string, number>());
+  useEffect(() => {
+    const present = new Set(
+      board.cards.flatMap((c) =>
+        c.clearedFrom ? [c.sessionId, c.clearedFrom] : [c.sessionId],
+      ),
+    );
+    const known = [
+      ...Object.keys(kept.current.drafts),
+      ...Object.keys(kept.current.attachments),
+      ...storedSessionIds(),
+    ];
+    const gone = tallyMissing(
+      missing.current,
+      known,
+      present,
+      board.sessionsKnown,
+    );
+    if (gone.length === 0) return;
+    gone.forEach(forgetStored);
+    const omit = <T,>(all: Record<string, T>) =>
+      Object.fromEntries(
+        Object.entries(all).filter(([id]) => !gone.includes(id)),
+      );
+    setDrafts(omit);
+    setAttachments((all) => {
+      for (const id of gone) {
+        for (const a of all[id] ?? []) URL.revokeObjectURL(a.url);
+      }
+      return omit(all);
+    });
+  }, [board, setDrafts]);
   const [colors, setColors] = useLocalStorage<Record<string, number | string>>(
     "seamux:project-colors",
     {},

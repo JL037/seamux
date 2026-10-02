@@ -39,6 +39,7 @@ it("loads before Claude Code has ever run", async () => {
   const board = await loadBoard();
   expect(board.cards).toEqual([]);
   expect(board.warnings).toEqual([]);
+  expect(board.sessionsKnown).toBe(true);
 });
 
 it("loads with only Codex installed, and no claude to run", async () => {
@@ -52,6 +53,7 @@ it("loads with only Codex installed, and no claude to run", async () => {
   const board = await loadBoard();
   expect(board.cards).toEqual([]);
   expect(board.warnings).toEqual([]);
+  expect(board.sessionsKnown).toBe(true);
 });
 
 it("says why when seamux was started outside cmux, in place of cmux's words", async () => {
@@ -59,6 +61,7 @@ it("says why when seamux was started outside cmux, in place of cmux's words", as
   const board = await loadBoard();
   expect(board.cmux).toMatchObject({ trouble: "outside_cmux" });
   expect(board.warnings).toEqual([]);
+  expect(board.sessionsKnown).toBe(false);
 });
 
 it("says cmux isn't running when nothing listens on its socket", async () => {
@@ -66,6 +69,7 @@ it("says cmux isn't running when nothing listens on its socket", async () => {
   const board = await loadBoard();
   expect(board.cmux).toMatchObject({ trouble: "not_running" });
   expect(board.warnings).toEqual([]);
+  expect(board.sessionsKnown).toBe(false);
   await cmux.start();
 });
 

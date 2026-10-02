@@ -722,17 +722,22 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   // Why seamux can't reach cmux at all, which the board explains in place of
   // the warnings below.
   let cmux: CmuxTrouble | null = null;
+  // Whether `claude agents` and the attached-terminal check answered: without
+  // them, chats can be missing from the board while they still run.
+  let agentsKnown = true;
 
   const [agents, attached, workspaces, transcripts, codexTranscripts, names] =
     await Promise.all([
       // No Claude Code installed is a board of Codex sessions, not an error.
       listAgents().catch((err: NodeJS.ErrnoException) => {
         if (err.code !== "ENOENT") {
+          agentsKnown = false;
           warnings.push(`Claude Code sessions unknown: ${err.message}`);
         }
         return [] as AgentRow[];
       }),
       attachedTo().catch((err) => {
+        agentsKnown = false;
         warnings.push(`Attached sessions unknown: ${err.message}`);
         return null;
       }),
@@ -1031,6 +1036,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
       return [];
     }),
     warnings,
+    sessionsKnown: agentsKnown && liveKnown && trouble === null,
     cmux: trouble && {
       trouble,
       start:

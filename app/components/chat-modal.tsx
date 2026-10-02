@@ -30,6 +30,7 @@ import {
   type Attachment,
 } from "~/lib/attachments";
 import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
+import { scrollKey } from "~/lib/sweep";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useSessionAction } from "~/lib/use-session-action";
 import { useSubmitKey } from "~/lib/use-submit-key";
@@ -38,10 +39,6 @@ import { cn } from "~/lib/utils";
 const POLL_MS = 3000;
 // Within this many pixels of the end counts as reading the latest message.
 const AT_END_PX = 40;
-
-function scrollKey(sessionId: string) {
-  return `seamux:chat-scroll:${sessionId}`;
-}
 
 // Full-screen view of one card: the conversation, and room to write the
 // next message. The draft is shared with the card's inline input.

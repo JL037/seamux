@@ -223,6 +223,9 @@ export interface Board {
   // Service problems, for the Attention column; empty when all is well.
   attention: ServiceNotice[];
   warnings: string[];
+  // Every source of the board's chats answered, so a chat missing from
+  // `cards` has gone, rather than gone unseen.
+  sessionsKnown: boolean;
   // Why seamux can't reach cmux, which leaves it unable to drive any chat;
   // null when it can.
   cmux: CmuxProblem | null;
