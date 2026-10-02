@@ -24,6 +24,7 @@ import { Markdown } from "~/components/markdown";
 import { useSlashMenu } from "~/components/slash-menu";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
+import { WaitingPanel } from "~/components/waiting-panel";
 import {
   fitAttachments,
   insertLabels,
@@ -238,6 +239,13 @@ export function ChatModal({
               <SubagentDetail subagents={card.subagents} now={Date.now()} />
             </div>
           </details>
+        )}
+
+        {/* What the chat is blocked on, answered here as on its card. */}
+        {card.waiting && (
+          <div className="max-h-[40dvh] shrink-0 overflow-y-auto text-xs max-md:text-sm">
+            <WaitingPanel card={card} />
+          </div>
         )}
 
         <QueuedList card={card} />
