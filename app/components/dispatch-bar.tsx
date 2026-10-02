@@ -7,7 +7,6 @@ import { AttachmentChips } from "~/components/attachments";
 import { DirectoryPicker } from "~/components/directory-picker";
 
 import { Button } from "~/components/ui/button";
-import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import {
   attachmentLabel,
@@ -256,10 +255,24 @@ export function DispatchBar({
         className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <AttachmentChips attachments={attachments} onDetach={detach} />
-      {/* Three groups, spaced apart: where it runs, which agent runs it,
-          and what goes with it. */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div className="flex flex-1 basis-64 items-center gap-3">
+      {/* Where and how it runs on the left, what goes with it on the
+          right, well apart. */}
+      <div className="flex flex-wrap items-center gap-x-12 gap-y-2">
+        <div className="flex min-w-0 flex-1 basis-80 items-center gap-3">
+          {available.length > 1 && (
+            <select
+              value={chosen}
+              onChange={(e) => setEngine(e.target.value as Engine)}
+              title="The agent the new session runs"
+              className="shrink-0 rounded-lg border bg-background px-2 py-1.5 text-sm"
+            >
+              {available.map((e) => (
+                <option key={e} value={e}>
+                  {ENGINE_LABELS[e]}
+                </option>
+              ))}
+            </select>
+          )}
           <DirectoryPicker
             data-focus-key="dispatch:cwd"
             value={cwd}
@@ -272,27 +285,15 @@ export function DispatchBar({
             inputClassName="sensitive text-sm"
           />
           <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-            <Switch
+            <input
+              type="checkbox"
               checked={worktree}
-              onCheckedChange={(on) => setWorktree(on)}
+              onChange={(e) => setWorktree(e.target.checked)}
+              className="size-4 cursor-pointer accent-brand-primary"
             />
-            new worktree
+            Worktree
           </label>
         </div>
-        {available.length > 1 && (
-          <select
-            value={chosen}
-            onChange={(e) => setEngine(e.target.value as Engine)}
-            title="The agent the new session runs"
-            className="rounded-lg border bg-background px-2 py-1.5 text-sm"
-          >
-            {available.map((e) => (
-              <option key={e} value={e}>
-                {ENGINE_LABELS[e]}
-              </option>
-            ))}
-          </select>
-        )}
         <div className="ml-auto flex items-center gap-2">
           {/* The file dialog, for what can't be pasted or dropped: on a
               phone, nothing can. */}
