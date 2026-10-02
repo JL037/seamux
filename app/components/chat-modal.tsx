@@ -33,7 +33,7 @@ import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
 import { scrollKey } from "~/lib/sweep";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useSessionAction } from "~/lib/use-session-action";
-import { useSubmitKey } from "~/lib/use-submit-key";
+import { keyHint, useSubmitKey } from "~/lib/use-submit-key";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -289,14 +289,14 @@ export function ChatModal({
                 !onFork
                   ? card.drivable
                     ? queueing
-                      ? `Next message (${submitKey} to queue it for when this turn ends)`
-                      : `Next message (${submitKey} to send)`
+                      ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}`
+                      : `Next message${keyHint(submitKey, " to send")}`
                     : "Not running"
                   : !card.drivable
                     ? "Not running: write a tangent to fork from this chat"
                     : queueing
-                      ? `Next message (${submitKey} to queue it for when this turn ends), or a tangent to fork`
-                      : `Next message (${submitKey} to send), or a tangent to fork`
+                      ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}, or a tangent to fork`
+                      : `Next message${keyHint(submitKey, " to send")}, or a tangent to fork`
               }
               className="sensitive max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none border-b-0 focus-visible:border-input focus-visible:ring-0 md:max-h-[40dvh] md:min-h-32"
             />
@@ -345,8 +345,8 @@ export function ChatModal({
               onClick={send}
               title={
                 queueing
-                  ? `Queue, to send once this turn ends (${submitKey})`
-                  : `Send (${submitKey})`
+                  ? `Queue, to send once this turn ends${keyHint(submitKey)}`
+                  : `Send${keyHint(submitKey)}`
               }
             >
               <SendHorizontal />
@@ -442,7 +442,7 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
                 size="icon-xs"
                 disabled={edit.pending || !text.trim()}
                 onClick={save}
-                title={`Save (${submitKey})`}
+                title={`Save${keyHint(submitKey)}`}
               >
                 <Check />
               </Button>

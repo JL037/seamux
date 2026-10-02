@@ -12,7 +12,7 @@ import { ENGINE_LABELS, ENGINES, type Engine } from "~/lib/config";
 import { useOptimistic } from "~/lib/optimistic";
 import { releaseFocus } from "~/lib/use-focus-restore";
 import { useSessionStorage } from "~/lib/use-session-storage";
-import { useSubmitKey } from "~/lib/use-submit-key";
+import { keyHint, useSubmitKey } from "~/lib/use-submit-key";
 import type { DispatchResult } from "~/routes/dispatch";
 
 const LAST_DIR_KEY = "seamux:last-dir";
@@ -163,7 +163,7 @@ export function DispatchBar({
             submit();
           }
         }}
-        placeholder={`Dispatch new work: what should a new session do? (${submitKey})`}
+        placeholder={`Dispatch new work: what should a new session do?${keyHint(submitKey)}`}
         rows={2}
         className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
