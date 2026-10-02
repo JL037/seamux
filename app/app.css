@@ -96,6 +96,10 @@
   --pinned: oklch(60.6% 0.25 292.717);
   /* The line a file opens at. */
   --line-highlight: oklch(82.8% 0.189 84.429 / 25%);
+  /* A scrollbar's thumb, a tenth darker under the pointer (lighter in
+     dark). */
+  --scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+  --scrollbar-thumb-hover: oklch(from var(--scrollbar-thumb) calc(l - 0.1) c h);
   /* Each service's own colour: Anthropic's clay for Claude Code, OpenAI's
      teal for Codex, and text on either. */
   --engine-claude: #d97757;
@@ -156,6 +160,7 @@
 .dark {
   --warning-text: oklch(82.8% 0.189 84.429);
   --line-highlight: oklch(87.9% 0.169 91.605 / 20%);
+  --scrollbar-thumb-hover: oklch(from var(--scrollbar-thumb) calc(l + 0.1) c h);
   --background: oklch(0.175 0.028 262);
   --foreground: oklch(0.97 0.012 262);
   --card: oklch(0.215 0.032 262);
@@ -225,8 +230,7 @@
 }
 
 /* Scrollbars in the palette, in place of the system's grey ones: a slim
-   pill in the muted tone on no track, taking the mark's ramp under the
-   pointer. Chrome and Safari draw them from ::-webkit-scrollbar, which
+   pill in the muted tone on no track. Chrome and Safari draw them from ::-webkit-scrollbar, which
    Chrome ignores once scrollbar-color or scrollbar-width is set, so those
    two are only for Firefox, which has nothing else. An element that hides
    its scrollbar ([scrollbar-width:none]) is still hidden in Chrome, which
@@ -245,20 +249,14 @@
 ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 9999px;
-  background: color-mix(in oklch, var(--muted-foreground) 35%, transparent)
-    padding-box;
+  background: var(--scrollbar-thumb) padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(
-      var(--brand-primary),
-      var(--brand-secondary)
-    )
-    padding-box;
+  background: var(--scrollbar-thumb-hover) padding-box;
 }
 @supports not selector(::-webkit-scrollbar) {
   html {
-    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent)
-      transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
   * {
     scrollbar-width: thin;
