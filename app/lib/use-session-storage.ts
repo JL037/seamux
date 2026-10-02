@@ -20,28 +20,35 @@ function useStoredState<T>(
 ) {
   const [value, setValue] = useState<T>(initial);
   const initialRef = useRef(initial);
+  // The latest value, so a set writes storage at once rather than when React
+  // gets to the update, which a set on pagehide might not live to see.
+  const latest = useRef(initial);
 
   useEffect(() => {
     try {
       const raw = storage(area).getItem(key);
-      if (raw !== null) setValue(JSON.parse(raw) as T);
+      if (raw !== null) {
+        latest.current = JSON.parse(raw) as T;
+        setValue(latest.current);
+      }
     } catch {}
   }, [area, key]);
 
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {
-      setValue((prev) => {
-        const v =
-          typeof next === "function" ? (next as (prev: T) => T)(prev) : next;
-        try {
-          if (JSON.stringify(v) === JSON.stringify(initialRef.current)) {
-            storage(area).removeItem(key);
-          } else {
-            storage(area).setItem(key, JSON.stringify(v));
-          }
-        } catch {}
-        return v;
-      });
+      const v =
+        typeof next === "function"
+          ? (next as (prev: T) => T)(latest.current)
+          : next;
+      latest.current = v;
+      try {
+        if (JSON.stringify(v) === JSON.stringify(initialRef.current)) {
+          storage(area).removeItem(key);
+        } else {
+          storage(area).setItem(key, JSON.stringify(v));
+        }
+      } catch {}
+      setValue(v);
     },
     [area, key],
   );

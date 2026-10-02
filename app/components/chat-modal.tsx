@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
 import {
   Check,
@@ -228,29 +228,7 @@ export function ChatModal({
             {messages?.length === 0 && (
               <p className="text-muted-foreground">No messages yet.</p>
             )}
-            <div className="flex flex-col gap-3">
-              {messages?.map((m, i) =>
-                m.role === "shell" ? (
-                  <ShellRun key={`${m.at}-${i}`} run={m} />
-                ) : (
-                  <div
-                    key={`${m.at}-${i}`}
-                    className={cn(
-                      "sensitive max-w-[85%] rounded-lg px-3 py-2 text-sm max-md:text-base",
-                      m.role === "user"
-                        ? "self-end whitespace-pre-wrap break-words bg-primary text-primary-foreground"
-                        : "prose prose-sm max-md:prose-base self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
-                    )}
-                  >
-                    {m.role === "user" ? (
-                      <MessageText text={m.text} />
-                    ) : (
-                      <Markdown base={card.cwd}>{m.text}</Markdown>
-                    )}
-                  </div>
-                ),
-              )}
-            </div>
+            {messages && <Conversation messages={messages} cwd={card.cwd} />}
           </div>
           {card.subagents.length > 0 && (
             <aside className="hidden w-72 shrink-0 overflow-y-auto border-l px-4 py-3 md:block">
@@ -523,6 +501,42 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
 // A command the user ran with `!`, and what it printed. One still running
 // may be waiting on the user, as a login waits for its URL to be opened,
 // so it says so rather than showing nothing.
+// The conversation, apart from the input so a keystroke there doesn't
+// render every message's markdown again.
+const Conversation = memo(function Conversation({
+  messages,
+  cwd,
+}: {
+  messages: ChatMessage[];
+  cwd: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {messages.map((m, i) =>
+        m.role === "shell" ? (
+          <ShellRun key={`${m.at}-${i}`} run={m} />
+        ) : (
+          <div
+            key={`${m.at}-${i}`}
+            className={cn(
+              "sensitive max-w-[85%] rounded-lg px-3 py-2 text-sm max-md:text-base",
+              m.role === "user"
+                ? "self-end whitespace-pre-wrap break-words bg-primary text-primary-foreground"
+                : "prose prose-sm max-md:prose-base self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
+            )}
+          >
+            {m.role === "user" ? (
+              <MessageText text={m.text} />
+            ) : (
+              <Markdown base={cwd}>{m.text}</Markdown>
+            )}
+          </div>
+        ),
+      )}
+    </div>
+  );
+});
+
 function ShellRun({ run }: { run: Extract<ChatMessage, { role: "shell" }> }) {
   return (
     <div className="sensitive w-full max-w-[85%] self-end overflow-hidden rounded-lg border font-mono text-xs max-md:text-sm">

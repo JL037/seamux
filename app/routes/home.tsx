@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -123,6 +124,7 @@ import {
   storedSlot,
 } from "~/lib/project-colors";
 import { useLocalStorage, useSessionStorage } from "~/lib/use-session-storage";
+import { useThrottle } from "~/lib/use-throttle";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -272,6 +274,7 @@ function PathSwatch({ cwd }: { cwd: string }) {
 // Unsent drafts by session, held above the columns so a draft survives its
 // card moving between them, with the files each holds. Files can't go into
 // session storage, so after a reload a draft's labels are only text.
+const DRAFT_SYNC_MS = 300;
 const NO_ATTACHMENTS: Attachment[] = [];
 const DraftsContext = createContext<{
   drafts: Record<string, string>;
@@ -300,15 +303,44 @@ function ChatInput({
   open: boolean;
   setOpen: (open: boolean) => void;
 }) {
+  // What's typed stays here, and reaches the board's drafts, and session
+  // storage, at most every DRAFT_SYNC_MS: a keystroke re-renders this card,
+  // not every card on the board.
   const { drafts, setDraft } = useContext(DraftsContext);
-  const draft = drafts[card.sessionId] ?? "";
-  const onDraftChange = (d: string) => setDraft(card.sessionId, d);
+  const stored = drafts[card.sessionId] ?? "";
+  const [draft, setLocalDraft] = useState(stored);
+  const synced = useRef(stored);
+  const sync = useThrottle((d: string) => {
+    synced.current = d;
+    setDraft(card.sessionId, d);
+  }, DRAFT_SYNC_MS);
+  // A draft read back from storage after a reload arrives once mounted.
+  useEffect(() => {
+    if (stored === synced.current) return;
+    synced.current = stored;
+    setLocalDraft(stored);
+  }, [stored]);
+  const onDraftChange = (d: string) => {
+    setLocalDraft(d);
+    sync.call(d);
+  };
+  // Set at once, past the throttle.
+  const { cancel: cancelSync } = sync;
+  const putDraft = useCallback(
+    (d: string) => {
+      cancelSync();
+      setLocalDraft(d);
+      synced.current = d;
+      setDraft(card.sessionId, d);
+    },
+    [cancelSync, setDraft, card.sessionId],
+  );
   // A draft is cleared, from state and storage, as it is sent, so a reload
   // mid-send can't bring it back; a failure puts it back.
   const sent = useRef("");
   const takeDraft = () => {
     sent.current = draft;
-    setDraft(card.sessionId, "");
+    putDraft("");
     return draft;
   };
   const released = useCallback(() => {
@@ -355,8 +387,8 @@ function ChatInput({
     );
   }, [released, updateAttachments, card.sessionId]);
   const restore = useCallback(
-    () => setDraft(card.sessionId, current.current || sent.current),
-    [card.sessionId, setDraft],
+    () => putDraft(current.current || sent.current),
+    [putDraft],
   );
   const { submit, pending, error } = useSessionAction(
     card.sessionId,
@@ -1743,11 +1775,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     "seamux:drafts",
     {},
   );
-  const setDraft = (sessionId: string, draft: string) =>
-    setDrafts((d) => {
-      const { [sessionId]: _, ...rest } = d;
-      return draft ? { ...rest, [sessionId]: draft } : rest;
-    });
+  const setDraft = useCallback(
+    (sessionId: string, draft: string) =>
+      setDrafts((d) => {
+        const { [sessionId]: _, ...rest } = d;
+        return draft ? { ...rest, [sessionId]: draft } : rest;
+      }),
+    [setDrafts],
+  );
   const [attachments, setAttachments] = useState<Record<string, Attachment[]>>(
     {},
   );
@@ -1759,6 +1794,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         return next.length > 0 ? { ...rest, [sessionId]: next } : rest;
       }),
     [],
+  );
+  const draftsContext = useMemo(
+    () => ({ drafts, setDraft, attachments, updateAttachments }),
+    [drafts, setDraft, attachments, updateAttachments],
   );
   const [colors, setColors] = useLocalStorage<Record<string, number | string>>(
     "seamux:project-colors",
@@ -1772,9 +1811,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <OptimisticContext.Provider value={optimistic.context}>
-      <DraftsContext.Provider
-        value={{ drafts, setDraft, attachments, updateAttachments }}
-      >
+      <DraftsContext.Provider value={draftsContext}>
         <ProjectColorsContext.Provider value={{ colors, setColor }}>
           {/* No bottom padding below md: the carousel is sized to end at the
               screen's foot, and any page left below it lets the page scroll
