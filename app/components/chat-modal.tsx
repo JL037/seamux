@@ -32,6 +32,7 @@ import {
 import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useSessionAction } from "~/lib/use-session-action";
+import { useSubmitKey } from "~/lib/use-submit-key";
 import { cn } from "~/lib/utils";
 
 const POLL_MS = 3000;
@@ -85,6 +86,7 @@ export function ChatModal({
   title?: ReactNode;
 }) {
   const coarse = useCoarsePointer();
+  const submitKey = useSubmitKey();
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
   const url = `/sessions/${card.sessionId}/messages`;
   // The dialog mounts its content a render or two after it opens, so the
@@ -312,14 +314,14 @@ export function ChatModal({
                 !onFork
                   ? card.drivable
                     ? queueing
-                      ? "Next message (⌘↵ to queue it for when this turn ends)"
-                      : "Next message (⌘↵ to send)"
+                      ? `Next message (${submitKey} to queue it for when this turn ends)`
+                      : `Next message (${submitKey} to send)`
                     : "Not running"
                   : !card.drivable
                     ? "Not running: write a tangent to fork from this chat"
                     : queueing
-                      ? "Next message (⌘↵ to queue it for when this turn ends), or a tangent to fork"
-                      : "Next message (⌘↵ to send), or a tangent to fork"
+                      ? `Next message (${submitKey} to queue it for when this turn ends), or a tangent to fork`
+                      : `Next message (${submitKey} to send), or a tangent to fork`
               }
               className="sensitive max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none border-b-0 focus-visible:border-input focus-visible:ring-0 md:max-h-[40dvh] md:min-h-32"
             />
@@ -367,7 +369,9 @@ export function ChatModal({
               disabled={!canSend}
               onClick={send}
               title={
-                queueing ? "Queue, to send once this turn ends (⌘↵)" : "Send (⌘↵)"
+                queueing
+                  ? `Queue, to send once this turn ends (${submitKey})`
+                  : `Send (${submitKey})`
               }
             >
               <SendHorizontal />
@@ -423,6 +427,7 @@ function QueuedList({ card }: { card: Card }) {
 function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(message.text);
+  const submitKey = useSubmitKey();
   const edit = useSessionAction(card.sessionId, () => setEditing(false));
   const other = useSessionAction(card.sessionId);
   const id = String(message.id);
@@ -462,7 +467,7 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
                 size="icon-xs"
                 disabled={edit.pending || !text.trim()}
                 onClick={save}
-                title="Save (⌘↵)"
+                title={`Save (${submitKey})`}
               >
                 <Check />
               </Button>
