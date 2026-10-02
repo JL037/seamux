@@ -255,11 +255,11 @@ export function DispatchBar({
         className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <AttachmentChips attachments={attachments} onDetach={detach} />
-      {/* Where and how it runs on the left, the agent and directory in
-          at most half the width, and what goes with it on the right. Below
-          md the agent and directory take a line of their own. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="flex w-full min-w-0 items-center gap-3 md:w-auto md:max-w-1/2 md:flex-1">
+      {/* Where and how it runs on the left, the directory taking what
+          room there is, and what goes with it on the right, well apart.
+          Below md the left takes a line of its own. */}
+      <div className="flex flex-wrap items-center gap-x-12 gap-y-2">
+        <div className="flex w-full min-w-0 items-center gap-3 md:w-auto md:flex-1">
           {available.length > 1 && (
             <select
               value={chosen}
@@ -285,17 +285,17 @@ export function DispatchBar({
             className="min-w-0 flex-1"
             inputClassName="sensitive text-sm"
           />
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={worktree}
+              onChange={(e) => setWorktree(e.target.checked)}
+              className="size-4 cursor-pointer accent-brand-primary"
+            />
+            Worktree
+          </label>
         </div>
-        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={worktree}
-            onChange={(e) => setWorktree(e.target.checked)}
-            className="size-4 cursor-pointer accent-brand-primary"
-          />
-          Worktree
-        </label>
-        <div className="ml-auto flex items-center gap-2 pl-9">
+        <div className="ml-auto flex items-center gap-2">
           {/* The file dialog, for what can't be pasted or dropped: on a
               phone, nothing can. */}
           <input
