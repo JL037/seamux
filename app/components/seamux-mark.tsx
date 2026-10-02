@@ -22,8 +22,8 @@ export function SeamuxMark({
     >
       <defs>
         <linearGradient id={ramp} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#5ECDFA" />
-          <stop offset="1" stopColor="#586BEB" />
+          <stop offset="0" style={{ stopColor: "var(--brand-primary)" }} />
+          <stop offset="1" style={{ stopColor: "var(--brand-secondary)" }} />
         </linearGradient>
       </defs>
       {small ? (
@@ -37,7 +37,7 @@ export function SeamuxMark({
           <path
             d="M40 216 Q74 198 108 216 T176 216 T216 216"
             fill="none"
-            stroke="#586BEB"
+            className="stroke-brand-secondary"
             strokeWidth="20"
             strokeLinecap="round"
           />
@@ -50,7 +50,7 @@ export function SeamuxMark({
             width="8"
             height="150"
             rx="4"
-            fill="#5ECDFA"
+            className="fill-brand-primary"
             opacity="0.55"
           />
           <g transform="rotate(-90 128 128)">
@@ -62,7 +62,7 @@ export function SeamuxMark({
           <path
             d="M44 210 Q70 196 96 210 T148 210 T200 210 T212 206"
             fill="none"
-            stroke="#586BEB"
+            className="stroke-brand-secondary"
             strokeWidth="10"
             strokeLinecap="round"
           />

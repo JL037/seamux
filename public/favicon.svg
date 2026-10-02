@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Seamux">
   <title>Seamux</title>
-  <!-- Simplified for 24px and below: no mast, heavier sail and wave. -->
+  <!-- Simplified for 24px and below: no mast, heavier sail and wave. The
+       browser loads this file on its own, without app.css, so the ramp is
+       spelled out: keep it the same as --brand-primary and --brand-secondary. -->
   <defs>
     <linearGradient id="seamux-ramp-sm" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#5ECDFA"/>
