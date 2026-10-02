@@ -255,10 +255,11 @@ export function DispatchBar({
         className="sensitive min-h-0 resize-y border-0 bg-transparent text-base max-md:min-h-48 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <AttachmentChips attachments={attachments} onDetach={detach} />
-      {/* Where and how it runs on the left, what goes with it on the
-          right, well apart. */}
-      <div className="flex flex-wrap items-center gap-x-12 gap-y-2">
-        <div className="flex min-w-0 flex-1 basis-80 items-center gap-3">
+      {/* Where and how it runs on the left, the agent and directory in
+          at most half the width, and what goes with it on the right. Below
+          md the agent and directory take a line of their own. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex w-full min-w-0 items-center gap-3 md:w-auto md:max-w-1/2 md:flex-1">
           {available.length > 1 && (
             <select
               value={chosen}
@@ -284,17 +285,17 @@ export function DispatchBar({
             className="min-w-0 flex-1"
             inputClassName="sensitive text-sm"
           />
-          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={worktree}
-              onChange={(e) => setWorktree(e.target.checked)}
-              className="size-4 cursor-pointer accent-brand-primary"
-            />
-            Worktree
-          </label>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={worktree}
+            onChange={(e) => setWorktree(e.target.checked)}
+            className="size-4 cursor-pointer accent-brand-primary"
+          />
+          Worktree
+        </label>
+        <div className="ml-auto flex items-center gap-2 pl-9">
           {/* The file dialog, for what can't be pasted or dropped: on a
               phone, nothing can. */}
           <input
@@ -308,15 +309,18 @@ export function DispatchBar({
               if (files.length > 0) attach(files);
             }}
           />
+          {/* A bare paperclip beside the rest; labelled once it has a line
+              of its own. */}
           <Button
-            size="icon"
             variant="ghost"
+            className="md:size-8 md:px-0"
             disabled={attachments.length >= MAX_ATTACHMENTS}
             onClick={() => picker.current?.click()}
             title="Attach files or images"
             aria-label="Attach files or images"
           >
             <Paperclip />
+            <span className="md:hidden">Attach</span>
           </Button>
           <Button
             disabled={!canDispatch}
