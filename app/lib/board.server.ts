@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
+import { shortenAttachments } from "./attachments";
 import {
   ASKED_IN_REPLY,
   DISPATCH_VISIBLE_MS,
@@ -991,7 +992,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
     for (const card of cards) {
       const d = intents.get(card.sessionId);
       if (d) {
-        card.intent = excerpt(d.prompt);
+        card.intent = excerpt(shortenAttachments(d.prompt));
         card.forkedFrom = d.forked_from;
         if (d.dispatch_id && d.worker) {
           card.worker = {

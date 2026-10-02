@@ -1,8 +1,9 @@
-// Files pasted or dropped into a chat's full view. Until the message is sent
-// they stay in the browser, each held by a label in the draft, `[Image #1]`
-// or `[File #1]`. Sending writes them under ATTACHMENT_ROOT and puts each
-// file's path in place of its label, which is how both agents get them: the
-// path is plain text, and the agent opens the file itself.
+// Files pasted, dropped or picked into a chat's full view or the dispatch
+// box. Until the message is sent they stay in the browser, each held by a
+// label in the draft, `[Image #1]` or `[File #1]`. Sending writes them under
+// ATTACHMENT_ROOT and puts each file's path in place of its label, which is
+// how both agents get them: the path is plain text, and the agent opens the
+// file itself.
 
 export const ATTACHMENT_ROOT = "/tmp/seamux";
 
@@ -39,6 +40,49 @@ export interface Attachment {
 }
 
 export const LABEL = /^\[(Image|File) #(\d{1,3})\]$/;
+
+// Labels as they sit in a draft, for taking them out of a name made from it.
+const LABELS = /\[(?:Image|File) #\d{1,3}\]/g;
+
+export function withoutLabels(text: string): string {
+  return text.replace(LABELS, " ");
+}
+
+// Which of the files pasted, dropped or picked can join the `held` a draft
+// already has, and what to say about the rest.
+export function fitAttachments(
+  files: File[],
+  held: number,
+): { fit: File[]; error: string | null } {
+  const tooBig = files.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
+  const fit = files
+    .filter((f) => !tooBig.includes(f))
+    .slice(0, Math.max(0, MAX_ATTACHMENTS - held));
+  const error =
+    tooBig.length > 0
+      ? `Over ${MAX_ATTACHMENT_BYTES >> 20} MB: ${tooBig.map((f) => f.name).join(", ")}`
+      : fit.length < files.length
+        ? `At most ${MAX_ATTACHMENTS} attachments`
+        : null;
+  return { fit, error };
+}
+
+// The draft with `labels` in place of the selection from `start` to `end`,
+// and where the caret goes after them.
+export function insertLabels(
+  draft: string,
+  start: number,
+  end: number,
+  labels: string[],
+): { text: string; caret: number } {
+  const before = draft.slice(0, start);
+  const inserted =
+    (before && !/\s$/.test(before) ? " " : "") + labels.join(" ") + " ";
+  return {
+    text: before + inserted + draft.slice(end),
+    caret: before.length + inserted.length,
+  };
+}
 
 // The file's name as the browser gave it, kept to characters that can't
 // end the label or read as part of the message around it.
