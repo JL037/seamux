@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { PROJECT_COLOR_COUNT, storedSlot } from "~/lib/project-colors";
+import { THEME_TOKENS } from "~/lib/theme";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const APP = join(ROOT, "app");
@@ -20,12 +21,13 @@ const sources = (readdirSync(APP, { recursive: true }) as string[])
   .map((f) => join(APP, f));
 
 // Files whose colours aren't the board's to theme: the seamux mark, the
-// PWA's theme-color meta, and the colours a browser kept before projects
-// had slots.
+// PWA's theme-color meta, the colours a browser kept before projects had
+// slots, and the theme module, which prints a theme's colours.
 const EXEMPT = new Set([
   "components/seamux-mark.tsx",
   "root.tsx",
   "lib/project-colors.ts",
+  "lib/theme.ts",
 ]);
 
 // A Tailwind palette class (amber-500, sky-400/20), or a colour literal.
@@ -67,6 +69,19 @@ describe("theme tokens", () => {
       .map((m) => m[1])
       .filter((token) => !new RegExp(`^\\s*${token}:`, "m").test(css));
     expect(missing).toEqual([]);
+  });
+
+  // A theme may set every token app.css declares, except the ones app.css
+  // works out from them and the engines' own colours. A new token in
+  // app.css lands here, for a decision on whether a theme may set it.
+  it("lets a theme set every token but the engines' and the derived", () => {
+    const declared = new Set(
+      [...css.matchAll(/^\s*(--[\w-]+):/gm)].map((m) => m[1]),
+    );
+    const settable = [...declared].filter(
+      (token) => !/^--(color|radius|font)-|^--engine-/.test(token),
+    );
+    expect(Object.keys(THEME_TOKENS).sort()).toEqual(settable.sort());
   });
 
   it("reads a colour kept before slots as its slot", () => {

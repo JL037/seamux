@@ -194,6 +194,75 @@
   --sidebar-ring: oklch(0.63 0.18 272);
 }
 
+/* A theme from the Themes tab (app/lib/theme.ts) sets data-theme on <html>
+   and needs only its two brand colours: these derive the surfaces from
+   them, at the lightness and chroma of seamux's own palette, which sits
+   10 degrees short of --brand-secondary's hue. Given seamux's brand, they
+   come out within a degree of the tokens above. They must be declared on
+   <html>, where the theme sets its brand: a colour derived in a custom
+   property is worked out where it's declared (knowledge/themes.md). A
+   theme's own :root[data-theme] rules outrank these, and these outrank
+   :root and .dark. What a theme doesn't set and these don't derive, states,
+   project colours, highlighting, stays seamux's. */
+html[data-theme]:not(.dark) {
+  --background: oklch(from var(--brand-secondary) 0.982 0.005 calc(h - 10));
+  --foreground: oklch(from var(--brand-secondary) 0.2 0.03 calc(h - 10));
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(from var(--brand-secondary) 0.56 0.19 h);
+  --secondary: oklch(from var(--brand-secondary) 0.955 0.01 calc(h - 10));
+  --secondary-foreground: oklch(from var(--brand-secondary) 0.25 0.03 calc(h - 10));
+  --muted: var(--secondary);
+  --muted-foreground: oklch(from var(--brand-secondary) 0.5 0.04 calc(h - 10));
+  --accent: oklch(from var(--brand-secondary) 0.95 0.02 calc(h - 10));
+  --accent-foreground: var(--secondary-foreground);
+  --border: oklch(from var(--brand-secondary) 0.9 0.015 calc(h - 10));
+  --input: var(--border);
+  --ring: oklch(from var(--brand-secondary) 0.62 0.17 h);
+  --chart-1: oklch(from var(--brand-primary) 0.81 0.12 h);
+  --chart-2: oklch(from var(--brand-secondary) 0.58 0.19 h);
+  --chart-3: oklch(from var(--brand-secondary) 0.7 0.15 calc(h - 27));
+  --chart-4: oklch(from var(--brand-secondary) 0.45 0.12 calc(h - 4));
+  --chart-5: oklch(from var(--brand-secondary) 0.35 0.08 calc(h - 10));
+  --sidebar: oklch(from var(--brand-secondary) 0.975 0.008 calc(h - 10));
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+html[data-theme].dark {
+  --background: oklch(from var(--brand-secondary) 0.175 0.028 calc(h - 10));
+  --foreground: oklch(from var(--brand-secondary) 0.97 0.012 calc(h - 10));
+  --card: oklch(from var(--brand-secondary) 0.215 0.032 calc(h - 10));
+  --card-foreground: var(--foreground);
+  --popover: oklch(from var(--brand-secondary) 0.235 0.035 calc(h - 10));
+  --popover-foreground: var(--foreground);
+  --primary: oklch(from var(--brand-secondary) 0.63 0.18 h);
+  --secondary: oklch(from var(--brand-secondary) 0.27 0.035 calc(h - 10));
+  --secondary-foreground: var(--foreground);
+  --muted: var(--secondary);
+  --muted-foreground: oklch(from var(--brand-secondary) 0.72 0.05 calc(h - 10));
+  --accent: oklch(from var(--brand-secondary) 0.28 0.04 calc(h - 10));
+  --accent-foreground: var(--foreground);
+  --border: oklch(from var(--brand-secondary) 0.72 0.05 calc(h - 10) / 14%);
+  --input: oklch(from var(--brand-secondary) 0.72 0.05 calc(h - 10) / 20%);
+  --ring: var(--primary);
+  --chart-1: oklch(from var(--brand-primary) 0.81 0.12 h);
+  --chart-2: var(--primary);
+  --chart-3: oklch(from var(--brand-secondary) 0.7 0.15 calc(h - 27));
+  --chart-4: oklch(from var(--brand-secondary) 0.5 0.12 calc(h - 4));
+  --chart-5: oklch(from var(--brand-secondary) 0.4 0.08 calc(h - 10));
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

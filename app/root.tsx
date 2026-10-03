@@ -5,6 +5,8 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteLoaderData,
+  type ShouldRevalidateFunctionArgs,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -13,6 +15,9 @@ import { THEME_KEY } from "~/components/theme-toggle";
 import { BLUR_KEY } from "~/lib/use-blur";
 import { Toaster } from "~/components/ui/sonner";
 import { requireAuth } from "~/lib/auth.server";
+import { DEFAULT_THEME } from "~/lib/theme";
+import { readActiveTheme, themeStyles } from "~/lib/theme.server";
+import { themeCssWanted, type ThemeStyles } from "~/lib/use-theme";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -29,7 +34,36 @@ export const links: Route.LinksFunction = () => [
 
 export const middleware: Route.MiddlewareFunction[] = [requireAuth];
 
+// Every theme's CSS, and the active one. A store that can't be read leaves
+// the board on seamux's own theme rather than stopping it.
+export function loader(): { themes: ThemeStyles } {
+  try {
+    return { themes: { ...themeStyles(), active: readActiveTheme() } };
+  } catch {
+    return {
+      themes: { hash: "", css: "", active: { name: DEFAULT_THEME, updatedAt: 0 } },
+    };
+  }
+}
+
+// The board's poll revalidates every loader every few seconds; the themes'
+// CSS is fetched again only after an action, or when the poll's hash says
+// it changed (useThemeSync).
+export function shouldRevalidate({
+  formMethod,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (formMethod) return defaultShouldRevalidate;
+  return themeCssWanted();
+}
+
+// JSON for an inline script: nothing in it can close the <script>.
+const inline = (value: unknown) =>
+  JSON.stringify(value).replace(/</g, "\\u003c");
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  // Missing on an error page that failed before the loader ran.
+  const themes = useRouteLoaderData<typeof loader>("root")?.themes;
   return (
     <html
       lang="en"
@@ -57,6 +91,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html: `(()=>{const k=${JSON.stringify(THEME_KEY)};const r=document.documentElement;const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>{let t=null;try{t=JSON.parse(localStorage.getItem(k))}catch{}const d=t==="dark"||(t!=="light"&&m.matches);if(r.classList.contains("dark")!==d)r.classList.toggle("dark",d)};s();m.addEventListener("change",s);new MutationObserver(s).observe(r,{attributes:true,attributeFilter:["class"]})})()`,
+          }}
+        />
+        {/* Every saved theme, printed from numbers only (app/lib/theme.ts),
+            and the active one as data-theme on <html>, before the first
+            paint. Kept there if hydration strips it, like the class above;
+            useThemeSync changes it. */}
+        {themes?.css ? (
+          <style
+            id="seamux-themes"
+            dangerouslySetInnerHTML={{ __html: themes.css.replace(/</g, "") }}
+          />
+        ) : null}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(()=>{const r=document.documentElement;window.__seamuxTheme=window.__seamuxTheme||${inline(themes?.active ?? { name: DEFAULT_THEME, updatedAt: 0 })};const s=()=>{const n=window.__seamuxTheme.name;const w=n===${inline(DEFAULT_THEME)}?null:n;if(r.getAttribute("data-theme")!==w){if(w===null)r.removeAttribute("data-theme");else r.setAttribute("data-theme",w)}};s();new MutationObserver(s).observe(r,{attributes:true,attributeFilter:["data-theme"]})})()`,
           }}
         />
         {/* Blur for screenshots, from the Debug tab, before the first paint

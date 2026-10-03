@@ -105,6 +105,9 @@ import { startQueue } from "~/lib/queue.server";
 import { startReconnect } from "~/lib/reconnect.server";
 import { SEAMUX_HOME } from "~/lib/paths.server";
 import { remoteStatus, type RemoteStatus } from "~/lib/remote.server";
+import { isLocalRequest } from "~/lib/guard.server";
+import { themeStatus } from "~/lib/theme.server";
+import { useThemeSync } from "~/lib/use-theme";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useBlur } from "~/lib/use-blur";
@@ -154,6 +157,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     config: configOrDefaults(),
     engines: installedEngines(),
     remote: remoteStatus(SEAMUX_HOME, request.headers.get("host")),
+    theme: themeStatus(isLocalRequest(request)),
   };
 }
 
@@ -1751,7 +1755,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   usePoll(POLL_MS);
   useFocusRestore();
   const board: Board = loaderData.board;
-  const { config, engines, remote } = loaderData;
+  const { config, engines, remote, theme } = loaderData;
+  useThemeSync(theme.active, theme.hash);
   const now = board.generatedAt;
   const diagnostics = useDiagnostics(board.version?.hash);
   const blur = useBlur();
@@ -1909,6 +1914,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   config={config}
                   engines={engines}
                   remote={remote}
+                  theme={theme}
                   notifications={notifications}
                   diagnostics={diagnostics}
                   blur={blur}

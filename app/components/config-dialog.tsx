@@ -2,12 +2,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher } from "react-router";
 import { toast } from "sonner";
 import {
+  Check,
   ChevronRight,
+  Copy,
+  Ellipsis,
   Plus,
   RotateCcw,
   Save,
   Send,
   Settings,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -21,6 +25,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { Textarea } from "~/components/ui/textarea";
 import {
   DEFAULT_MACROS,
@@ -33,6 +42,15 @@ import {
   type MacroName,
 } from "~/lib/config";
 import type { RemoteStatus } from "~/lib/remote.server";
+import {
+  COLOUR_FUNCTIONS,
+  DEFAULT_THEME,
+  NEW_THEME_LIGHT,
+  parseThemeInput,
+  printTheme,
+  THEME_NAME,
+} from "~/lib/theme";
+import type { ThemeStatus } from "~/lib/theme.server";
 import type { Notifications } from "~/components/waiting-alerts";
 import type { Blur } from "~/lib/use-blur";
 import type { Diagnostics } from "~/lib/use-diagnostics";
@@ -42,6 +60,7 @@ import type { ConfigResult } from "~/routes/config";
 const TABS = [
   { key: "general", label: "General" },
   { key: "macros", label: "Macros" },
+  { key: "themes", label: "Themes" },
   { key: "remote", label: "Remote" },
   { key: "debug", label: "Debug" },
 ] as const;
@@ -82,6 +101,7 @@ export function ConfigDialog({
   config,
   engines,
   remote,
+  theme,
   notifications,
   diagnostics,
   blur,
@@ -90,6 +110,7 @@ export function ConfigDialog({
   // Which agents this Mac can launch.
   engines: Record<Engine, boolean>;
   remote: RemoteStatus;
+  theme: ThemeStatus;
   notifications: Notifications;
   diagnostics: Diagnostics;
   blur: Blur;
@@ -146,10 +167,17 @@ export function ConfigDialog({
               />
             ) : tab === "macros" ? (
               <MacrosTab config={config} />
+            ) : tab === "themes" ? (
+              <ThemesTab theme={theme} />
             ) : tab === "remote" ? (
               <RemoteTab remote={remote} />
             ) : (
-              <DebugTab diagnostics={diagnostics} blur={blur} />
+              <DebugTab
+                diagnostics={diagnostics}
+                blur={blur}
+                swap={theme.swap}
+                local={!remote.viaTunnel && !remote.mdns.viaLan}
+              />
             )}
           </div>
         </DialogContent>
@@ -360,9 +388,13 @@ function NotificationSetting({ enabled, permission, toggle }: Notifications) {
 function DebugTab({
   diagnostics,
   blur,
+  swap,
+  local,
 }: {
   diagnostics: Diagnostics;
   blur: Blur;
+  swap: ThemeStatus["swap"];
+  local: boolean;
 }) {
   const action = useConfigAction();
   return (
@@ -405,7 +437,91 @@ function DebugTab({
         </div>
         {action.error && <p className="text-destructive">{action.error}</p>}
       </section>
+      <ThemeSwapSetting swap={swap} local={local} />
     </div>
+  );
+}
+
+// Turns on only from this Mac, which is the only page given the token, and
+// off from anywhere.
+function ThemeSwapSetting({
+  swap,
+  local,
+}: {
+  swap: ThemeStatus["swap"];
+  local: boolean;
+}) {
+  const action = useConfigAction();
+  const [copied, setCopied] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  const copy = async () => {
+    if (!swap.token) return;
+    try {
+      await navigator.clipboard.writeText(swap.token);
+    } catch {
+      // No clipboard API off a secure origin: copy from the field.
+      const input = field.current;
+      if (!input) return;
+      input.type = "text";
+      input.select();
+      document.execCommand("copy");
+      input.type = "password";
+      input.setSelectionRange(0, 0);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-medium">Remote theme swapping</h3>
+      <SwitchRow
+        checked={swap.on}
+        disabled={(!swap.on && !local) || action.pending}
+        onCheckedChange={(checked) =>
+          action.submit("theme-swap", { on: String(checked) })
+        }
+        label="Let a script choose the board's theme"
+      >
+        A POST to <code>/theme-swap</code> with a saved theme's name and this
+        token switches every board to that theme. From this Mac, or over mDNS
+        with the board's credentials; never through the tunnel. It can only
+        choose a theme, not make or change one. Turning it on makes a new
+        token; it can only be turned on from this Mac.
+      </SwitchRow>
+      {swap.on &&
+        (swap.token ? (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                ref={field}
+                type="password"
+                readOnly
+                value={swap.token}
+                aria-label="Theme swap token"
+                className="min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+              />
+              <Button variant="outline" size="sm" onClick={() => void copy()}>
+                {copied ? <Check /> : <Copy />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            <pre className="overflow-x-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px]">
+              {`curl -X POST -d name=<theme> -d token=<token> ${origin}/theme-swap`}
+            </pre>
+            <p className="text-xs text-muted-foreground">
+              Over mDNS, add <code>-u</code> with the board's user and
+              password. A theme's name is the one under its label on the
+              Themes tab; <code>{DEFAULT_THEME}</code> is the built-in one.
+            </p>
+          </>
+        ) : (
+          <p className="text-muted-foreground">
+            On. The token is shown only on this Mac.
+          </p>
+        ))}
+      {action.error && <p className="text-destructive">{action.error}</p>}
+    </section>
   );
 }
 
@@ -785,3 +901,286 @@ const REMOTE_VARIABLES = [
   },
   { name: "SEAMUX_CF_AUD", meaning: "the Access application's AUD tag" },
 ];
+
+// Saved themes on the left, seamux's own first; the chosen one's editor on
+// the right. Kept in seamux's store and shown on every board.
+function ThemesTab({ theme }: { theme: ThemeStatus }) {
+  const [selected, setSelected] = useState<string | null>(theme.active.name);
+  const [adding, setAdding] = useState(false);
+  const remover = useConfigAction(() => setSelected(DEFAULT_THEME));
+  const current = theme.themes.find((t) => t.name === selected);
+  const pick = (name: string) => {
+    setAdding(false);
+    setSelected(name);
+  };
+  const entries = [
+    { name: DEFAULT_THEME, label: "seamux" },
+    ...theme.themes.map((t) => ({ name: t.name, label: t.label })),
+  ];
+  return (
+    <div className="grid gap-4 md:grid-cols-[11rem_minmax(0,1fr)]">
+      <div className="flex flex-col gap-2">
+        <ul className="flex flex-col divide-y rounded-lg border">
+          {entries.map((t) => (
+            <li key={t.name}>
+              <button
+                type="button"
+                onClick={() => pick(t.name)}
+                className={cn(
+                  "flex w-full cursor-pointer flex-col items-start px-2 py-1.5 text-left hover:bg-muted",
+                  !adding && selected === t.name && "bg-muted",
+                )}
+              >
+                <span className="flex w-full items-center gap-1">
+                  <span className="min-w-0 flex-1 truncate">{t.label}</span>
+                  {theme.active.name === t.name && (
+                    <span className="text-xs text-muted-foreground">active</span>
+                  )}
+                </span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {t.name}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setAdding(true);
+              setSelected(null);
+            }}
+          >
+            <Plus />
+            Add
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!current || adding || remover.pending}
+            onClick={() =>
+              current && remover.submit("remove-theme", { name: current.name })
+            }
+          >
+            <Trash2 />
+            Remove
+          </Button>
+        </div>
+        {remover.error && <p className="text-destructive">{remover.error}</p>}
+      </div>
+      {adding ? (
+        <ThemeEditor
+          key="new"
+          name={null}
+          saved={{ label: "", light: NEW_THEME_LIGHT, dark: "" }}
+          active={false}
+          onSaved={pick}
+        />
+      ) : current ? (
+        // Keyed on what's saved, so a save, or a change from another board,
+        // starts a fresh draft.
+        <ThemeEditor
+          key={`${current.name}:${current.label}:${current.light}:${current.dark}`}
+          name={current.name}
+          saved={current}
+          active={theme.active.name === current.name}
+          onSaved={pick}
+        />
+      ) : (
+        <BuiltInTheme active={theme.active.name === DEFAULT_THEME} />
+      )}
+    </div>
+  );
+}
+
+function BuiltInTheme({ active }: { active: boolean }) {
+  const action = useConfigAction();
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-medium">seamux</h3>
+      <p className="text-muted-foreground">
+        seamux's own colours, from the mark's cyan to indigo. A theme needs only
+        its two brand colours, <code>--brand-primary</code> and{" "}
+        <code>--brand-secondary</code>: the rest of its palette is worked out
+        from them, and anything else it sets replaces what was worked out.
+        Leave out light or dark and it's made from the other's brand.
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          disabled={active || action.pending}
+          onClick={() => action.submit("activate-theme", { name: DEFAULT_THEME })}
+        >
+          <Check />
+          {active ? "Active" : "Make active"}
+        </Button>
+      </div>
+      {action.error && <p className="text-destructive">{action.error}</p>}
+    </section>
+  );
+}
+
+function ThemeEditor({
+  name,
+  saved,
+  active,
+  onSaved,
+}: {
+  // null for a theme not yet saved, which asks for its name.
+  name: string | null;
+  saved: { label: string; light: string; dark: string };
+  active: boolean;
+  onSaved: (name: string) => void;
+}) {
+  const saver = useConfigAction((fields) => onSaved(fields.name));
+  const activator = useConfigAction();
+  const [newName, setNewName] = useState("");
+  const [label, setLabel] = useState(saved.label);
+  const [light, setLight] = useState(saved.light);
+  const [dark, setDark] = useState(saved.dark);
+  const [mode, setMode] = useState<"light" | "dark">(
+    saved.light || !saved.dark ? "light" : "dark",
+  );
+  const [menu, setMenu] = useState(false);
+  const themeName = name ?? newName.trim();
+  const dirty =
+    name === null ||
+    label !== saved.label ||
+    light !== saved.light ||
+    dark !== saved.dark;
+  // The draft as it would print: shown on the board while this theme is the
+  // active one, after the saved theme's rules, so it wins.
+  const draft = parseThemeInput({ label: label || themeName, light, dark });
+  const preview =
+    active && dirty && draft.ok ? printTheme(themeName, draft.theme) : "";
+  const save = () =>
+    saver.submit("save-theme", { name: themeName, label, light, dark });
+  const text = mode === "light" ? light : dark;
+  const setText = mode === "light" ? setLight : setDark;
+  return (
+    <section className="flex min-w-0 flex-col gap-2">
+      {preview && <style>{preview}</style>}
+      {name === null ? (
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            Name: lowercase letters, digits and dashes
+          </span>
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="duck"
+            className="rounded-md border bg-transparent px-2 py-1 font-mono text-sm"
+          />
+        </label>
+      ) : (
+        <h3 className="font-mono text-xs text-muted-foreground">{name}</h3>
+      )}
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">Label</span>
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Duck"
+          className="rounded-md border bg-transparent px-2 py-1 text-sm"
+        />
+      </label>
+      <div role="tablist" className="flex gap-1 border-b">
+        {(["light", "dark"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            className={cn(
+              "-mb-px cursor-pointer border-b-2 px-3 py-1 text-sm capitalize",
+              mode === m
+                ? "border-foreground font-medium text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {m}
+            {!(m === "light" ? light : dark).trim() && (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                derived
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={12}
+        spellCheck={false}
+        placeholder={`Empty: made from the ${mode === "light" ? "dark" : "light"} variant's brand colours`}
+        className="font-mono text-xs"
+      />
+      <p className="text-xs text-muted-foreground">
+        JSON of token to value. Colours as hex,{" "}
+        {COLOUR_FUNCTIONS.map((f, i) => (
+          <span key={f}>
+            {i > 0 && (i === COLOUR_FUNCTIONS.length - 1 ? " or " : ", ")}
+            <code>{f}</code>
+          </span>
+        ))}
+        ; <code className="whitespace-nowrap">--radius</code> in rem or px.
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          disabled={!dirty || !THEME_NAME.test(themeName) || saver.pending}
+          onClick={save}
+        >
+          <Save />
+          Save
+        </Button>
+        {name !== null && (
+          <Popover open={menu} onOpenChange={setMenu}>
+            <PopoverTrigger
+              aria-label="More"
+              render={<Button size="icon-sm" variant="ghost" />}
+            >
+              <Ellipsis />
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-48 gap-0.5 p-1.5">
+              <button
+                type="button"
+                disabled={!dirty}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  setLabel(saved.label);
+                  setLight(saved.light);
+                  setDark(saved.dark);
+                  setMenu(false);
+                }}
+              >
+                <RotateCcw className="size-4" />
+                Revert
+              </button>
+              <button
+                type="button"
+                disabled={active || activator.pending}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  activator.submit("activate-theme", { name });
+                  setMenu(false);
+                }}
+              >
+                <Check className="size-4" />
+                {active ? "Active" : "Make active"}
+              </button>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+      {(saver.error ?? activator.error) && (
+        <p className="whitespace-pre-line text-destructive">
+          {saver.error ?? activator.error}
+        </p>
+      )}
+    </section>
+  );
+}

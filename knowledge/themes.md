@@ -9,6 +9,7 @@ How the browser treats the CSS custom properties a theme is made of: what a valu
 A ban on words in a theme's values can always be spelled around like this. A theme's value has to be parsed into what it means, a colour's numbers or a length's number and unit, and the CSS written from those, so nothing the author typed reaches the page as text.
 
 - **Measured:** Chrome 154.0.8037.95, macOS 26.5.1.
+- **In seamux:** `parseColour`, `parseLength` and `printValue` in [theme.ts](../app/lib/theme.ts); the store keeps only the parsed numbers.
 
 ## A relative colour in a custom property resolves where it's declared
 
@@ -17,7 +18,7 @@ With `:root { --brand: #5ecdfa; --background: oklch(from var(--brand) 0.175 0.02
 Setting `--brand: #ff0000` from `html[data-theme="duck"]`, on the same element as `:root`, moved `--background` from hue 227.751 to 29.2346 as soon as the attribute was added. Tokens derived from the brand in `:root` follow a theme that sets the brand on `<html>`, and on no other element.
 
 - **Measured:** Chrome 154.0.8037.95, macOS 26.5.1.
-- **In seamux:** `--scrollbar-thumb-hover` in [app.css](../app/app.css) is the one token derived this way so far.
+- **In seamux:** the `html[data-theme]` rules in [app.css](../app/app.css), which derive a theme's surfaces from its brand, and `printTheme` in [theme.ts](../app/lib/theme.ts), which sets the brand on `:root[data-theme=…]`.
 
 ## `getComputedStyle` gives a custom property back as text, not as a colour
 
@@ -31,10 +32,19 @@ Setting `--brand: #ff0000` from `html[data-theme="duck"]`, on the same element a
 An element with `background-color: red` in one rule and `--c2: notacolor; background-color: var(--c2)` in a later one was painted `rgba(0, 0, 0, 0)`, not red. So was one using `oklch(from var(--nope) l c h)` with `--nope` undefined. The browser accepts `var()` when it reads the stylesheet and finds the value is bad only when it works it out, by which time the earlier declaration has already lost. A bad token in a theme blanks whatever uses it; it doesn't fall back to seamux's own value.
 
 - **Measured:** Chrome 154.0.8037.95, macOS 26.5.1.
+- **In seamux:** why `printValue` in [theme.ts](../app/lib/theme.ts) leaves out a value it can't print, rather than printing something the browser would refuse.
 
 ## A theme's light rules outrank seamux's `.dark` tokens
 
 app.css sets the light tokens on `:root` and the dark ones on `.dark`. A test page with `:root { --bg2: oklch(0.98 0.005 262) }`, `.dark { --bg2: oklch(0.175 0.028 262) }` and a theme's light rule `html[data-theme="duck"] { --bg2: rgb(255, 0, 0) }` painted `oklch(0.98 0.005 262)` in light mode and `oklch(0.175 0.028 262)` with `.dark` on `<html>`. With `data-theme="duck"` added as well, still dark, it painted `rgb(255, 0, 0)`, the theme's light value. `html[data-theme="duck"]` is a type selector and an attribute, which outranks the one class in `.dark`, so whatever a theme sets for light also replaces seamux's dark value, unless the theme's own dark rule sets it again. A theme's light rule has to exclude dark mode, as `html[data-theme="duck"]:not(.dark)` does.
 
 - **Measured:** Chrome 154.0.8037.95, macOS 26.5.1.
-- **In seamux:** the `:root` and `.dark` blocks in [app.css](../app/app.css).
+- **In seamux:** `printTheme` in [theme.ts](../app/lib/theme.ts), whose light rule is `:root[data-theme="…"]:not(.dark)`.
+
+## Given seamux's own brand, colours derived from it in CSS land within a degree of seamux's palette
+
+app.css's `html[data-theme]` rules derive a theme's surfaces from `--brand-secondary` at the lightness and chroma of seamux's palette, with the neutrals at `calc(h - 10)`. A theme setting only `--brand-primary: #5ecdfa` and `--brand-secondary: #586beb`, seamux's own, computed every surface token at the same lightness and chroma as app.css's, with the hue 262.605 for 262 and 272.605 for 272: `#586beb` is hue 272.598. `--chart-1`, from `--brand-primary`, came out at 227.751 for 225. Measured on the board itself, in light and dark, through `getComputedStyle` on a property that uses each token.
+
+- **Measured:** Chrome 154.0.8037.95, macOS 26.5.1, React Router 7.18.4, Vite 8.3.0.
+- **In seamux:** the `html[data-theme]` rules in [app.css](../app/app.css).
+- **See also:** [A relative colour in a custom property resolves where it's declared](#a-relative-colour-in-a-custom-property-resolves-where-its-declared).

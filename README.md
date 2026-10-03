@@ -96,7 +96,7 @@ A worker counts as finished only when it writes its `done` marker, not when its 
 ### Rules it keeps
 
 - **It never destroys.** seamux has no command that deletes a session, a worktree or a transcript. When something should go, seamux sends a prompt asking the session that owns it to remove it.
-- **Localhost, unless you open it.** The server binds `127.0.0.1`, and every write checks that the request came from the board itself, so no other website can type into your sessions. The only other ways in are the ones the Remote tab switches on: mDNS, only with the board's password, and the Cloudflare tunnel, only with a valid Access token.
+- **Localhost, unless you open it.** The server binds `127.0.0.1`, and every write checks that the request came from the board itself, so no other website can type into your sessions. The one exception is Remote theme swapping, off unless you turn it on in Debug, which takes a token instead and can only pick a saved theme. The only other ways in are the ones the Remote tab switches on: mDNS, only with the board's password, and the Cloudflare tunnel, only with a valid Access token.
 
 Whoever can reach the board can type into every session on your Mac, and those sessions can run commands. Treat access to it like access to your terminal. [SECURITY.md](SECURITY.md) says how to report a vulnerability.
 

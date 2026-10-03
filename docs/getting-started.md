@@ -94,6 +94,26 @@ Macros are prompts seamux sends into a session for you. `{{name}}` variables are
 
 `{{siblings}}` is a sentence naming the other live sessions under the same repo. Without it, a session can't know that another session is using the same repo.
 
+### Themes
+
+A theme repaints the board, on every browser that has it open. Pick one from the list on the left; **Make active**, under the `⋯` beside Save, switches every board to it within a few seconds. `seamux` is the built-in one.
+
+**Add** starts a theme. Its name, lowercase letters, digits and dashes, is fixed once saved; its label is what the list shows. Each theme has a Light and a Dark variant, each JSON of token to value:
+
+```json
+{
+  "--brand-primary": "#f5b301",
+  "--brand-secondary": "#e0661b",
+  "--radius": "0.5rem"
+}
+```
+
+- A variant needs only `--brand-primary` and `--brand-secondary`. The board works out the rest of its palette from them: in light, a near-white ground tinted with the brand; in dark, a very dark one. Anything else you set replaces what was worked out.
+- Leave a variant empty and it's made from the other's brand colours.
+- Colours are hex, `rgb()`, `hsl()`, `oklch()`, `oklab()` or `transparent`; `--radius` is 0 to 4rem or 0 to 64px. Every colour token in `app/app.css` can be set except the two engine colours, Claude Code's and Codex's. Anything else is refused when you save, with where and why.
+- Saving keeps the values as numbers, so the editor shows them back in a standard form: `oklch(56% 0.19 272)` comes back as `oklch(0.56 0.19 272)`.
+- While you edit the active theme, the board shows the draft before you save it. **Revert** puts back what's saved.
+
 ### Remote
 
 Switches on remote connections: mDNS for your own network, and a Cloudflare tunnel for anywhere else. See [Remote connections](remote-connections.md).
@@ -104,10 +124,18 @@ Switches on remote connections: mDNS for your own network, and a Cloudflare tunn
 - **Diagnostics**: sends a snapshot of how this browser lays out the board to the Mac, for triage from a phone. It records the screen size, the media queries that match, the safe areas, which stylesheets are loaded and whether they carry the phone layout's rules, and every column's and card's size and computed style. It also records the service worker's state and recent script errors. A snapshot is sent when the board loads, a second after the window is resized or turned, and when you press **Send now**. The tab shows the last one, and the Mac keeps it in `data/diagnostics/latest.json`, with the last 50 in `data/diagnostics/log.jsonl`.
 - **Clear this browser's cache for the board**: a link to `/reset`, which answers with `Clear-Site-Data: "cache"` and goes back to the board. It gets a browser that is stuck on old code working again, and keeps drafts, settings and the Access login. The error page links to it too.
 - **Clear autocomplete cache**: forgets every folder's slash commands, so each is listed again the next time you type `/`.
+- **Remote theme swapping**: lets a script switch every board's theme, with a token this tab shows on this Mac only, behind a Copy button. Turning it on makes a new token and can only be done from this Mac; turning it off, from anywhere, makes the token useless. It answers a POST, never a GET, from this Mac or over mDNS (with the board's user and password), never through the tunnel:
+
+  ```sh
+  curl -X POST -d name=duck -d token=<token> http://localhost:54321/theme-swap
+  curl -u "$SEAMUX_USER:$SEAMUX_PASS" -X POST -d name=duck -d token=<token> http://<name>.local:54321/theme-swap
+  ```
+
+  It can only choose a saved theme, or `seamux`, and answers 204; 403 for a wrong token or with swapping off, 404 for a theme that doesn't exist. JSON (`{"name": …, "token": …}`) works too. The newest swap wins: every board takes whichever was made last.
 
 ### In the browser
 
-Some choices are kept in the browser rather than the store: light or dark theme (the board follows the OS until you pick the other one with the header toggle, and again once you flip it back), whether DONE is shown, project colours, whether to send desktop notifications, whether to send diagnostics, and whether to blur cards for screenshots.
+Some choices are kept in the browser rather than the store: light or dark (the board follows the OS until you pick the other one with the header toggle, and again once you flip it back), whether DONE is shown, project colours, whether to send desktop notifications, whether to send diagnostics, and whether to blur cards for screenshots.
 
 ## `.seamux.json`
 

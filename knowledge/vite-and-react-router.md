@@ -15,12 +15,14 @@ It calls `Object.assign(process.env, loadEnv(...))` from its plugin's `config` h
 - **Measured:** Vite 8.3.0, React Router 7.18.4.
 - **In seamux:** `forgetDotenv` in [credentials.ts](../app/lib/credentials.ts), called at the top of [vite.config.ts](../vite.config.ts), clears every `SEAMUX_` variable the dev server's own environment didn't set, before each load.
 
-## React Router refuses a cross-origin POST before any action runs
+## React Router checks a POST's Origin only on its `.data` requests, never on a plain POST to a resource route
 
-It answers with a 400, rather than `assertFromBoard`'s 403.
+A POST to `/config.data`, which is how the board's own fetchers send an action, with `Origin: http://evil.example` got a 400 "Bad Request" from React Router before the action ran. The same POST to `/config` reached the action, and `assertFromBoard` answered 403. A POST to `/theme-swap` with that Origin and the right token got 204. React Router's check runs in `singleFetchAction` and `handleDocumentRequest`, and not in `handleResourceRequest`, which serves every route without a page. That covers all of seamux's actions, so a form another site posts to one of them meets `assertFromBoard` and nothing else.
 
-- **Measured:** React Router version not recorded.
-- **In seamux:** `assertFromBoard` in [guard.server.ts](../app/lib/guard.server.ts), which still runs on every action React Router lets through.
+This entry used to say React Router refuses a cross-origin POST before any action runs. That held only for the `.data` request the board sends, which is where it was first seen.
+
+- **Measured:** React Router 7.18.4, Vite 8.3.0.
+- **In seamux:** `assertFromBoard` in [guard.server.ts](../app/lib/guard.server.ts), which every action but [theme-swap.ts](../app/routes/theme-swap.ts) calls; that one checks a token instead.
 - **See also:** [cloudflared forwards over http, so React Router refuses actions](cloudflare-tunnel.md#cloudflared-forwards-over-http-so-react-router-refuses-actions).
 
 ## Vite serves its pre-bundled dependencies as immutable

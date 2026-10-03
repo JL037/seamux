@@ -19,6 +19,13 @@ import {
   setRemoteSwitch,
   type RemoteSwitch,
 } from "~/lib/remote.server";
+import { parseThemeInput } from "~/lib/theme";
+import {
+  removeTheme,
+  saveTheme,
+  setActiveTheme,
+  setThemeSwap,
+} from "~/lib/theme.server";
 
 const INTENTS = new Set([
   "add-directory",
@@ -31,6 +38,10 @@ const INTENTS = new Set([
   "tunnel",
   "mdns",
   "clear-commands",
+  "save-theme",
+  "remove-theme",
+  "activate-theme",
+  "theme-swap",
 ]);
 
 export interface ConfigResult {
@@ -56,6 +67,25 @@ async function perform(intent: string, form: FormData, request: Request) {
     setRemote(intent, field("on") === "true", request);
   } else if (intent === "clear-commands") {
     forgetCommands();
+  } else if (intent === "save-theme") {
+    const parsed = parseThemeInput({
+      label: field("label"),
+      light: field("light"),
+      dark: field("dark"),
+    });
+    if (!parsed.ok) throw new Error(parsed.errors.join("\n"));
+    saveTheme(field("name"), parsed.theme);
+  } else if (intent === "remove-theme") {
+    removeTheme(field("name"));
+  } else if (intent === "activate-theme") {
+    setActiveTheme(field("name"));
+  } else if (intent === "theme-swap") {
+    // Like remote access: on only from this Mac, off from anywhere.
+    const on = field("on") === "true";
+    if (on && !isLocalRequest(request)) {
+      throw new Error("Remote theme swapping can only be turned on from this Mac");
+    }
+    setThemeSwap(on);
   }
 }
 

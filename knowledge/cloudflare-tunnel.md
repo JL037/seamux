@@ -28,11 +28,11 @@ cloudflared prints "Provided Tunnel token is not valid", so the supervisor backs
 
 ## cloudflared forwards over http, so React Router refuses actions
 
-The dev server builds `request.url` as `http://<hostname>`, the browser sends `Origin: https://<hostname>`, and React Router's CSRF check answers every action with "Bad Request" until the hostname is in `allowedActionOrigins` in `react-router.config.ts`.
+The dev server builds `request.url` as `http://<hostname>`, the browser sends `Origin: https://<hostname>`, and React Router's CSRF check answers every action the board sends, a `.data` request, with "Bad Request" until the hostname is in `allowedActionOrigins` in `react-router.config.ts`.
 
 - **Measured:** cloudflared 2026.9.3.
 - **In seamux:** `allowedActionOrigins` in [react-router.config.ts](../react-router.config.ts) and in [server/serve.ts](../server/serve.ts); `assertFromBoard` in [guard.server.ts](../app/lib/guard.server.ts) still requires the Origin to be exactly `https://<hostname>`.
-- **See also:** [React Router refuses a cross-origin POST before any action runs](vite-and-react-router.md#react-router-refuses-a-cross-origin-post-before-any-action-runs).
+- **See also:** [React Router checks a POST's Origin only on its `.data` requests, never on a plain POST to a resource route](vite-and-react-router.md#react-router-checks-a-posts-origin-only-on-its-data-requests-never-on-a-plain-post-to-a-resource-route).
 
 ## A renamed team keeps its old issuer
 
