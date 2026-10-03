@@ -50,6 +50,7 @@ import {
   THEME_NAME,
 } from "~/lib/theme";
 import type { ThemeStatus } from "~/lib/theme.server";
+import { previewTheme } from "~/lib/use-theme";
 import type { Notifications } from "~/components/waiting-alerts";
 import type { Blur } from "~/lib/use-blur";
 import type { Diagnostics } from "~/lib/use-diagnostics";
@@ -904,7 +905,9 @@ const REMOTE_VARIABLES = [
 ];
 
 // Saved themes on the left, seamux's own first; the chosen one's editor on
-// the right. Kept in seamux's store and shown on every board.
+// the right. Kept in seamux's store and shown on every board. The chosen
+// one is previewed on this browser until the tab closes; Make active shows
+// it on every board.
 function ThemesTab({
   theme,
   local,
@@ -916,6 +919,12 @@ function ThemesTab({
   const [adding, setAdding] = useState(false);
   const remover = useConfigAction(() => setSelected(DEFAULT_THEME));
   const current = theme.themes.find((t) => t.name === selected);
+  const previewed =
+    adding || (selected !== DEFAULT_THEME && !current) ? null : selected;
+  useEffect(() => {
+    previewTheme(previewed);
+    return () => previewTheme(null);
+  }, [previewed]);
   const pick = (name: string) => {
     setAdding(false);
     setSelected(name);
@@ -941,8 +950,14 @@ function ThemesTab({
                 >
                   <span className="flex w-full items-center gap-1">
                     <span className="min-w-0 flex-1 truncate">{t.label}</span>
-                    {theme.active.name === t.name && (
+                    {theme.active.name === t.name ? (
                       <span className="text-xs text-muted-foreground">active</span>
+                    ) : (
+                      previewed === t.name && (
+                        <span className="text-xs text-muted-foreground">
+                          preview
+                        </span>
+                      )
                     )}
                   </span>
                   <span className="font-mono text-xs text-muted-foreground">
@@ -1060,11 +1075,13 @@ function ThemeEditor({
     label !== saved.label ||
     light !== saved.light ||
     dark !== saved.dark;
-  // The draft as it would print: shown on the board while this theme is the
-  // active one, after the saved theme's rules, so it wins.
+  // The draft as it would print: shown on this browser, which previews the
+  // theme being edited, after the saved theme's rules, so it wins.
   const draft = parseThemeInput({ label: label || themeName, light, dark });
   const preview =
-    active && dirty && draft.ok ? printTheme(themeName, draft.theme) : "";
+    name !== null && dirty && draft.ok
+      ? printTheme(themeName, draft.theme)
+      : "";
   const save = () =>
     saver.submit("save-theme", { name: themeName, label, light, dark });
   const text = mode === "light" ? light : dark;

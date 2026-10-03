@@ -20,6 +20,9 @@ declare global {
     // Set first by root.tsx's inline script, which keeps data-theme on
     // <html> matching it.
     __seamuxTheme?: ActiveTheme;
+    // A theme this browser shows in place of the active one while the
+    // Themes tab previews it. Never sent anywhere.
+    __seamuxPreview?: string;
   }
 }
 
@@ -37,13 +40,28 @@ export function themeCssWanted(): boolean {
   return cssWanted;
 }
 
+// The preview if there is one, else the active theme, as data-theme.
+function showTheme() {
+  const name =
+    window.__seamuxPreview ?? window.__seamuxTheme?.name ?? DEFAULT_THEME;
+  const root = document.documentElement;
+  if (name === DEFAULT_THEME) root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", name);
+}
+
 export function applyActiveTheme(active: ActiveTheme) {
   const shown = window.__seamuxTheme;
   if (shown && shown.updatedAt >= active.updatedAt) return;
   window.__seamuxTheme = active;
-  const root = document.documentElement;
-  if (active.name === DEFAULT_THEME) root.removeAttribute("data-theme");
-  else root.setAttribute("data-theme", active.name);
+  showTheme();
+}
+
+// Shows a theme on this browser only, over whatever is active; null goes
+// back to the active one.
+export function previewTheme(name: string | null) {
+  if (name === null) delete window.__seamuxPreview;
+  else window.__seamuxPreview = name;
+  showTheme();
 }
 
 // Light or dark from a swap, when it's newer than the last this browser
