@@ -298,10 +298,12 @@ html[data-theme].dark {
     opacity: var(--watermark-opacity);
     pointer-events: none;
   }
-  /* A theme's --input-image behind every text box, filling it. On the
-     element's data-slot rather than a bg-* class, which cn() would drop
-     for a caller's own bg-transparent. */
-  [data-slot="textarea"] {
+  /* A theme's --input-image behind every text box, filling it: each
+     textarea, and the box around a card's reply line. Marked by an
+     attribute rather than a bg-* class, which cn() would drop for a
+     caller's own bg-transparent. */
+  [data-slot="textarea"],
+  [data-input-image] {
     background-image: var(--input-image);
     background-size: cover;
     background-position: center;

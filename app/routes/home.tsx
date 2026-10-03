@@ -499,6 +499,7 @@ function ChatInput({
           <div className="min-w-0 flex-1">
             <form
               ref={form}
+              data-input-image
               className="flex items-center gap-1 rounded-t-lg border bg-background p-1"
               onSubmit={(e) => {
                 e.preventDefault();
