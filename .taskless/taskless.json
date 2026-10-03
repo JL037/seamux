@@ -26,7 +26,8 @@
         "mode": "reference"
       }
     },
-    "cliVersion": "0.11.2"
+    "cliVersion": "0.11.2",
+    "onboarded": true
   },
   "version": 7,
   "rules": {
