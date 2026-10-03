@@ -198,10 +198,10 @@ function useDoneToasts(cards: BoardCard[]) {
 }
 
 const COLUMN_ACCENT: Record<Column, string> = {
-  idle: "bg-muted-foreground/40",
-  waiting: "bg-warning",
-  working: "bg-brand-primary",
-  done: "bg-success/60",
+  idle: "bg-column-idle",
+  waiting: "bg-column-waiting",
+  working: "bg-column-working",
+  done: "bg-column-done",
 };
 
 function ago(ms: number | null, now: number): string {
@@ -1368,7 +1368,7 @@ function DropLine({ edge }: { edge: "top" | "bottom" }) {
 // Attention sits left of Pinned, while a service needs looking at.
 type BoardColumnKey = Column | "pinned" | "attention";
 
-const PINNED_ACCENT = "bg-pinned";
+const PINNED_ACCENT = "bg-column-pinned";
 
 // Spelled out so Tailwind sees each class.
 const XL_GRID_COLS: Record<number, string> = {
@@ -1384,7 +1384,7 @@ function columnLabel(column: BoardColumnKey): string {
 }
 
 function columnAccent(column: BoardColumnKey): string {
-  if (column === "attention") return ATTENTION_ACCENT;
+  if (column === "attention") return "bg-column-attention";
   return column === "pinned" ? PINNED_ACCENT : COLUMN_ACCENT[column];
 }
 

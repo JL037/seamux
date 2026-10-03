@@ -64,6 +64,12 @@
   --color-attention: var(--attention);
   --color-attention-foreground: var(--attention-foreground);
   --color-pinned: var(--pinned);
+  --color-column-idle: var(--column-idle);
+  --color-column-waiting: var(--column-waiting);
+  --color-column-working: var(--column-working);
+  --color-column-done: var(--column-done);
+  --color-column-pinned: var(--column-pinned);
+  --color-column-attention: var(--column-attention);
   --color-line-highlight: var(--line-highlight);
   --color-engine-foreground: var(--engine-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -94,6 +100,14 @@
   --attention: oklch(63.7% 0.237 25.331);
   --attention-foreground: #fff;
   --pinned: oklch(60.6% 0.25 292.717);
+  /* Each column's dot, in its header and tab and on a pinned card: the
+     state colours above unless a theme gives a column its own. */
+  --column-idle: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
+  --column-waiting: var(--warning);
+  --column-working: var(--brand-primary);
+  --column-done: color-mix(in oklch, var(--success) 60%, transparent);
+  --column-pinned: var(--pinned);
+  --column-attention: var(--attention);
   /* The line a file opens at. */
   --line-highlight: oklch(82.8% 0.189 84.429 / 25%);
   /* A scrollbar's thumb, a tenth darker under the pointer (lighter in
