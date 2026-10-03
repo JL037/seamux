@@ -48,6 +48,8 @@ import {
   parseThemeInput,
   printTheme,
   THEME_NAME,
+  WATERMARK_LABELS,
+  WATERMARKS,
 } from "~/lib/theme";
 import type { ThemeStatus } from "~/lib/theme.server";
 import { previewColor, previewTheme } from "~/lib/use-theme";
@@ -997,7 +999,7 @@ function ThemesTab({
           <ThemeEditor
             key="new"
             name={null}
-            saved={{ label: "", light: NEW_THEME_LIGHT, dark: "" }}
+            saved={{ label: "", light: NEW_THEME_LIGHT, dark: "", watermark: "" }}
             active={false}
             onSaved={pick}
           />
@@ -1005,7 +1007,7 @@ function ThemesTab({
           // Keyed on what's saved, so a save, or a change from another board,
           // starts a fresh draft.
           <ThemeEditor
-            key={`${current.name}:${current.label}:${current.light}:${current.dark}`}
+            key={`${current.name}:${current.label}:${current.light}:${current.dark}:${current.watermark}`}
             name={current.name}
             saved={current}
             active={theme.active.name === current.name}
@@ -1055,7 +1057,7 @@ function ThemeEditor({
 }: {
   // null for a theme not yet saved, which asks for its name.
   name: string | null;
-  saved: { label: string; light: string; dark: string };
+  saved: { label: string; light: string; dark: string; watermark: string };
   active: boolean;
   onSaved: (name: string) => void;
 }) {
@@ -1065,6 +1067,7 @@ function ThemeEditor({
   const [label, setLabel] = useState(saved.label);
   const [light, setLight] = useState(saved.light);
   const [dark, setDark] = useState(saved.dark);
+  const [watermark, setWatermark] = useState(saved.watermark);
   // Opens on the variant this browser shows, and previews whichever tab is
   // picked, light or dark, on this browser alone.
   const [mode, setMode] = useState<"light" | "dark">(() =>
@@ -1084,16 +1087,28 @@ function ThemeEditor({
     name === null ||
     label !== saved.label ||
     light !== saved.light ||
-    dark !== saved.dark;
+    dark !== saved.dark ||
+    watermark !== saved.watermark;
   // The draft as it would print: shown on this browser, which previews the
   // theme being edited, after the saved theme's rules, so it wins.
-  const draft = parseThemeInput({ label: label || themeName, light, dark });
+  const draft = parseThemeInput({
+    label: label || themeName,
+    light,
+    dark,
+    watermark,
+  });
   const preview =
     name !== null && dirty && draft.ok
       ? printTheme(themeName, draft.theme)
       : "";
   const save = () =>
-    saver.submit("save-theme", { name: themeName, label, light, dark });
+    saver.submit("save-theme", {
+      name: themeName,
+      label,
+      light,
+      dark,
+      watermark,
+    });
   const text = mode === "light" ? light : dark;
   const setText = mode === "light" ? setLight : setDark;
   return (
@@ -1122,6 +1137,24 @@ function ThemeEditor({
           placeholder="Duck"
           className="rounded-md border bg-transparent px-2 py-1 text-sm"
         />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">
+          Watermark: drawn by seamux, its stripes coloured by{" "}
+          <code>--watermark-1</code> to <code>--watermark-6</code>
+        </span>
+        <select
+          value={watermark}
+          onChange={(e) => setWatermark(e.target.value)}
+          className="rounded-md border bg-background px-2 py-1 text-sm"
+        >
+          <option value="">None</option>
+          {WATERMARKS.map((w) => (
+            <option key={w} value={w}>
+              {WATERMARK_LABELS[w]}
+            </option>
+          ))}
+        </select>
       </label>
       <div role="tablist" className="flex gap-1 border-b">
         {(["light", "dark"] as const).map((m) => (
@@ -1191,6 +1224,7 @@ function ThemeEditor({
                   setLabel(saved.label);
                   setLight(saved.light);
                   setDark(saved.dark);
+                  setWatermark(saved.watermark);
                   setMenu(false);
                 }}
               >

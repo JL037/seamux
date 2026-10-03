@@ -111,6 +111,35 @@ describe("parsing a theme", () => {
     expect(errors(`{${BRAND}, "--card": 5}`)).toHaveLength(1);
   });
 
+  it("takes a watermark seamux draws, and an opacity from 0 to 1", () => {
+    const ok = parseThemeInput({
+      label: "Duck",
+      light: `{${BRAND}, "--watermark-opacity": "0.3", "--watermark-1": "#fff"}`,
+      dark: "",
+      watermark: "pride-heart",
+    });
+    expect(ok.ok && ok.theme.watermark).toBe("pride-heart");
+    expect(ok.ok && ok.theme.light?.["--watermark-opacity"]).toEqual({
+      fraction: 0.3,
+    });
+    const none = parseThemeInput({ label: "Duck", light: `{${BRAND}}`, dark: "", watermark: "" });
+    expect(none.ok && none.theme.watermark).toBeUndefined();
+    const bad = parseThemeInput({
+      label: "Duck",
+      light: `{${BRAND}}`,
+      dark: "",
+      watermark: "url(x)",
+    });
+    expect(bad.ok ? [] : bad.errors).toEqual([
+      "watermark: not a watermark seamux draws",
+    ]);
+    for (const value of ["1.5", "-0.1", "120%", "#fff", "0.5rem"]) {
+      expect(errors(`{${BRAND}, "--watermark-opacity": "${value}"}`)).toEqual([
+        "light.--watermark-opacity: not a number from 0 to 1, or 0% to 100%",
+      ]);
+    }
+  });
+
   it("needs a brand in each variant, and at least one variant", () => {
     expect(errors(`{"--brand-primary": "#fff"}`)).toEqual([
       "light.--brand-secondary: required",
@@ -145,8 +174,27 @@ describe("printing a theme", () => {
       [
         `:root[data-theme="duck"]:not(.dark){--brand-primary:#f5b301;--brand-secondary:#e0661b;--radius:0.5rem}`,
         `:root[data-theme="duck"].dark{--brand-primary:#f5b301;--brand-secondary:#e0661b}`,
+        `:root[data-theme="duck"] .watermark{display:none}`,
       ].join("\n"),
     );
+  });
+
+  it("shows only the watermark the theme picks, after hiding them all", () => {
+    const theme = parseThemeInput({
+      label: "Duck",
+      light: `{${BRAND}, "--watermark-opacity": "35%"}`,
+      dark: "",
+      watermark: "pride-heart",
+    });
+    if (!theme.ok) throw new Error(theme.errors.join("\n"));
+    const css = printTheme("duck", theme.theme);
+    expect(css).toContain("--watermark-opacity:0.35");
+    expect(css.endsWith(
+      [
+        `:root[data-theme="duck"] .watermark{display:none}`,
+        `:root[data-theme="duck"] .watermark-pride-heart{display:block}`,
+      ].join("\n"),
+    )).toBe(true);
   });
 
   it("gives a missing variant the other's brand and nothing more", () => {
@@ -173,13 +221,17 @@ describe("printing a theme", () => {
         "--radius": { unit: "rem", value: 1e300 },
         "--accent": { space: "rgb", r: 1e21, g: -5, b: 2, alpha: 9 },
         "display:none;--x": { space: "transparent" },
+        "--watermark-opacity": { fraction: "1;background:url(x)" },
+        "--watermark-1": { fraction: 0.5 },
       },
+      watermark: "pride-heart{display:block}body{background:url(x)",
     };
     const css = printThemes({ duck: evil, "</style>": evil, Duck: evil });
     expect(css).toBe(
       [
         `:root[data-theme="duck"]:not(.dark){--radius:4rem;--accent:rgb(255 0 2)}`,
         `:root[data-theme="duck"].dark{}`,
+        `:root[data-theme="duck"] .watermark{display:none}`,
       ].join("\n"),
     );
   });

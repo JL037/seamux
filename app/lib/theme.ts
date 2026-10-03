@@ -88,6 +88,13 @@ export const THEME_TOKENS = {
   "--hl-name": "colour",
   "--hl-attr": "colour",
   "--hl-meta": "colour",
+  "--watermark-1": "colour",
+  "--watermark-2": "colour",
+  "--watermark-3": "colour",
+  "--watermark-4": "colour",
+  "--watermark-5": "colour",
+  "--watermark-6": "colour",
+  "--watermark-opacity": "fraction",
   "--radius": "length",
 } as const;
 export type ThemeToken = keyof typeof THEME_TOKENS;
@@ -95,6 +102,19 @@ export type ThemeToken = keyof typeof THEME_TOKENS;
 // The two a variant must set: everything else is derived from them, by the
 // html[data-theme] rules in app.css.
 export const BRAND_TOKENS = ["--brand-primary", "--brand-secondary"] as const;
+
+// The watermarks a theme may pick. Each is drawn by seamux itself
+// (app/components/watermark.tsx) and coloured by the --watermark-* tokens;
+// a theme names one and never supplies a shape.
+export const WATERMARKS = ["pride-heart"] as const;
+export type Watermark = (typeof WATERMARKS)[number];
+export const WATERMARK_LABELS: Record<Watermark, string> = {
+  "pride-heart": "Pride heart",
+};
+
+export function isWatermark(name: unknown): name is Watermark {
+  return WATERMARKS.includes(name as Watermark);
+}
 
 // The built-in theme, which is no theme at all: app.css's own tokens.
 export const DEFAULT_THEME = "seamux";
@@ -120,12 +140,14 @@ export type Colour =
   | { space: "oklab"; l: number; a: number; b: number; alpha: number }
   | { space: "transparent" };
 export type Length = { unit: "rem" | "px"; value: number };
-export type ThemeValue = Colour | Length;
+export type Fraction = { fraction: number };
+export type ThemeValue = Colour | Length | Fraction;
 export type Variant = Partial<Record<ThemeToken, ThemeValue>>;
 export interface Theme {
   label: string;
   light?: Variant;
   dark?: Variant;
+  watermark?: Watermark;
 }
 export type ColorMode = "light" | "dark";
 
@@ -271,6 +293,13 @@ export function parseLength(input: string): Length | null {
   return { unit, value };
 }
 
+// A fraction from 0 to 1, as a number or a percentage: an opacity.
+export function parseFraction(input: string): Fraction | null {
+  const n = arg(input.trim(), 1);
+  if (n === null || n < 0 || n > 1) return null;
+  return { fraction: n };
+}
+
 // --- The schema a theme is saved through ------------------------------------
 
 const MAX_VALUE = 64;
@@ -287,12 +316,30 @@ const lengthField = z
   .refine((s) => parseLength(s) !== null, "not a length from 0 to 4rem or 64px")
   .transform((s) => parseLength(s) as Length);
 
+const fractionField = z
+  .string()
+  .max(MAX_VALUE)
+  .refine(
+    (s) => parseFraction(s) !== null,
+    "not a number from 0 to 1, or 0% to 100%",
+  )
+  .transform((s) => parseFraction(s) as Fraction);
+
+const FIELDS = {
+  colour: colourField,
+  length: lengthField,
+  fraction: fractionField,
+};
+
 const variantShape = Object.fromEntries(
   Object.entries(THEME_TOKENS).map(([token, kind]) => [
     token,
-    (kind === "colour" ? colourField : lengthField).optional(),
+    FIELDS[kind].optional(),
   ]),
-) as Record<ThemeToken, z.ZodOptional<typeof colourField | typeof lengthField>>;
+) as Record<
+  ThemeToken,
+  z.ZodOptional<typeof colourField | typeof lengthField | typeof fractionField>
+>;
 
 export const variantSchema = z
   .strictObject(variantShape)
@@ -308,17 +355,22 @@ export const themeInputSchema = z
     label: z.string().trim().min(1, "required").max(MAX_LABEL),
     light: variantSchema.optional(),
     dark: variantSchema.optional(),
+    watermark: z
+      .enum(WATERMARKS, { error: "not a watermark seamux draws" })
+      .optional(),
   })
   .refine((t) => t.light || t.dark, {
     message: "a theme needs a light variant, a dark one, or both",
   });
 
-// Parses what the editor sent: a label, and each variant as JSON text, ""
-// for none. Errors come back one per line, each with where it was.
+// Parses what the editor sent: a label, each variant as JSON text, "" for
+// none, and a watermark's name, "" or left out for none. Errors come back
+// one per line, each with where it was.
 export function parseThemeInput(input: {
   label: string;
   light: string;
   dark: string;
+  watermark?: string;
 }): { ok: true; theme: Theme } | { ok: false; errors: string[] } {
   const errors: string[] = [];
   const json = (which: "light" | "dark") => {
@@ -335,6 +387,7 @@ export function parseThemeInput(input: {
     label: input.label,
     light: json("light"),
     dark: json("dark"),
+    watermark: input.watermark || undefined,
   };
   if (errors.length > 0) return { ok: false, errors };
   const result = themeInputSchema.safeParse(raw);
@@ -371,6 +424,7 @@ function hexByte(value: unknown): string | null {
 export function printValue(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
+  if ("fraction" in v) return num(v.fraction, 0, 1);
   if ("unit" in v) {
     if (v.unit !== "rem" && v.unit !== "px") return null;
     const n = num(v.value, 0, v.unit === "rem" ? 4 : 64);
@@ -449,8 +503,13 @@ function declarations(variant: unknown): [ThemeToken, string][] {
   for (const [token, value] of Object.entries(variant)) {
     if (!Object.hasOwn(THEME_TOKENS, token)) continue;
     const kind = THEME_TOKENS[token as ThemeToken];
-    if (kind === "length" ? !("unit" in Object(value)) : "unit" in Object(value))
-      continue;
+    const shape =
+      "fraction" in Object(value)
+        ? "fraction"
+        : "unit" in Object(value)
+          ? "length"
+          : "colour";
+    if (shape !== kind) continue;
     const css = printValue(value);
     if (css !== null) out.push([token as ThemeToken, css]);
   }
@@ -476,9 +535,11 @@ function brandOf(variant: Variant | undefined): Variant {
 // One theme's rules. The light rule leaves dark mode out: a light rule
 // outranks app.css's .dark tokens (knowledge/themes.md). :root[…] outranks
 // app.css's html[data-theme] rules, which derive what a theme leaves out.
+// Every theme hides every watermark and then shows its own, so an editor's
+// draft, printed after the saved theme, can take one away.
 export function printTheme(name: string, theme: unknown): string {
   if (!isThemeName(name) || !theme || typeof theme !== "object") return "";
-  const t = theme as { light?: unknown; dark?: unknown };
+  const t = theme as { light?: unknown; dark?: unknown; watermark?: unknown };
   if (!t.light && !t.dark) return "";
   const light = t.light ?? brandOf(t.dark as Variant);
   const dark = t.dark ?? brandOf(t.light as Variant);
@@ -489,6 +550,10 @@ export function printTheme(name: string, theme: unknown): string {
   return [
     block(`:root[data-theme="${name}"]:not(.dark)`, light),
     block(`:root[data-theme="${name}"].dark`, dark),
+    `:root[data-theme="${name}"] .watermark{display:none}`,
+    ...(isWatermark(t.watermark)
+      ? [`:root[data-theme="${name}"] .watermark-${t.watermark}{display:block}`]
+      : []),
   ].join("\n");
 }
 

@@ -74,6 +74,7 @@ async function perform(intent: string, form: FormData, request: Request) {
       label: field("label"),
       light: field("light"),
       dark: field("dark"),
+      watermark: field("watermark"),
     });
     if (!parsed.ok) throw new Error(parsed.errors.join("\n"));
     saveTheme(field("name"), parsed.theme);

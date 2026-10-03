@@ -12,6 +12,7 @@ import {
 import type { Route } from "./+types/root";
 import { StuckBoard } from "~/components/stuck-board";
 import { THEME_KEY } from "~/components/theme-toggle";
+import { Watermarks } from "~/components/watermark";
 import { BLUR_KEY } from "~/lib/use-blur";
 import { Toaster } from "~/components/ui/sonner";
 import { requireAuth } from "~/lib/auth.server";
@@ -128,6 +129,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       </head>
       <body>
+        <Watermarks />
         {children}
         <StuckBoard />
         <ScrollRestoration />

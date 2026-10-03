@@ -48,3 +48,10 @@ app.css's `html[data-theme]` rules derive a theme's surfaces from `--brand-secon
 - **Measured:** Chrome 154.0.8037.95, macOS 26.5.1, React Router 7.18.4, Vite 8.3.0.
 - **In seamux:** the `html[data-theme]` rules in [app.css](../app/app.css).
 - **See also:** [A relative colour in a custom property resolves where it's declared](#a-relative-colour-in-a-custom-property-resolves-where-its-declared).
+
+## A fixed child of `<body>` at `z-index: -1` paints over the page's background and under the board
+
+An `<svg>` appended to `<body>` with `position: fixed; z-index: -1` showed on the board in light and dark, over `body`'s background colour and its radial-gradient wash, and under every card, the dispatch bar and the column headers: a card that overlapped it covered it. `<html>` sets no background, so `body`'s propagates to the canvas, which paints beneath everything in the root stacking context, including what sits at `z-index: -1`. Give `<html>` a background, or make `body` a stacking context, and the watermark would vanish behind it.
+
+- **Measured:** Chrome 154.0.8037.95, macOS 26.5.1, on the board at 1440 by 900, through the DevTools protocol.
+- **In seamux:** `.watermark` in [app.css](../app/app.css), drawn by [watermark.tsx](../app/components/watermark.tsx).

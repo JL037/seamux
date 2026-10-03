@@ -108,6 +108,15 @@
   --column-done: color-mix(in oklch, var(--success) 60%, transparent);
   --column-pinned: var(--pinned);
   --column-attention: var(--attention);
+  /* A theme's watermark: its stripes, the pride flag's unless the theme
+     sets its own, and how strongly it shows. */
+  --watermark-1: #e40303;
+  --watermark-2: #ff8c00;
+  --watermark-3: #ffed00;
+  --watermark-4: #008026;
+  --watermark-5: #24408e;
+  --watermark-6: #732982;
+  --watermark-opacity: 0.2;
   /* The line a file opens at. */
   --line-highlight: oklch(82.8% 0.189 84.429 / 25%);
   /* A scrollbar's thumb, a tenth darker under the pointer (lighter in
@@ -275,6 +284,33 @@ html[data-theme].dark {
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--primary);
+}
+
+/* A theme's watermark (app/components/watermark.tsx), tilted in the
+   bottom-right corner behind the board: hidden unless the theme on the page
+   picks it, by a rule printTheme writes. At z-index -1 it paints above the
+   page's background and under everything else (knowledge/themes.md). */
+@layer components {
+  .watermark {
+    display: none;
+    position: fixed;
+    z-index: -1;
+    right: 3rem;
+    bottom: 2.5rem;
+    width: 240px;
+    height: 220px;
+    rotate: -15deg;
+    opacity: var(--watermark-opacity);
+    pointer-events: none;
+  }
+  @media (width < 48rem) {
+    .watermark {
+      right: 1rem;
+      bottom: calc(1rem + env(safe-area-inset-bottom));
+      width: 120px;
+      height: 110px;
+    }
+  }
 }
 
 @layer base {

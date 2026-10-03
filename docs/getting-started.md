@@ -111,6 +111,7 @@ A theme repaints the board, on every browser that has it open. Pick one from the
 - A variant needs only `--brand-primary` and `--brand-secondary`. The board works out the rest of its palette from them: in light, a near-white ground tinted with the brand; in dark, a very dark one. Anything else you set replaces what was worked out.
 - Leave a variant empty and it's made from the other's brand colours.
 - Colours are hex, `rgb()`, `hsl()`, `oklch()`, `oklab()` or `transparent`; `--radius` is 0 to 4rem or 0 to 64px. Every colour token in `app/app.css` can be set except the two engine colours, Claude Code's and Codex's. Anything else is refused when you save, with where and why.
+- **Watermark**, beside the label, puts one of seamux's own shapes in the bottom-right corner, tilted and behind the board, smaller on a phone. There's one so far, a pride heart. A theme only picks it and colours it: `--watermark-1` to `--watermark-6` are its stripes, top to bottom, the pride flag's unless you set them, and `--watermark-opacity`, 0 to 1 or 0% to 100%, is how strongly it shows, 0.2 unless you set it. Each variant sets its own, so dark can differ from light.
 - Saving keeps the values as numbers, so the editor shows them back in a standard form: `oklch(56% 0.19 272)` comes back as `oklch(0.56 0.19 272)`.
 - While you edit a theme, this browser shows the draft before you save it, in light or dark as the editor's tab says. **Revert** puts back what's saved.
 
