@@ -12,6 +12,7 @@ export default [
   route("diagnostics", "routes/diagnostics.ts"),
   route("reset", "routes/reset.ts"),
   route("theme/set", "routes/theme-set.ts"),
+  route("theme/events", "routes/theme-events.ts"),
   route("restart", "routes/restart.ts"),
   route("file", "routes/file.tsx"),
   route("file/stat", "routes/file-stat.ts"),

@@ -64,3 +64,10 @@ A module requested with a `v=` query goes out as `Cache-Control: max-age=3153600
 - **Measured:** Vite 8.3.0, `@tailwindcss/vite` 4.3.3.
 - **In seamux:** `bustStylesheet` in [vite.config.ts](../vite.config.ts) uses `?boot=`.
 - **See also:** [Vite serves its pre-bundled dependencies as immutable](#vite-serves-its-pre-bundled-dependencies-as-immutable).
+
+## A resource route's `ReadableStream` reaches the browser unbuffered, through the dev server
+
+A loader returning `new Response(stream, { headers: { "Content-Type": "text/event-stream" } })` delivered each event to an `EventSource` as it was enqueued: a theme set by POST reached an open board in 6 to 55 ms, against the 3 seconds the poll took. Neither Vite's middleware nor React Router's request handler held the body back. Through the compiled server and through Cloudflare's tunnel it's unmeasured.
+
+- **Measured:** React Router 7.18.4, Vite 8.3.0, Chrome 154.0.8037.95, macOS 26.5.1.
+- **In seamux:** [theme-events.ts](../app/routes/theme-events.ts), and `useThemeSync` in [use-theme.ts](../app/lib/use-theme.ts).

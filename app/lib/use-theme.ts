@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRevalidator, useRouteLoaderData } from "react-router";
 
 import { THEME_KEY } from "~/components/theme-toggle";
@@ -65,14 +65,19 @@ export function applyColor(color: ColorMode | null, colorAt: number) {
   } catch {}
 }
 
-// Follows the poll: shows the active theme, and fetches the CSS again when
-// the poll's hash of the themes differs from the one the page has.
+// Follows the board's theme: from /theme/events as soon as it changes, and
+// from the poll, which still carries it if the stream drops. Each source
+// can only move the theme and light or dark forward, by their stamps, so
+// whichever arrives late changes nothing. Fetches the CSS again when the
+// newest hash of the themes differs from the one the page has.
 export function useThemeSync(active: ActiveTheme, hash: string) {
   const root = useRouteLoaderData("root") as
     | { themes?: ThemeStyles }
     | undefined;
   const loaded = root?.themes?.hash;
   const revalidator = useRevalidator();
+  const [latestHash, setLatestHash] = useState(hash);
+  useEffect(() => setLatestHash(hash), [hash]);
   useEffect(() => {
     applyActiveTheme(active);
   }, [active.name, active.updatedAt]);
@@ -80,9 +85,25 @@ export function useThemeSync(active: ActiveTheme, hash: string) {
     applyColor(active.color, active.colorAt);
   }, [active.color, active.colorAt]);
   useEffect(() => {
-    cssWanted = loaded !== undefined && loaded !== hash;
+    // Reconnects by itself when the stream drops, as on a restart.
+    const source = new EventSource("/theme/events");
+    source.onmessage = (message) => {
+      let event: { active: ActiveTheme; hash: string };
+      try {
+        event = JSON.parse(message.data as string);
+      } catch {
+        return;
+      }
+      applyActiveTheme(event.active);
+      applyColor(event.active.color, event.active.colorAt);
+      setLatestHash(event.hash);
+    };
+    return () => source.close();
+  }, []);
+  useEffect(() => {
+    cssWanted = loaded !== undefined && loaded !== latestHash;
     if (!cssWanted) return;
     if (revalidator.state === "idle") void revalidator.revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hash, loaded]);
+  }, [latestHash, loaded]);
 }

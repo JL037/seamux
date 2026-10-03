@@ -21,6 +21,7 @@ import {
 } from "~/lib/remote.server";
 import { parseThemeInput } from "~/lib/theme";
 import {
+  clearThemes,
   removeTheme,
   saveTheme,
   setActiveTheme,
@@ -42,6 +43,7 @@ const INTENTS = new Set([
   "remove-theme",
   "activate-theme",
   "theme-set",
+  "clear-themes",
 ]);
 
 export interface ConfigResult {
@@ -75,6 +77,8 @@ async function perform(intent: string, form: FormData, request: Request) {
     });
     if (!parsed.ok) throw new Error(parsed.errors.join("\n"));
     saveTheme(field("name"), parsed.theme);
+  } else if (intent === "clear-themes") {
+    clearThemes();
   } else if (intent === "remove-theme") {
     removeTheme(field("name"));
   } else if (intent === "activate-theme") {

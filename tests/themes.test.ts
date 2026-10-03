@@ -13,6 +13,8 @@ import {
   type Theme,
 } from "~/lib/theme";
 import {
+  clearThemes,
+  onThemeChange,
   readActiveTheme,
   readThemes,
   readThemeSwap,
@@ -25,6 +27,7 @@ import {
 } from "~/lib/theme.server";
 import { openStore } from "~/lib/store.server";
 import { action, loader } from "~/routes/theme-set";
+import { loader as eventsLoader } from "~/routes/theme-events";
 
 const BRAND = `"--brand-primary": "#f5b301", "--brand-secondary": "#e0661b"`;
 
@@ -349,5 +352,68 @@ describe("the swap route", () => {
     setThemeSwap(true);
     setThemeSwap(false);
     expect(await swap({ name: "duck" })).toBe(403);
+  });
+});
+
+describe("clearing and telling boards", () => {
+  beforeEach(() => {
+    openStore().prepare(`DELETE FROM config`).run();
+    saveTheme("duck", parsed(`{${BRAND}}`));
+    saveTheme("goose", parsed(`{${BRAND}}`));
+  });
+
+  it("clears every theme and puts the board back on seamux", () => {
+    setActiveTheme("goose", "dark");
+    expect(clearThemes()).toBe(2);
+    expect(readThemes()).toEqual({});
+    expect(readActiveTheme()).toMatchObject({ name: "seamux", color: "dark" });
+  });
+
+  it("tells listeners of every change, with the new hash", () => {
+    const seen: string[] = [];
+    const stop = onThemeChange((e) => seen.push(`${e.active.name} ${e.hash}`));
+    const before = themeStyles().hash;
+    setActiveTheme("duck");
+    saveTheme("heron", parsed(`{${BRAND}}`));
+    removeTheme("heron");
+    stop();
+    setActiveTheme("goose");
+    expect(seen).toHaveLength(3);
+    expect(seen[0]).toBe(`duck ${before}`);
+    expect(seen[1]).not.toBe(seen[0]);
+    expect(seen[2]).toBe(`duck ${before}`);
+  });
+
+  it("streams the theme as it is now, then each change", async () => {
+    const abort = new AbortController();
+    const request = new Request("http://localhost:54321/theme/events", {
+      headers: { host: "localhost:54321" },
+      signal: abort.signal,
+    });
+    const response = eventsLoader({ request } as never);
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+    const reader = response.body!.getReader();
+    const next = async () => {
+      const { value } = await reader.read();
+      const text = new TextDecoder().decode(value);
+      return JSON.parse(text.replace(/^data: /, ""));
+    };
+    expect((await next()).active.name).toBe("seamux");
+    setActiveTheme("duck", "light");
+    expect((await next()).active).toMatchObject({ name: "duck", color: "light" });
+    abort.abort();
+  });
+
+  it("refuses a stream to another site's page", () => {
+    const request = new Request("http://localhost:54321/theme/events", {
+      headers: { host: "localhost:54321", "sec-fetch-site": "cross-site" },
+    });
+    let status: number | undefined;
+    try {
+      eventsLoader({ request } as never);
+    } catch (err) {
+      status = (err as { init?: { status?: number } }).init?.status;
+    }
+    expect(status).toBe(403);
   });
 });

@@ -3,6 +3,7 @@
 // parsed values (app/lib/theme.ts), so reading them parses nothing.
 
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 
 import { openStore } from "./store.server.ts";
 import {
@@ -73,12 +74,23 @@ export function saveTheme(name: string, theme: Theme) {
     );
   }
   put(`${PREFIX}${name}`, theme);
+  announce();
 }
 
 // Removing the active theme puts the board back on seamux's own.
 export function removeTheme(name: string) {
   put(`${PREFIX}${name}`, undefined);
   if (readActiveTheme().name === name) setActiveTheme(DEFAULT_THEME);
+  announce();
+}
+
+// Every saved theme gone, and the board back on seamux's own. From Debug.
+export function clearThemes(): number {
+  const names = Object.keys(readThemes());
+  openStore().prepare(`DELETE FROM config WHERE key LIKE 'theme:%'`).run();
+  if (readActiveTheme().name !== DEFAULT_THEME) setActiveTheme(DEFAULT_THEME);
+  announce();
+  return names.length;
 }
 
 // --- The theme every board shows -----------------------------------------
@@ -121,7 +133,38 @@ export function setActiveTheme(
     colorAt: color ? later(before.colorAt) : before.colorAt,
   };
   put("activeTheme", active);
+  announce();
   return active;
+}
+
+// --- Telling open boards at once -----------------------------------------
+
+// What a board needs to follow a change: the active theme, and the hash of
+// the themes' rows, which says whether its CSS is still current.
+export interface ThemeEvent {
+  active: ActiveTheme;
+  hash: string;
+}
+
+// On globalThis, so every copy of this module the dev server evaluates
+// shares one.
+const EVENTS = Symbol.for("seamux.themeEvents");
+const store = globalThis as { [EVENTS]?: EventEmitter };
+const events = (store[EVENTS] ??= new EventEmitter().setMaxListeners(0));
+
+export function themeEvent(): ThemeEvent {
+  return { active: readActiveTheme(), hash: themeStyles().hash };
+}
+
+function announce() {
+  if (events.listenerCount("change") === 0) return;
+  events.emit("change", themeEvent());
+}
+
+// Calls `listener` with each change; returns what stops it.
+export function onThemeChange(listener: (event: ThemeEvent) => void) {
+  events.on("change", listener);
+  return () => void events.off("change", listener);
 }
 
 // --- The page's stylesheet -------------------------------------------------

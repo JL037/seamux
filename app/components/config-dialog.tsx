@@ -174,7 +174,11 @@ export function ConfigDialog({
             ) : tab === "remote" ? (
               <RemoteTab remote={remote} />
             ) : (
-              <DebugTab diagnostics={diagnostics} blur={blur} />
+              <DebugTab
+                diagnostics={diagnostics}
+                blur={blur}
+                themes={theme.themes.length}
+              />
             )}
           </div>
         </DialogContent>
@@ -385,9 +389,11 @@ function NotificationSetting({ enabled, permission, toggle }: Notifications) {
 function DebugTab({
   diagnostics,
   blur,
+  themes,
 }: {
   diagnostics: Diagnostics;
   blur: Blur;
+  themes: number;
 }) {
   const action = useConfigAction();
   return (
@@ -430,7 +436,51 @@ function DebugTab({
         </div>
         {action.error && <p className="text-destructive">{action.error}</p>}
       </section>
+      <ClearThemesSetting themes={themes} />
     </div>
+  );
+}
+
+// Asks once more before it goes, since saved themes can't be had back.
+function ClearThemesSetting({ themes }: { themes: number }) {
+  const action = useConfigAction(() => setConfirming(false));
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-medium">Themes</h3>
+      <p className="text-muted-foreground">
+        Removes every saved theme and puts the board back on seamux's own.
+      </p>
+      <div className="flex items-center gap-2">
+        {confirming ? (
+          <>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={action.pending}
+              onClick={() => action.submit("clear-themes")}
+            >
+              <Trash2 />
+              Remove {themes} {themes === 1 ? "theme" : "themes"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={themes === 0}
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 />
+            Clear all themes
+          </Button>
+        )}
+      </div>
+      {action.error && <p className="text-destructive">{action.error}</p>}
+    </section>
   );
 }
 
@@ -453,27 +503,15 @@ function ThemeSetSetting({
         onCheckedChange={(checked) =>
           action.submit("theme-set", { on: String(checked) })
         }
-        label="Let a script choose the board's theme"
+        label="Allow POST /theme/set"
       >
-        A JSON POST to <code>/theme/set</code> with a saved theme's name,
-        and <code>"color": "light"</code> or <code>"dark"</code> if you like,
-        switches every board to that theme. A colour switches every browser
-        until its own toggle switches it back. From this Mac, or over mDNS with the
-        board's user and password; never through the tunnel, and never from
-        another website. It can only choose a theme, not make or change one.
-        It can only be turned on from this Mac.
+        From this Mac or over mDNS, never the tunnel. Turns on only from this
+        Mac.
       </SwitchRow>
       {swap.on && (
-        <>
-          <pre className="overflow-x-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px]">
-            {`curl -u <user>:<password> -X POST -H 'content-type: application/json' -d '{"name": "<theme>", "color": "light"}' ${origin}/theme/set`}
-          </pre>
-          <p className="text-xs text-muted-foreground">
-            <code>-u</code> with the board's SEAMUX_USER and SEAMUX_PASS, when
-            they're set. A theme's name is the one under its label above;{" "}
-            <code>{DEFAULT_THEME}</code> is the built-in one.
-          </p>
-        </>
+        <pre className="overflow-x-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px]">
+          {`curl -u <user>:<password> -H 'content-type: application/json' -d '{"name": "<theme>", "color": "light"}' ${origin}/theme/set`}
+        </pre>
       )}
       {action.error && <p className="text-destructive">{action.error}</p>}
     </section>
@@ -882,7 +920,7 @@ function ThemesTab({
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 md:grid-cols-[11rem_minmax(0,1fr)]">
         <div className="flex flex-col gap-2">
-          <ul className="flex flex-col divide-y rounded-lg border">
+          <ul className="flex max-h-72 flex-col divide-y overflow-y-auto rounded-lg border">
             {entries.map((t) => (
               <li key={t.name}>
                 <button

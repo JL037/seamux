@@ -96,7 +96,7 @@ Macros are prompts seamux sends into a session for you. `{{name}}` variables are
 
 ### Themes
 
-A theme repaints the board, on every browser that has it open. Pick one from the list on the left; **Make active**, under the `⋯` beside Save, switches every board to it within a few seconds. `seamux` is the built-in one.
+A theme repaints the board, on every browser that has it open. Pick one from the list on the left; **Make active**, under the `⋯` beside Save, switches every open board to it at once. `seamux` is the built-in one.
 
 **Add** starts a theme. Its name, lowercase letters, digits and dashes, is fixed once saved; its label is what the list shows. Each theme has a Light and a Dark variant, each JSON of token to value:
 
@@ -114,7 +114,7 @@ A theme repaints the board, on every browser that has it open. Pick one from the
 - Saving keeps the values as numbers, so the editor shows them back in a standard form: `oklch(56% 0.19 272)` comes back as `oklch(0.56 0.19 272)`.
 - While you edit the active theme, the board shows the draft before you save it. **Revert** puts back what's saved.
 
-**Set the theme from a script**, the switch below the editor, lets a script switch every board's theme, and light or dark with it. It can only be turned on from this Mac, and turns off from anywhere. It answers a JSON POST, never a GET or a form, from this Mac or over mDNS, with the board's user and password like every request whenever they're set, never through the tunnel, and never from another website: a POST that carries an `Origin` other than the board's own is refused, which a script never sends:
+**Allow POST /theme/set**, the switch below the editor, lets a script switch every board's theme, and light or dark with it. It can only be turned on from this Mac, and turns off from anywhere. It answers a JSON POST, never a GET or a form, from this Mac or over mDNS, with the board's user and password like every request whenever they're set, never through the tunnel, and never from another website: a POST that carries an `Origin` other than the board's own is refused, which a script never sends:
 
 ```sh
 curl -u "$SEAMUX_USER:$SEAMUX_PASS" -X POST -H 'content-type: application/json' \
@@ -135,6 +135,7 @@ Switches on remote connections: mDNS for your own network, and a Cloudflare tunn
 - **Diagnostics**: sends a snapshot of how this browser lays out the board to the Mac, for triage from a phone. It records the screen size, the media queries that match, the safe areas, which stylesheets are loaded and whether they carry the phone layout's rules, and every column's and card's size and computed style. It also records the service worker's state and recent script errors. A snapshot is sent when the board loads, a second after the window is resized or turned, and when you press **Send now**. The tab shows the last one, and the Mac keeps it in `data/diagnostics/latest.json`, with the last 50 in `data/diagnostics/log.jsonl`.
 - **Clear this browser's cache for the board**: a link to `/reset`, which answers with `Clear-Site-Data: "cache"` and goes back to the board. It gets a browser that is stuck on old code working again, and keeps drafts, settings and the Access login. The error page links to it too.
 - **Clear autocomplete cache**: forgets every folder's slash commands, so each is listed again the next time you type `/`.
+- **Clear all themes**: removes every saved theme, after asking once more, and puts the board back on `seamux`.
 
 ### In the browser
 
