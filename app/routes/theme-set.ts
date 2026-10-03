@@ -1,15 +1,15 @@
 import { data } from "react-router";
 import { z } from "zod";
 
-import type { Route } from "./+types/debug-theme-swap";
+import type { Route } from "./+types/theme-set";
 import { isLocalRequest } from "~/lib/guard.server";
 import { SEAMUX_HOME } from "~/lib/paths.server";
 import { isLanHost } from "~/lib/remote.server";
 import { DEFAULT_THEME } from "~/lib/theme";
 import { readThemes, readThemeSwap, setActiveTheme } from "~/lib/theme.server";
 
-// Remote theme swapping, from the Debug tab: picks the board's theme, and
-// light or dark if asked, from curl or a Shortcut, as JSON:
+// Sets the board's theme from a script, once the Themes tab allows it: the
+// theme, and light or dark if asked, from curl or a Shortcut, as JSON:
 // `{"name": "duck", "color": "dark"}`. The one action that skips
 // assertFromBoard, since a script sends no Origin. remoteGate and the HTTP
 // Basic check have already run, and it can only choose among saved themes,

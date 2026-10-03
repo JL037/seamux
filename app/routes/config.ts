@@ -41,7 +41,7 @@ const INTENTS = new Set([
   "save-theme",
   "remove-theme",
   "activate-theme",
-  "theme-swap",
+  "theme-set",
 ]);
 
 export interface ConfigResult {
@@ -79,11 +79,11 @@ async function perform(intent: string, form: FormData, request: Request) {
     removeTheme(field("name"));
   } else if (intent === "activate-theme") {
     setActiveTheme(field("name"));
-  } else if (intent === "theme-swap") {
+  } else if (intent === "theme-set") {
     // Like remote access: on only from this Mac, off from anywhere.
     const on = field("on") === "true";
     if (on && !isLocalRequest(request)) {
-      throw new Error("Remote theme swapping can only be turned on from this Mac");
+      throw new Error("Setting the theme from a script can only be turned on from this Mac");
     }
     setThemeSwap(on);
   }

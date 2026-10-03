@@ -167,16 +167,14 @@ export function ConfigDialog({
             ) : tab === "macros" ? (
               <MacrosTab config={config} />
             ) : tab === "themes" ? (
-              <ThemesTab theme={theme} />
+              <ThemesTab
+                theme={theme}
+                local={!remote.viaTunnel && !remote.mdns.viaLan}
+              />
             ) : tab === "remote" ? (
               <RemoteTab remote={remote} />
             ) : (
-              <DebugTab
-                diagnostics={diagnostics}
-                blur={blur}
-                swap={theme.swap}
-                local={!remote.viaTunnel && !remote.mdns.viaLan}
-              />
+              <DebugTab diagnostics={diagnostics} blur={blur} />
             )}
           </div>
         </DialogContent>
@@ -387,13 +385,9 @@ function NotificationSetting({ enabled, permission, toggle }: Notifications) {
 function DebugTab({
   diagnostics,
   blur,
-  swap,
-  local,
 }: {
   diagnostics: Diagnostics;
   blur: Blur;
-  swap: ThemeStatus["swap"];
-  local: boolean;
 }) {
   const action = useConfigAction();
   return (
@@ -436,13 +430,12 @@ function DebugTab({
         </div>
         {action.error && <p className="text-destructive">{action.error}</p>}
       </section>
-      <ThemeSwapSetting swap={swap} local={local} />
     </div>
   );
 }
 
 // Turns on only from this Mac, and off from anywhere.
-function ThemeSwapSetting({
+function ThemeSetSetting({
   swap,
   local,
 }: {
@@ -453,16 +446,16 @@ function ThemeSwapSetting({
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="font-medium">Remote theme swapping</h3>
+      <h3 className="font-medium">Set the theme from a script</h3>
       <SwitchRow
         checked={swap.on}
         disabled={(!swap.on && !local) || action.pending}
         onCheckedChange={(checked) =>
-          action.submit("theme-swap", { on: String(checked) })
+          action.submit("theme-set", { on: String(checked) })
         }
         label="Let a script choose the board's theme"
       >
-        A JSON POST to <code>/debug/theme-swap</code> with a saved theme's name,
+        A JSON POST to <code>/theme/set</code> with a saved theme's name,
         and <code>"color": "light"</code> or <code>"dark"</code> if you like,
         switches every board to that theme. A colour switches every browser
         until its own toggle switches it back. From this Mac, or over mDNS with the
@@ -473,11 +466,11 @@ function ThemeSwapSetting({
       {swap.on && (
         <>
           <pre className="overflow-x-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px]">
-            {`curl -X POST -H 'content-type: application/json' -d '{"name": "<theme>", "color": "light"}' ${origin}/debug/theme-swap`}
+            {`curl -u <user>:<password> -X POST -H 'content-type: application/json' -d '{"name": "<theme>", "color": "light"}' ${origin}/theme/set`}
           </pre>
           <p className="text-xs text-muted-foreground">
-            Over mDNS, add <code>-u</code> with the board's user and password.
-            A theme's name is the one under its label on the Themes tab;{" "}
+            <code>-u</code> with the board's SEAMUX_USER and SEAMUX_PASS, when
+            they're set. A theme's name is the one under its label above;{" "}
             <code>{DEFAULT_THEME}</code> is the built-in one.
           </p>
         </>
@@ -866,7 +859,13 @@ const REMOTE_VARIABLES = [
 
 // Saved themes on the left, seamux's own first; the chosen one's editor on
 // the right. Kept in seamux's store and shown on every board.
-function ThemesTab({ theme }: { theme: ThemeStatus }) {
+function ThemesTab({
+  theme,
+  local,
+}: {
+  theme: ThemeStatus;
+  local: boolean;
+}) {
   const [selected, setSelected] = useState<string | null>(theme.active.name);
   const [adding, setAdding] = useState(false);
   const remover = useConfigAction(() => setSelected(DEFAULT_THEME));
@@ -880,79 +879,82 @@ function ThemesTab({ theme }: { theme: ThemeStatus }) {
     ...theme.themes.map((t) => ({ name: t.name, label: t.label })),
   ];
   return (
-    <div className="grid gap-4 md:grid-cols-[11rem_minmax(0,1fr)]">
-      <div className="flex flex-col gap-2">
-        <ul className="flex flex-col divide-y rounded-lg border">
-          {entries.map((t) => (
-            <li key={t.name}>
-              <button
-                type="button"
-                onClick={() => pick(t.name)}
-                className={cn(
-                  "flex w-full cursor-pointer flex-col items-start px-2 py-1.5 text-left hover:bg-muted",
-                  !adding && selected === t.name && "bg-muted",
-                )}
-              >
-                <span className="flex w-full items-center gap-1">
-                  <span className="min-w-0 flex-1 truncate">{t.label}</span>
-                  {theme.active.name === t.name && (
-                    <span className="text-xs text-muted-foreground">active</span>
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-4 md:grid-cols-[11rem_minmax(0,1fr)]">
+        <div className="flex flex-col gap-2">
+          <ul className="flex flex-col divide-y rounded-lg border">
+            {entries.map((t) => (
+              <li key={t.name}>
+                <button
+                  type="button"
+                  onClick={() => pick(t.name)}
+                  className={cn(
+                    "flex w-full cursor-pointer flex-col items-start px-2 py-1.5 text-left hover:bg-muted",
+                    !adding && selected === t.name && "bg-muted",
                   )}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {t.name}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setAdding(true);
-              setSelected(null);
-            }}
-          >
-            <Plus />
-            Add
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!current || adding || remover.pending}
-            onClick={() =>
-              current && remover.submit("remove-theme", { name: current.name })
-            }
-          >
-            <Trash2 />
-            Remove
-          </Button>
+                >
+                  <span className="flex w-full items-center gap-1">
+                    <span className="min-w-0 flex-1 truncate">{t.label}</span>
+                    {theme.active.name === t.name && (
+                      <span className="text-xs text-muted-foreground">active</span>
+                    )}
+                  </span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {t.name}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setAdding(true);
+                setSelected(null);
+              }}
+            >
+              <Plus />
+              Add
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!current || adding || remover.pending}
+              onClick={() =>
+                current && remover.submit("remove-theme", { name: current.name })
+              }
+            >
+              <Trash2 />
+              Remove
+            </Button>
+          </div>
+          {remover.error && <p className="text-destructive">{remover.error}</p>}
         </div>
-        {remover.error && <p className="text-destructive">{remover.error}</p>}
+        {adding ? (
+          <ThemeEditor
+            key="new"
+            name={null}
+            saved={{ label: "", light: NEW_THEME_LIGHT, dark: "" }}
+            active={false}
+            onSaved={pick}
+          />
+        ) : current ? (
+          // Keyed on what's saved, so a save, or a change from another board,
+          // starts a fresh draft.
+          <ThemeEditor
+            key={`${current.name}:${current.label}:${current.light}:${current.dark}`}
+            name={current.name}
+            saved={current}
+            active={theme.active.name === current.name}
+            onSaved={pick}
+          />
+        ) : (
+          <BuiltInTheme active={theme.active.name === DEFAULT_THEME} />
+        )}
       </div>
-      {adding ? (
-        <ThemeEditor
-          key="new"
-          name={null}
-          saved={{ label: "", light: NEW_THEME_LIGHT, dark: "" }}
-          active={false}
-          onSaved={pick}
-        />
-      ) : current ? (
-        // Keyed on what's saved, so a save, or a change from another board,
-        // starts a fresh draft.
-        <ThemeEditor
-          key={`${current.name}:${current.label}:${current.light}:${current.dark}`}
-          name={current.name}
-          saved={current}
-          active={theme.active.name === current.name}
-          onSaved={pick}
-        />
-      ) : (
-        <BuiltInTheme active={theme.active.name === DEFAULT_THEME} />
-      )}
+      <ThemeSetSetting swap={theme.swap} local={local} />
     </div>
   );
 }

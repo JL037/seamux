@@ -24,7 +24,7 @@ import {
   themeStyles,
 } from "~/lib/theme.server";
 import { openStore } from "~/lib/store.server";
-import { action, loader } from "~/routes/debug-theme-swap";
+import { action, loader } from "~/routes/theme-set";
 
 const BRAND = `"--brand-primary": "#f5b301", "--brand-secondary": "#e0661b"`;
 
@@ -268,7 +268,7 @@ describe("the swap route", () => {
       origin,
     }: { host?: string; type?: string; origin?: string } = {},
   ) => {
-    const request = new Request(`http://${host}/debug/theme-swap`, {
+    const request = new Request(`http://${host}/theme/set`, {
       method: "POST",
       headers: {
         host,
