@@ -39,7 +39,7 @@ export function useServiceAlerts(notices: ServiceNotice[], notifying: boolean) {
       const was = before.get(n.service);
       const label = ENGINE_LABELS[n.service];
       if (was?.login?.state === "running" && n.login?.state === "done") {
-        toast.success(`Signed in to ${label}`, { id: `login:${n.service}` });
+        toast.success(`${label} sign-in complete`, { id: `login:${n.service}` });
       }
       if (was?.login?.state === "running" && n.login?.state === "failed") {
         toast.error(`${label} sign-in failed`, {

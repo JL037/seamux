@@ -193,6 +193,12 @@ export function needsAction(n: ServiceNotice): boolean {
   );
 }
 
+// Whether the notice gets a card. A sign-in that just finished stays in the
+// notices so every board sees it end, but says so in a toast instead.
+export function showsCard(n: ServiceNotice): boolean {
+  return n.needsLogin || n.stopped.length > 0 || n.login?.state !== "done";
+}
+
 export interface QueuedMessage {
   id: number;
   text: string;

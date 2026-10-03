@@ -93,6 +93,7 @@ import {
   closable,
   COLUMN_LABELS,
   COLUMNS,
+  showsCard,
   type Board,
   type Card as BoardCard,
   type Column,
@@ -1745,7 +1746,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   useServiceAlerts(board.attention, notifications.enabled);
   // Attention only takes a column while a service needs looking at, and
   // Pinned only while something is pinned.
-  const attention = board.attention;
+  const attention = board.attention.filter(showsCard);
   const pinned = cards.filter((c) => c.pinned);
   // Done is hidden until asked for, and the choice outlives the tab.
   const [showDone, setShowDone] = useLocalStorage("seamux:show-done", false);
