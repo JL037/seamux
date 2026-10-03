@@ -50,7 +50,7 @@ import {
   THEME_NAME,
 } from "~/lib/theme";
 import type { ThemeStatus } from "~/lib/theme.server";
-import { previewTheme } from "~/lib/use-theme";
+import { previewColor, previewTheme } from "~/lib/use-theme";
 import type { Notifications } from "~/components/waiting-alerts";
 import type { Blur } from "~/lib/use-blur";
 import type { Diagnostics } from "~/lib/use-diagnostics";
@@ -1065,9 +1065,19 @@ function ThemeEditor({
   const [label, setLabel] = useState(saved.label);
   const [light, setLight] = useState(saved.light);
   const [dark, setDark] = useState(saved.dark);
-  const [mode, setMode] = useState<"light" | "dark">(
-    saved.light || !saved.dark ? "light" : "dark",
+  // Opens on the variant this browser shows, and previews whichever tab is
+  // picked, light or dark, on this browser alone.
+  const [mode, setMode] = useState<"light" | "dark">(() =>
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light",
   );
+  useEffect(() => {
+    if (name === null) return;
+    previewColor(mode);
+    return () => previewColor(null);
+  }, [name, mode]);
   const [menu, setMenu] = useState(false);
   const themeName = name ?? newName.trim();
   const dirty =

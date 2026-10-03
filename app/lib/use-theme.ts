@@ -23,6 +23,10 @@ declare global {
     // A theme this browser shows in place of the active one while the
     // Themes tab previews it. Never sent anywhere.
     __seamuxPreview?: string;
+    // Light or dark, shown in place of this browser's own while the Themes
+    // tab's editor previews that variant. root.tsx's first script keeps
+    // the class on <html> matching it.
+    __seamuxPreviewColor?: ColorMode;
   }
 }
 
@@ -62,6 +66,23 @@ export function previewTheme(name: string | null) {
   if (name === null) delete window.__seamuxPreview;
   else window.__seamuxPreview = name;
   showTheme();
+}
+
+// Shows the light or dark variant on this browser only, without touching
+// what its toggle stored; null goes back to the toggle's, or the OS's.
+export function previewColor(color: ColorMode | null) {
+  if (color === null) delete window.__seamuxPreviewColor;
+  else window.__seamuxPreviewColor = color;
+  let stored: unknown = null;
+  try {
+    stored = JSON.parse(localStorage.getItem(THEME_KEY) ?? "null");
+  } catch {}
+  const dark = color
+    ? color === "dark"
+    : stored === "dark" ||
+      (stored !== "light" &&
+        matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
 }
 
 // Light or dark from a swap, when it's newer than the last this browser

@@ -92,13 +92,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content="#0B1220" />
         <Meta />
         <Links />
-        {/* Use the theme chosen with the header toggle, else follow the OS;
-            shadcn tokens key off the .dark class. When hydration fails,
+        {/* Use the theme chosen with the header toggle, else follow the OS,
+            unless the Themes tab is previewing light or dark; shadcn tokens
+            key off the .dark class. When hydration fails,
             React renders <html> afresh and strips every attribute from it,
             so the class is put back whenever it goes missing. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(()=>{const k=${JSON.stringify(THEME_KEY)};const r=document.documentElement;const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>{let t=null;try{t=JSON.parse(localStorage.getItem(k))}catch{}const d=t==="dark"||(t!=="light"&&m.matches);if(r.classList.contains("dark")!==d)r.classList.toggle("dark",d)};s();m.addEventListener("change",s);new MutationObserver(s).observe(r,{attributes:true,attributeFilter:["class"]})})()`,
+            __html: `(()=>{const k=${JSON.stringify(THEME_KEY)};const r=document.documentElement;const m=matchMedia("(prefers-color-scheme: dark)");const s=()=>{let t=null;try{t=JSON.parse(localStorage.getItem(k))}catch{}const p=window.__seamuxPreviewColor;const d=p?p==="dark":t==="dark"||(t!=="light"&&m.matches);if(r.classList.contains("dark")!==d)r.classList.toggle("dark",d)};s();m.addEventListener("change",s);new MutationObserver(s).observe(r,{attributes:true,attributeFilter:["class"]})})()`,
           }}
         />
         {/* Every saved theme, printed from numbers only (app/lib/theme.ts),

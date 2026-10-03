@@ -112,7 +112,7 @@ A theme repaints the board, on every browser that has it open. Pick one from the
 - Leave a variant empty and it's made from the other's brand colours.
 - Colours are hex, `rgb()`, `hsl()`, `oklch()`, `oklab()` or `transparent`; `--radius` is 0 to 4rem or 0 to 64px. Every colour token in `app/app.css` can be set except the two engine colours, Claude Code's and Codex's. Anything else is refused when you save, with where and why.
 - Saving keeps the values as numbers, so the editor shows them back in a standard form: `oklch(56% 0.19 272)` comes back as `oklch(0.56 0.19 272)`.
-- While you edit a theme, this browser shows the draft before you save it. **Revert** puts back what's saved.
+- While you edit a theme, this browser shows the draft before you save it, in light or dark as the editor's tab says. **Revert** puts back what's saved.
 
 **Allow POST /theme/set**, the switch below the editor, lets a script switch every board's theme, and light or dark with it. It can only be turned on from this Mac, and turns off from anywhere. It answers a JSON POST, never a GET or a form, from this Mac or over mDNS, with the board's user and password like every request whenever they're set, never through the tunnel, and never from another website: a POST that carries an `Origin` other than the board's own is refused, which a script never sends:
 
