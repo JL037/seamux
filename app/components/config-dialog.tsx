@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Download,
   Ellipsis,
+  Minus,
   Plus,
   RotateCcw,
   Save,
@@ -999,10 +1000,15 @@ function ThemesTab({
               </li>
             ))}
           </ul>
-          <div className="flex flex-wrap gap-2">
+          {/* Each button's word shows where the list is wide enough for
+              all three, as on a phone; in the narrow column, only + and −. */}
+          <div className="@container">
+          <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
+              aria-label="Add"
+              title="Add a theme"
               onClick={() => {
                 setImported(null);
                 setImportNote(null);
@@ -1011,15 +1017,17 @@ function ThemesTab({
               }}
             >
               <Plus />
-              Add
+              <span className="hidden @[17rem]:inline">Add</span>
             </Button>
             <Button
               size="sm"
               variant="outline"
+              aria-label="Import"
+              title="Import a theme file"
               onClick={() => fileInput.current?.click()}
             >
               <Upload />
-              Import
+              <span className="hidden @[17rem]:inline">Import</span>
             </Button>
             <input
               ref={fileInput}
@@ -1035,14 +1043,17 @@ function ThemesTab({
             <Button
               size="sm"
               variant="ghost"
+              aria-label="Remove"
+              title="Remove this theme"
               disabled={!current || adding || remover.pending}
               onClick={() =>
                 current && remover.submit("remove-theme", { name: current.name })
               }
             >
-              <Trash2 />
-              Remove
+              <Minus />
+              <span className="hidden @[17rem]:inline">Remove</span>
             </Button>
+          </div>
           </div>
           {remover.error && <p className="text-destructive">{remover.error}</p>}
           {importNote && (
