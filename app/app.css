@@ -298,6 +298,14 @@ html[data-theme].dark {
     opacity: var(--watermark-opacity);
     pointer-events: none;
   }
+  /* A theme's --input-image behind every text box, filling it. On the
+     element's data-slot rather than a bg-* class, which cn() would drop
+     for a caller's own bg-transparent. */
+  [data-slot="textarea"] {
+    background-image: var(--input-image);
+    background-size: cover;
+    background-position: center;
+  }
   @media (width < 48rem) {
     .watermark {
       right: 1rem;
@@ -388,13 +396,6 @@ html[data-theme].dark {
    a fixed 5px left small print readable. */
 [data-blur] .sensitive {
   filter: blur(0.5em);
-}
-
-/* A theme's --input-image behind a text box, filling it. */
-@utility bg-input-image {
-  background-image: var(--input-image);
-  background-size: cover;
-  background-position: center;
 }
 
 /* The mark's ramp: the primary action, and the edge of a working card. */
