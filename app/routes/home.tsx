@@ -111,7 +111,6 @@ import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useBlur } from "~/lib/use-blur";
 import { useDiagnostics } from "~/lib/use-diagnostics";
-import { textAnswers, useQuestionDrafts } from "~/lib/question-drafts";
 import { useSessionAction } from "~/lib/use-session-action";
 import {
   OptimisticContext,
@@ -433,38 +432,16 @@ function ChatInput({
     });
     forker.submit("fork", { text });
   };
-  // An open question takes the reply as the user's own answer, with the
-  // picks made on its form, as Claude Code's "Type something" does.
-  const ask = card.waiting?.ask;
-  const [picks] = useQuestionDrafts(
-    ask?.toolUseId ?? "",
-    ask?.questions.length ?? 0,
-  );
-  const answers = ask ? textAnswers(ask.questions, picks, draft) : null;
-  const canSend =
-    card.drivable &&
-    !pending &&
-    (ask
-      ? answers != null && attachments.length === 0
-      : draft.trim().length > 0);
-  const queueing =
-    !ask && (card.column === "working" || card.boardQueue.length > 0);
-  const send = () => {
-    if (!canSend) return;
-    if (ask) {
-      takeDraft();
-      submit("answer", {
-        toolUseId: ask.toolUseId,
-        answers: JSON.stringify(answers),
-      });
-      return;
-    }
+  const canSend = card.drivable && !pending && draft.trim().length > 0;
+  const queueing = card.column === "working" || card.boardQueue.length > 0;
+  const asking = card.waiting?.ask != null;
+  const send = () =>
+    canSend &&
     submit(
       queueing ? "queue" : "send",
       { text: takeDraft() },
       attachments.map(({ label, file }) => ({ label, file })),
     );
-  };
 
   // A single-line input would flatten a multiline draft, and editing it there
   // would drop the line breaks for good. So a multiline draft is shown, read
@@ -513,73 +490,73 @@ function ChatInput({
         </Button>
         <ContextBar context={card.context} />
       </div>
-      <div className="flex items-center gap-1 max-md:hidden">
-        <div className="min-w-0 flex-1">
-          <form
-            ref={form}
-            className="flex items-center gap-1 rounded-t-lg border bg-background p-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (multiline) setOpen(true);
-              else send();
-            }}
-          >
-            <input
-              data-focus-key={`reply:${card.sessionId}`}
-              value={multiline ? draft.split("\n")[0] : draft}
-              onChange={(e) => onDraftChange(e.target.value)}
-              onKeyDown={slash.onKeyDown}
-              onClick={multiline ? () => setOpen(true) : undefined}
-              readOnly={multiline}
-              placeholder={
-                !card.drivable
-                  ? "Not in a cmux surface"
-                  : ask
-                    ? "Provide an unstructured answer here (Enter to send)"
+      {/* An open question is answered in its own form, above: the reply
+          box would only be a second place to type. */}
+      {asking ? (
+        <div className="flex justify-end max-md:hidden">{expand}</div>
+      ) : (
+        <div className="flex items-center gap-1 max-md:hidden">
+          <div className="min-w-0 flex-1">
+            <form
+              ref={form}
+              className="flex items-center gap-1 rounded-t-lg border bg-background p-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (multiline) setOpen(true);
+                else send();
+              }}
+            >
+              <input
+                data-focus-key={`reply:${card.sessionId}`}
+                value={multiline ? draft.split("\n")[0] : draft}
+                onChange={(e) => onDraftChange(e.target.value)}
+                onKeyDown={slash.onKeyDown}
+                onClick={multiline ? () => setOpen(true) : undefined}
+                readOnly={multiline}
+                placeholder={
+                  !card.drivable
+                    ? "Not in a cmux surface"
                     : queueing
                       ? "Queue a reply"
                       : "Reply"
-              }
-              disabled={!card.drivable}
-              className={cn(
-                "sensitive min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground",
-                multiline && "cursor-pointer",
-              )}
-            />
-            {multiline ? (
-              <>
-                <button
-                  type="button"
-                  title="Open full view"
-                  onClick={() => setOpen(true)}
-                  className="shrink-0 cursor-pointer text-[10px] tabular-nums text-muted-foreground hover:text-foreground"
-                >
-                  {lines} lines
-                </button>
-                {expand}
-              </>
-            ) : (
-              <Button
-                type="submit"
-                size="icon-xs"
-                disabled={!canSend}
-                title={
-                  ask
-                    ? "Answer the question"
-                    : queueing
-                      ? "Queue, to send once this turn ends"
-                      : "Send"
                 }
-              >
-                <SendHorizontal />
-              </Button>
-            )}
-          </form>
-          {slash.menu}
-          <ContextBar context={card.context} />
+                disabled={!card.drivable}
+                className={cn(
+                  "sensitive min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground",
+                  multiline && "cursor-pointer",
+                )}
+              />
+              {multiline ? (
+                <>
+                  <button
+                    type="button"
+                    title="Open full view"
+                    onClick={() => setOpen(true)}
+                    className="shrink-0 cursor-pointer text-[10px] tabular-nums text-muted-foreground hover:text-foreground"
+                  >
+                    {lines} lines
+                  </button>
+                  {expand}
+                </>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon-xs"
+                  disabled={!canSend}
+                  title={
+                    queueing ? "Queue, to send once this turn ends" : "Send"
+                  }
+                >
+                  <SendHorizontal />
+                </Button>
+              )}
+            </form>
+            {slash.menu}
+            <ContextBar context={card.context} />
+          </div>
+          {!multiline && expand}
         </div>
-        {!multiline && expand}
-      </div>
+      )}
       {error && <ActionError error={error} />}
       <ChatModal
         card={card}
@@ -593,7 +570,6 @@ function ChatInput({
         onSend={send}
         canSend={canSend}
         queueing={queueing}
-        answering={!!ask}
         pending={pending}
         error={error ?? forker.error}
         onFork={card.engine === "claude" ? fork : null}

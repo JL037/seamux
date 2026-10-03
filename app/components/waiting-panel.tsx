@@ -4,21 +4,16 @@ import { Button } from "~/components/ui/button";
 import {
   ASKED_IN_REPLY,
   hasPreviews,
-  type Answer,
   type Card,
   type Question,
   type Waiting,
 } from "~/lib/board";
-import {
-  pickAnswer,
-  takesText,
-  useQuestionDrafts,
-} from "~/lib/question-drafts";
+import { answerOf, takesText, useQuestionDrafts } from "~/lib/question-drafts";
 import { useSessionAction } from "~/lib/use-session-action";
 import { cn } from "~/lib/utils";
 
-// Enter in the note box leaves it be rather than answering: only the Answer
-// button sends.
+// Enter in a box inside the form leaves it be rather than answering: only
+// the Answer button sends.
 const holdEnter = (e: React.KeyboardEvent) => {
   if (e.key === "Enter") e.preventDefault();
 };
@@ -27,8 +22,8 @@ const BOX =
   "rounded-md border bg-background px-2 py-1 outline-none placeholder:text-muted-foreground";
 
 // An open AskUserQuestion, answered from the card. The board drives the
-// same dialog the user would see in the terminal. An answer of the user's
-// own goes in the chat's reply box, as in the terminal, not in the form.
+// same dialog the user would see in the terminal, and like it, offers a
+// row for an answer of the user's own after the options.
 function QuestionForm({
   card,
   ask,
@@ -41,16 +36,17 @@ function QuestionForm({
     ask.questions.length,
   );
   const { submit, pending, error } = useSessionAction(card.sessionId);
-  const answers = drafts.map(pickAnswer);
+  const answers = ask.questions.map((q, i) => answerOf(q, drafts[i]));
   const ready = card.drivable && !pending && answers.every((a) => a != null);
 
   const toggle = (i: number, q: Question, option: number) => {
     const { picks, notes } = drafts[i];
-    if (!q.multiSelect) return update(i, { picks: [option], notes });
+    if (!q.multiSelect) return update(i, { picks: [option], text: "", notes });
     update(i, {
       picks: picks.includes(option)
         ? picks.filter((p) => p !== option)
         : [...picks, option].sort((a, b) => a - b),
+      text: "",
       notes,
     });
   };
@@ -150,9 +146,32 @@ function QuestionForm({
                 />
               ))}
             {takesText(q) && (
-              <p className="text-muted-foreground">
-                Or write your own answer in the reply box.
-              </p>
+              // Claude Code's "Type something", the row after the options.
+              <label
+                className={cn(
+                  "flex cursor-text items-center gap-2 rounded-md border bg-background px-2 py-1",
+                  draft.text.trim() && "border-warning bg-warning/10",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-3 shrink-0 items-center justify-center rounded-full border",
+                    draft.text.trim() &&
+                      "border-warning bg-warning text-warning-foreground",
+                  )}
+                >
+                  {draft.text.trim() && <Check className="size-2.5" />}
+                </span>
+                <input
+                  value={draft.text}
+                  onChange={(e) =>
+                    update(i, { picks: [], text: e.target.value, notes: null })
+                  }
+                  onKeyDown={holdEnter}
+                  placeholder="Type your answer here"
+                  className="sensitive min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+                />
+              </label>
             )}
           </fieldset>
         );
