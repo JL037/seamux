@@ -56,7 +56,6 @@ export function ChatModal({
   onSend,
   canSend,
   queueing,
-  answering,
   pending,
   error,
   onFork,
@@ -76,8 +75,6 @@ export function ChatModal({
   onSend: () => void;
   canSend: boolean;
   queueing: boolean;
-  // An open question: what's written here is the user's own answer to it.
-  answering: boolean;
   pending: boolean;
   error: string | null;
   // null when the chat's agent can't fork: only Claude Code can.
@@ -88,6 +85,7 @@ export function ChatModal({
   title?: ReactNode;
 }) {
   const coarse = useCoarsePointer();
+  const asking = card.waiting?.ask != null;
   const submitKey = useSubmitKey();
   const fetcher = useFetcher<{ messages: ChatMessage[] }>();
   const url = `/sessions/${card.sessionId}/messages`;
@@ -189,7 +187,7 @@ export function ChatModal({
       <DialogContent
         // On a phone, open on the conversation rather than raising the
         // keyboard over it.
-        initialFocus={coarse ? true : input}
+        initialFocus={coarse || asking ? true : input}
         // Framed like its card, so the chat keeps its status and engine; clipped
         // like it too, so the edge follows the rounded corners.
         className={cn(
@@ -253,123 +251,125 @@ export function ChatModal({
 
         <QueuedList card={card} />
 
-        <AttachmentChips attachments={attachments} onDetach={onDetach} />
+        {/* An open question is answered in its own form, above. */}
+        {!asking && (
+          <>
+            <AttachmentChips attachments={attachments} onDetach={onDetach} />
 
-        <div className="flex flex-col gap-2 md:flex-row md:items-end">
-          <div className="relative flex min-w-0 flex-1 flex-col">
-            {slash.menu}
-            <Textarea
-              ref={input}
-              data-focus-key={`chat:${card.sessionId}`}
-              value={draft}
-              onChange={(e) => onDraftChange(e.target.value)}
-              // Files on the clipboard or dropped in are attached; a paste
-              // of anything else is text as usual.
-              onPaste={(e) => {
-                const files = [...e.clipboardData.files];
-                if (files.length === 0 || !card.drivable) return;
-                e.preventDefault();
-                attach(files);
-              }}
-              onDragOver={(e) => {
-                if (e.dataTransfer.types.includes("Files")) e.preventDefault();
-              }}
-              onDrop={(e) => {
-                const files = [...e.dataTransfer.files];
-                if (files.length === 0 || !card.drivable) return;
-                e.preventDefault();
-                attach(files);
-              }}
-              onKeyDown={(e) => {
-                if (slash.onKeyDown(e)) return;
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder={
-                answering && card.drivable
-                  ? `Provide an unstructured answer here${keyHint(submitKey, " to send")}`
-                  : !onFork
-                    ? card.drivable
-                      ? queueing
-                        ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}`
-                        : `Next message${keyHint(submitKey, " to send")}`
-                      : "Not running"
-                    : !card.drivable
-                      ? "Not running: write a tangent to fork from this chat"
-                      : queueing
-                        ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}, or a tangent to fork`
-                        : `Next message${keyHint(submitKey, " to send")}, or a tangent to fork`
-              }
-              className="sensitive max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none border-b-0 focus-visible:border-input focus-visible:ring-0 md:max-h-[40dvh] md:min-h-32"
-            />
-            <ContextBar context={card.context} className="border-input" />
-          </div>
-          <div className="flex justify-end gap-2 md:flex-col">
-            {/* The file dialog, for what can't be pasted or dropped: on a
+            <div className="flex flex-col gap-2 md:flex-row md:items-end">
+              <div className="relative flex min-w-0 flex-1 flex-col">
+                {slash.menu}
+                <Textarea
+                  ref={input}
+                  data-focus-key={`chat:${card.sessionId}`}
+                  value={draft}
+                  onChange={(e) => onDraftChange(e.target.value)}
+                  // Files on the clipboard or dropped in are attached; a paste
+                  // of anything else is text as usual.
+                  onPaste={(e) => {
+                    const files = [...e.clipboardData.files];
+                    if (files.length === 0 || !card.drivable) return;
+                    e.preventDefault();
+                    attach(files);
+                  }}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes("Files"))
+                      e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    const files = [...e.dataTransfer.files];
+                    if (files.length === 0 || !card.drivable) return;
+                    e.preventDefault();
+                    attach(files);
+                  }}
+                  onKeyDown={(e) => {
+                    if (slash.onKeyDown(e)) return;
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  placeholder={
+                    !onFork
+                      ? card.drivable
+                        ? queueing
+                          ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}`
+                          : `Next message${keyHint(submitKey, " to send")}`
+                        : "Not running"
+                      : !card.drivable
+                        ? "Not running: write a tangent to fork from this chat"
+                        : queueing
+                          ? `Next message${keyHint(submitKey, " to queue it for when this turn ends")}, or a tangent to fork`
+                          : `Next message${keyHint(submitKey, " to send")}, or a tangent to fork`
+                  }
+                  className="sensitive max-h-[30dvh] min-h-20 resize-y overflow-y-auto rounded-b-none border-b-0 focus-visible:border-input focus-visible:ring-0 md:max-h-[40dvh] md:min-h-32"
+                />
+                <ContextBar context={card.context} className="border-input" />
+              </div>
+              <div className="flex justify-end gap-2 md:flex-col">
+                {/* The file dialog, for what can't be pasted or dropped: on a
                 phone, nothing can. */}
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => {
-                const files = [...(e.target.files ?? [])];
-                e.target.value = "";
-                if (files.length > 0) attach(files);
-              }}
-            />
-            <Button
-              variant="outline"
-              disabled={!card.drivable || attachments.length >= MAX_ATTACHMENTS}
-              onClick={() => picker.current?.click()}
-              title="Attach files or images"
-            >
-              <Paperclip />
-              Attach
-            </Button>
-            {onFork && (
-              <Button
-                variant="outline"
-                disabled={forking || !draft.trim() || attachments.length > 0}
-                onClick={onFork}
-                title={
-                  attachments.length > 0
-                    ? "A fork can't take attachments yet"
-                    : "Start a new session with this chat's context and this message"
-                }
-              >
-                <GitFork />
-                {forking ? "Forking…" : "Fork"}
-              </Button>
-            )}
-            <Button
-              disabled={!canSend}
-              onClick={send}
-              title={
-                answering
-                  ? `Answer the question${keyHint(submitKey)}`
-                  : queueing
-                    ? `Queue, to send once this turn ends${keyHint(submitKey)}`
-                    : `Send${keyHint(submitKey)}`
-              }
-            >
-              <SendHorizontal />
-              {answering
-                ? pending
-                  ? "Answering…"
-                  : "Answer"
-                : pending
-                  ? queueing
-                    ? "Queueing…"
-                    : "Sending…"
-                  : queueing
-                    ? "Queue"
-                    : "Send"}
-            </Button>
-          </div>
-        </div>
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    const files = [...(e.target.files ?? [])];
+                    e.target.value = "";
+                    if (files.length > 0) attach(files);
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  disabled={
+                    !card.drivable || attachments.length >= MAX_ATTACHMENTS
+                  }
+                  onClick={() => picker.current?.click()}
+                  title="Attach files or images"
+                >
+                  <Paperclip />
+                  Attach
+                </Button>
+                {onFork && (
+                  <Button
+                    variant="outline"
+                    disabled={
+                      forking || !draft.trim() || attachments.length > 0
+                    }
+                    onClick={onFork}
+                    title={
+                      attachments.length > 0
+                        ? "A fork can't take attachments yet"
+                        : "Start a new session with this chat's context and this message"
+                    }
+                  >
+                    <GitFork />
+                    {forking ? "Forking…" : "Fork"}
+                  </Button>
+                )}
+                <Button
+                  disabled={!canSend}
+                  onClick={send}
+                  title={
+                    queueing
+                      ? `Queue, to send once this turn ends${keyHint(submitKey)}`
+                      : `Send${keyHint(submitKey)}`
+                  }
+                >
+                  <SendHorizontal />
+                  {pending
+                    ? queueing
+                      ? "Queueing…"
+                      : "Sending…"
+                    : queueing
+                      ? "Queue"
+                      : "Send"}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
         {(error ?? attachError) && (
           <p className="text-sm text-destructive">{error ?? attachError}</p>
         )}

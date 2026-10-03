@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Question } from "~/lib/board";
-import { textAnswers, type QuestionDraft } from "~/lib/question-drafts";
+import { answerOf, type QuestionDraft } from "~/lib/question-drafts";
 
 const question = (multiSelect: boolean, preview: string | null = null) =>
   ({
@@ -14,44 +14,38 @@ const question = (multiSelect: boolean, preview: string | null = null) =>
     ],
   }) satisfies Question;
 
-const none: QuestionDraft = { picks: [], notes: null };
-const picked = (...picks: number[]): QuestionDraft => ({ picks, notes: null });
+const draft = (d: Partial<QuestionDraft>): QuestionDraft => ({
+  picks: [],
+  text: "",
+  notes: null,
+  ...d,
+});
 
-describe("textAnswers", () => {
-  it("answers a lone question with the reply's text", () => {
-    expect(textAnswers([question(false)], [none], " mine ")).toEqual([
-      { text: "mine" },
-    ]);
+describe("answerOf", () => {
+  it("answers with the picks", () => {
+    expect(answerOf(question(true), draft({ picks: [0, 1] }))).toEqual({
+      picks: [0, 1],
+    });
   });
 
-  it("puts the text in place of a lone question's pick", () => {
-    expect(textAnswers([question(false)], [picked(1)], "mine")).toEqual([
-      { text: "mine" },
-    ]);
+  it("answers a single-select question with the text typed", () => {
+    expect(answerOf(question(false), draft({ text: " mine " }))).toEqual({
+      text: "mine",
+    });
   });
 
-  it("answers the one question left without a pick, the rest with theirs", () => {
+  it("takes no text on a multi-select question or one with previews", () => {
+    expect(answerOf(question(true), draft({ text: "mine" }))).toBeNull();
+    expect(answerOf(question(false, "x"), draft({ text: "mine" }))).toBeNull();
+  });
+
+  it("sends a note with a pick", () => {
     expect(
-      textAnswers(
-        [question(true), question(false)],
-        [picked(0, 1), none],
-        "mine",
-      ),
-    ).toEqual([{ picks: [0, 1] }, { text: "mine" }]);
+      answerOf(question(false, "x"), draft({ picks: [0], notes: " why " })),
+    ).toEqual({ picks: [0], notes: "why" });
   });
 
-  it("can't tell which of several open questions the text answers", () => {
-    expect(
-      textAnswers([question(false), question(false)], [none, none], "mine"),
-    ).toBeNull();
-  });
-
-  it("has no text for a multi-select question or one with previews", () => {
-    expect(textAnswers([question(true)], [none], "mine")).toBeNull();
-    expect(textAnswers([question(false, "x")], [none], "mine")).toBeNull();
-  });
-
-  it("sends nothing without text", () => {
-    expect(textAnswers([question(false)], [none], "  ")).toBeNull();
+  it("has no answer before a pick or any text", () => {
+    expect(answerOf(question(false), draft({ text: "  " }))).toBeNull();
   });
 });
