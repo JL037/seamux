@@ -226,17 +226,11 @@ describe("themes in the store", () => {
     expect(themeStyles().hash).toBe(one.hash);
   });
 
-  it("hands the swap token only to a page on this Mac", () => {
+  it("turns swapping on and off", () => {
+    expect(themeStatus().swap).toEqual({ on: false });
     setThemeSwap(true);
-    expect(themeStatus(true).swap.token).toMatch(/^[\w-]{43}$/);
-    expect(themeStatus(false).swap).toEqual({ on: true, token: null });
-  });
-
-  it("makes a new token each time swapping turns on, and forgets it off", () => {
-    const first = setThemeSwap(true).token;
-    const second = setThemeSwap(true).token;
-    expect(second).not.toBe(first);
-    expect(setThemeSwap(false)).toEqual({ on: false, token: null });
+    expect(themeStatus().swap).toEqual({ on: true });
+    expect(setThemeSwap(false)).toEqual({ on: false });
   });
 });
 
@@ -248,8 +242,11 @@ describe("the swap route", () => {
 
   const swap = async (
     fields: Record<string, string>,
-    host = "localhost:54321",
-    json = false,
+    {
+      host = "localhost:54321",
+      json = false,
+      origin,
+    }: { host?: string; json?: boolean; origin?: string } = {},
   ) => {
     const request = new Request(`http://${host}/theme-swap`, {
       method: "POST",
@@ -258,6 +255,7 @@ describe("the swap route", () => {
         "content-type": json
           ? "application/json"
           : "application/x-www-form-urlencoded",
+        ...(origin ? { origin } : {}),
       },
       body: json
         ? JSON.stringify(fields)
@@ -282,33 +280,38 @@ describe("the swap route", () => {
   });
 
   it("refuses everything while swapping is off", async () => {
-    expect(await swap({ name: "duck", token: "x" })).toBe(403);
-  });
-
-  it("swaps with the token, by form or JSON", async () => {
-    const { token } = setThemeSwap(true);
-    expect(await swap({ name: "duck", token: token! })).toBe(204);
-    expect(readActiveTheme().name).toBe("duck");
-    expect(await swap({ name: "seamux", token: token! }, undefined, true)).toBe(
-      204,
-    );
-    expect(readActiveTheme().name).toBe("seamux");
-  });
-
-  it("refuses a wrong token, an unknown theme, and the tunnel", async () => {
-    const { token } = setThemeSwap(true);
-    expect(await swap({ name: "duck", token: "wrong" })).toBe(403);
     expect(await swap({ name: "duck" })).toBe(403);
-    expect(await swap({ name: "goose", token: token! })).toBe(404);
-    expect(await swap({ name: "duck", token: token! }, "board.example.com")).toBe(
+  });
+
+  it("swaps from a script, by form or JSON, and from the board itself", async () => {
+    setThemeSwap(true);
+    expect(await swap({ name: "duck" })).toBe(204);
+    expect(readActiveTheme().name).toBe("duck");
+    expect(await swap({ name: "seamux" }, { json: true })).toBe(204);
+    expect(readActiveTheme().name).toBe("seamux");
+    expect(
+      await swap({ name: "duck" }, { origin: "http://localhost:54321" }),
+    ).toBe(204);
+  });
+
+  // React Router doesn't check the Origin on a route without a page, so this
+  // is what stops another site's form.
+  it("refuses another website, an unknown theme, and the tunnel", async () => {
+    setThemeSwap(true);
+    expect(
+      await swap({ name: "duck" }, { origin: "http://evil.example" }),
+    ).toBe(403);
+    expect(await swap({ name: "duck" }, { origin: "null" })).toBe(403);
+    expect(await swap({ name: "goose" })).toBe(404);
+    expect(await swap({ name: "duck" }, { host: "board.example.com" })).toBe(
       403,
     );
     expect(readActiveTheme().name).toBe("seamux");
   });
 
   it("stops working once swapping is turned off", async () => {
-    const { token } = setThemeSwap(true);
+    setThemeSwap(true);
     setThemeSwap(false);
-    expect(await swap({ name: "duck", token: token! })).toBe(403);
+    expect(await swap({ name: "duck" })).toBe(403);
   });
 });

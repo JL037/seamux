@@ -1,8 +1,8 @@
 // Themes in the store's config table: one row per theme (`theme:<name>`),
-// the active theme, and the remote swap's switch and token. The rows hold
+// the active theme, and the remote swap's switch. The rows hold
 // parsed values (app/lib/theme.ts), so reading them parses nothing.
 
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { openStore } from "./store.server.ts";
 import {
@@ -130,30 +130,16 @@ export function themeStyles(): { hash: string; css: string } {
 
 export interface ThemeSwap {
   on: boolean;
-  token: string | null;
 }
 
 export function readThemeSwap(): ThemeSwap {
   const saved = get("themeSwap") as Partial<ThemeSwap> | undefined;
-  const on = saved?.on === true && typeof saved.token === "string";
-  return { on, token: on ? (saved!.token as string) : null };
+  return { on: saved?.on === true };
 }
 
-// A new token each time it turns on; off forgets it.
 export function setThemeSwap(on: boolean): ThemeSwap {
-  const swap = on
-    ? { on: true, token: randomBytes(32).toString("base64url") }
-    : undefined;
-  put("themeSwap", swap);
+  put("themeSwap", on ? { on: true } : undefined);
   return readThemeSwap();
-}
-
-// Whether `token` is the swap's, in constant time.
-export function isSwapToken(token: string): boolean {
-  const { token: expected } = readThemeSwap();
-  if (!expected) return false;
-  const digest = (s: string) => createHash("sha256").update(s).digest();
-  return timingSafeEqual(digest(token), digest(expected));
 }
 
 // --- What the board's poll carries ---------------------------------------
@@ -164,11 +150,10 @@ export interface ThemeStatus {
   hash: string;
   // For the Themes tab, each variant as the JSON its editor shows.
   themes: { name: string; label: string; light: string; dark: string }[];
-  // The token only for a page on this Mac, which is where it's handed out.
-  swap: { on: boolean; token: string | null };
+  swap: ThemeSwap;
 }
 
-export function themeStatus(local: boolean): ThemeStatus {
+export function themeStatus(): ThemeStatus {
   try {
     const swap = readThemeSwap();
     return {
@@ -180,14 +165,14 @@ export function themeStatus(local: boolean): ThemeStatus {
         light: variantJson(theme.light),
         dark: variantJson(theme.dark),
       })),
-      swap: { on: swap.on, token: local ? swap.token : null },
+      swap,
     };
   } catch {
     return {
       active: { name: DEFAULT_THEME, updatedAt: 0 },
       hash: "",
       themes: [],
-      swap: { on: false, token: null },
+      swap: { on: false },
     };
   }
 }

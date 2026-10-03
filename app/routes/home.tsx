@@ -105,7 +105,6 @@ import { startQueue } from "~/lib/queue.server";
 import { startReconnect } from "~/lib/reconnect.server";
 import { SEAMUX_HOME } from "~/lib/paths.server";
 import { remoteStatus, type RemoteStatus } from "~/lib/remote.server";
-import { isLocalRequest } from "~/lib/guard.server";
 import { themeStatus } from "~/lib/theme.server";
 import { useThemeSync } from "~/lib/use-theme";
 import { releaseFocus, useFocusRestore } from "~/lib/use-focus-restore";
@@ -157,7 +156,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     config: configOrDefaults(),
     engines: installedEngines(),
     remote: remoteStatus(SEAMUX_HOME, request.headers.get("host")),
-    theme: themeStatus(isLocalRequest(request)),
+    theme: themeStatus(),
   };
 }
 

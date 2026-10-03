@@ -124,14 +124,14 @@ Switches on remote connections: mDNS for your own network, and a Cloudflare tunn
 - **Diagnostics**: sends a snapshot of how this browser lays out the board to the Mac, for triage from a phone. It records the screen size, the media queries that match, the safe areas, which stylesheets are loaded and whether they carry the phone layout's rules, and every column's and card's size and computed style. It also records the service worker's state and recent script errors. A snapshot is sent when the board loads, a second after the window is resized or turned, and when you press **Send now**. The tab shows the last one, and the Mac keeps it in `data/diagnostics/latest.json`, with the last 50 in `data/diagnostics/log.jsonl`.
 - **Clear this browser's cache for the board**: a link to `/reset`, which answers with `Clear-Site-Data: "cache"` and goes back to the board. It gets a browser that is stuck on old code working again, and keeps drafts, settings and the Access login. The error page links to it too.
 - **Clear autocomplete cache**: forgets every folder's slash commands, so each is listed again the next time you type `/`.
-- **Remote theme swapping**: lets a script switch every board's theme, with a token this tab shows on this Mac only, behind a Copy button. Turning it on makes a new token and can only be done from this Mac; turning it off, from anywhere, makes the token useless. It answers a POST, never a GET, from this Mac or over mDNS (with the board's user and password), never through the tunnel:
+- **Remote theme swapping**: lets a script switch every board's theme. It can only be turned on from this Mac, and turns off from anywhere. It answers a POST, never a GET, from this Mac or over mDNS (with the board's user and password, as every request there needs), never through the tunnel, and never from another website: a POST that carries an `Origin` other than the board's own is refused, which a script never sends:
 
   ```sh
-  curl -X POST -d name=duck -d token=<token> http://localhost:54321/theme-swap
-  curl -u "$SEAMUX_USER:$SEAMUX_PASS" -X POST -d name=duck -d token=<token> http://<name>.local:54321/theme-swap
+  curl -X POST -d name=duck http://localhost:54321/theme-swap
+  curl -u "$SEAMUX_USER:$SEAMUX_PASS" -X POST -d name=duck http://<name>.local:54321/theme-swap
   ```
 
-  It can only choose a saved theme, or `seamux`, and answers 204; 403 for a wrong token or with swapping off, 404 for a theme that doesn't exist. JSON (`{"name": …, "token": …}`) works too. The newest swap wins: every board takes whichever was made last.
+  It can only choose a saved theme, or `seamux`, and answers 204; 403 with swapping off or from another website, 404 for a theme that doesn't exist. JSON (`{"name": …}`) works too. The newest swap wins: every board takes whichever was made last.
 
 ### In the browser
 

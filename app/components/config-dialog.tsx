@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import {
   Check,
   ChevronRight,
-  Copy,
   Ellipsis,
   Plus,
   RotateCcw,
@@ -442,8 +441,7 @@ function DebugTab({
   );
 }
 
-// Turns on only from this Mac, which is the only page given the token, and
-// off from anywhere.
+// Turns on only from this Mac, and off from anywhere.
 function ThemeSwapSetting({
   swap,
   local,
@@ -452,25 +450,6 @@ function ThemeSwapSetting({
   local: boolean;
 }) {
   const action = useConfigAction();
-  const [copied, setCopied] = useState(false);
-  const field = useRef<HTMLInputElement>(null);
-  const copy = async () => {
-    if (!swap.token) return;
-    try {
-      await navigator.clipboard.writeText(swap.token);
-    } catch {
-      // No clipboard API off a secure origin: copy from the field.
-      const input = field.current;
-      if (!input) return;
-      input.type = "text";
-      input.select();
-      document.execCommand("copy");
-      input.type = "password";
-      input.setSelectionRange(0, 0);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   return (
     <section className="flex flex-col gap-2">
@@ -483,43 +462,24 @@ function ThemeSwapSetting({
         }
         label="Let a script choose the board's theme"
       >
-        A POST to <code>/theme-swap</code> with a saved theme's name and this
-        token switches every board to that theme. From this Mac, or over mDNS
-        with the board's credentials; never through the tunnel. It can only
-        choose a theme, not make or change one. Turning it on makes a new
-        token; it can only be turned on from this Mac.
+        A POST to <code>/theme-swap</code> with a saved theme's name switches
+        every board to that theme. From this Mac, or over mDNS with the
+        board's user and password; never through the tunnel, and never from
+        another website. It can only choose a theme, not make or change one.
+        It can only be turned on from this Mac.
       </SwitchRow>
-      {swap.on &&
-        (swap.token ? (
-          <>
-            <div className="flex items-center gap-2">
-              <input
-                ref={field}
-                type="password"
-                readOnly
-                value={swap.token}
-                aria-label="Theme swap token"
-                className="min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
-              />
-              <Button variant="outline" size="sm" onClick={() => void copy()}>
-                {copied ? <Check /> : <Copy />}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-            </div>
-            <pre className="overflow-x-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px]">
-              {`curl -X POST -d name=<theme> -d token=<token> ${origin}/theme-swap`}
-            </pre>
-            <p className="text-xs text-muted-foreground">
-              Over mDNS, add <code>-u</code> with the board's user and
-              password. A theme's name is the one under its label on the
-              Themes tab; <code>{DEFAULT_THEME}</code> is the built-in one.
-            </p>
-          </>
-        ) : (
-          <p className="text-muted-foreground">
-            On. The token is shown only on this Mac.
+      {swap.on && (
+        <>
+          <pre className="overflow-x-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px]">
+            {`curl -X POST -d name=<theme> ${origin}/theme-swap`}
+          </pre>
+          <p className="text-xs text-muted-foreground">
+            Over mDNS, add <code>-u</code> with the board's user and password.
+            A theme's name is the one under its label on the Themes tab;{" "}
+            <code>{DEFAULT_THEME}</code> is the built-in one.
           </p>
-        ))}
+        </>
+      )}
       {action.error && <p className="text-destructive">{action.error}</p>}
     </section>
   );
