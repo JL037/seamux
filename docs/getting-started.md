@@ -96,7 +96,7 @@ Macros are prompts seamux sends into a session for you. `{{name}}` variables are
 
 ### Themes
 
-A theme repaints the board, on every browser that has it open. Pick one from the list on the left and this browser previews it until you leave the tab; no other board changes. **Make active**, under the `⋯` beside Save, switches every open board to it at once. `seamux` is the built-in one.
+A theme repaints the board, on every browser that has it open. Pick one from the list on the left and this browser previews it until you leave the tab; no other board changes. **Make active**, beside Save, switches every open board to it at once. `seamux` is the built-in one.
 
 **Add** starts a theme. Its name, lowercase letters, digits and dashes, is fixed once saved; its label is what the list shows. Each theme has a Light and a Dark variant, each JSON of token to value:
 

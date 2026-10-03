@@ -1242,8 +1242,20 @@ function ThemeEditor({
         ; <code className="whitespace-nowrap">--radius</code> in rem or px.
       </p>
       <div className="flex items-center gap-2">
+        {/* Activates what's saved, not the draft; dimmed on the active one. */}
+        {name !== null && (
+          <Button
+            size="sm"
+            disabled={active || activator.pending}
+            onClick={() => activator.submit("activate-theme", { name })}
+          >
+            <Check />
+            {active ? "Active" : "Make active"}
+          </Button>
+        )}
         <Button
           size="sm"
+          variant={name === null ? "default" : "outline"}
           disabled={!dirty || !THEME_NAME.test(themeName) || saver.pending}
           onClick={save}
         >
@@ -1272,18 +1284,6 @@ function ThemeEditor({
               >
                 <RotateCcw className="size-4" />
                 Revert
-              </button>
-              <button
-                type="button"
-                disabled={active || activator.pending}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={() => {
-                  activator.submit("activate-theme", { name });
-                  setMenu(false);
-                }}
-              >
-                <Check className="size-4" />
-                {active ? "Active" : "Make active"}
               </button>
               <button
                 type="button"
