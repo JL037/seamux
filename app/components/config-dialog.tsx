@@ -462,7 +462,7 @@ function ThemeSwapSetting({
         }
         label="Let a script choose the board's theme"
       >
-        A POST to <code>/theme-swap</code> with a saved theme's name switches
+        A POST to <code>/debug/theme-swap</code> with a saved theme's name switches
         every board to that theme. From this Mac, or over mDNS with the
         board's user and password; never through the tunnel, and never from
         another website. It can only choose a theme, not make or change one.
@@ -471,7 +471,7 @@ function ThemeSwapSetting({
       {swap.on && (
         <>
           <pre className="overflow-x-auto rounded-md border bg-muted/50 px-2 py-1 font-mono text-[11px]">
-            {`curl -X POST -d name=<theme> ${origin}/theme-swap`}
+            {`curl -X POST -d name=<theme> ${origin}/debug/theme-swap`}
           </pre>
           <p className="text-xs text-muted-foreground">
             Over mDNS, add <code>-u</code> with the board's user and password.

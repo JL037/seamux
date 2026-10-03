@@ -1,6 +1,6 @@
 import { data } from "react-router";
 
-import type { Route } from "./+types/theme-swap";
+import type { Route } from "./+types/debug-theme-swap";
 import { isLocalRequest } from "~/lib/guard.server";
 import { SEAMUX_HOME } from "~/lib/paths.server";
 import { isLanHost } from "~/lib/remote.server";

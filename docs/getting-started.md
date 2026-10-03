@@ -127,8 +127,8 @@ Switches on remote connections: mDNS for your own network, and a Cloudflare tunn
 - **Remote theme swapping**: lets a script switch every board's theme. It can only be turned on from this Mac, and turns off from anywhere. It answers a POST, never a GET, from this Mac or over mDNS (with the board's user and password, as every request there needs), never through the tunnel, and never from another website: a POST that carries an `Origin` other than the board's own is refused, which a script never sends:
 
   ```sh
-  curl -X POST -d name=duck http://localhost:54321/theme-swap
-  curl -u "$SEAMUX_USER:$SEAMUX_PASS" -X POST -d name=duck http://<name>.local:54321/theme-swap
+  curl -X POST -d name=duck http://localhost:54321/debug/theme-swap
+  curl -u "$SEAMUX_USER:$SEAMUX_PASS" -X POST -d name=duck http://<name>.local:54321/debug/theme-swap
   ```
 
   It can only choose a saved theme, or `seamux`, and answers 204; 403 with swapping off or from another website, 404 for a theme that doesn't exist. JSON (`{"name": …}`) works too. The newest swap wins: every board takes whichever was made last.

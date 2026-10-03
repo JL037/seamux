@@ -17,12 +17,12 @@ It calls `Object.assign(process.env, loadEnv(...))` from its plugin's `config` h
 
 ## React Router checks a POST's Origin only on its `.data` requests, never on a plain POST to a resource route
 
-A POST to `/config.data`, which is how the board's own fetchers send an action, with `Origin: http://evil.example` got a 400 "Bad Request" from React Router before the action ran. The same POST to `/config` reached the action, and `assertFromBoard` answered 403. A POST to `/theme-swap` with that Origin got 204, back when that route checked a token in place of the Origin. React Router's check runs in `singleFetchAction` and `handleDocumentRequest`, and not in `handleResourceRequest`, which serves every route without a page. That covers all of seamux's actions, so a form another site posts to one of them meets `assertFromBoard` and nothing else.
+A POST to `/config.data`, which is how the board's own fetchers send an action, with `Origin: http://evil.example` got a 400 "Bad Request" from React Router before the action ran. The same POST to `/config` reached the action, and `assertFromBoard` answered 403. A POST to `/theme-swap` (now `/debug/theme-swap`) with that Origin got 204, back when that route checked a token in place of the Origin. React Router's check runs in `singleFetchAction` and `handleDocumentRequest`, and not in `handleResourceRequest`, which serves every route without a page. That covers all of seamux's actions, so a form another site posts to one of them meets `assertFromBoard` and nothing else.
 
 This entry used to say React Router refuses a cross-origin POST before any action runs. That held only for the `.data` request the board sends, which is where it was first seen.
 
 - **Measured:** React Router 7.18.4, Vite 8.3.0.
-- **In seamux:** `assertFromBoard` in [guard.server.ts](../app/lib/guard.server.ts), which every action but [theme-swap.ts](../app/routes/theme-swap.ts) calls; that one, for scripts, refuses any Origin but the board's own.
+- **In seamux:** `assertFromBoard` in [guard.server.ts](../app/lib/guard.server.ts), which every action but [debug-theme-swap.ts](../app/routes/debug-theme-swap.ts) calls; that one, for scripts, refuses any Origin but the board's own.
 - **See also:** [cloudflared forwards over http, so React Router refuses actions](cloudflare-tunnel.md#cloudflared-forwards-over-http-so-react-router-refuses-actions).
 
 ## Vite serves its pre-bundled dependencies as immutable
