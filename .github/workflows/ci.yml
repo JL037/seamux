@@ -6,8 +6,8 @@
 # On macOS, because package.json says seamux runs there only, and npm refuses
 # to install it anywhere else (EBADPLATFORM), even for a typecheck.
 #
-# Taskless isn't wired in yet: the repo has no rules, and a check with none
-# is always green. Add it (`npx @taskless/cli agent ci`) with the first rule.
+# Taskless tests its rules and checks the whole repo against them (`npm run
+# check`); the pre-commit hook checks only the staged files.
 #
 # Action refs are pinned to commit SHAs; the trailing comment records the tag.
 
@@ -41,6 +41,8 @@ jobs:
           cache: npm
       # No dependency's install scripts run: nothing here needs them.
       - run: npm ci --ignore-scripts
+      # .taskless/rules: the rules a single file can show, from CLAUDE.md.
+      - run: npm run check
       - run: npm run typecheck
       # tests/, against a fake cmux (tests/fake-cmux.ts): nothing here needs
       # cmux or Claude Code installed. tests-cmux/, the contract against a

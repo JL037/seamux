@@ -1,0 +1,4 @@
+# --no-stash: the stash stack is shared with every worktree and the sessions
+# working in them, and taskless check changes no file, so there is nothing
+# to restore. It checks each staged file as it is in the working tree.
+npx lint-staged --no-stash

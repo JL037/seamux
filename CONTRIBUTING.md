@@ -39,7 +39,7 @@ For a pull request, push your branch and open the PR against `main` instead of l
 - A new cmux call needs a contract test in `tests-cmux/`, the method taught to the fake (which refuses methods it doesn't know), and a test in `tests/` of what seamux sends.
 - Try a new cmux or Claude Code call against a throwaway session in its own cmux workspace, never against sessions you care about, and close the workspace afterwards.
 - Several documented cmux and Claude Code behaviours turned out wrong when seamux ran them. [knowledge/](knowledge/index.md) records them by domain, and says how to add to it. Add to it when a tool surprises you, and say which version you measured.
-- `npx @taskless/cli check` must pass. [Taskless](https://taskless.io) checks the rules below that a single file can show, such as an action without `assertFromBoard` or a cmux call without a surface; its rules are in `.taskless/rules/`.
+- `npm run check` must pass, and CI runs it too; a pre-commit hook, which `npm install` sets up, checks the files you stage. [Taskless](https://taskless.io) checks the rules below that a single file can show, such as an action without `assertFromBoard` or a cmux call without a surface; its rules are in `.taskless/rules/`.
 
 ## Release notes
 
