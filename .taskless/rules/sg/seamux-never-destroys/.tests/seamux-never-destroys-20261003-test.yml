@@ -1,0 +1,21 @@
+id: seamux-never-destroys
+valid:
+  - |
+    await run("git", ["-C", cwd, "worktree", "add", path, "-b", branch, "HEAD"]);
+  - |
+    const REPO = git(process.cwd(), "worktree", "list", "--porcelain");
+  - |
+    await run("git", ["-C", cwd, "branch", "--show-current"]);
+  - |
+    const text = `Check it with \`claude agents --json --all\`, then run \`claude rm ${orphan.id}\`.`;
+invalid:
+  - |
+    await run("git", ["-C", repo, "worktree", "remove", path]);
+  - |
+    await run("git", ["branch", "-D", branch]);
+  - |
+    await run("claude", ["rm", sessionId]);
+  - |
+    spawn("rm", ["-rf", transcript]);
+  - |
+    git(REPO, "worktree", "remove", path);

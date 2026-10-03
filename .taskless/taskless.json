@@ -18,6 +18,12 @@
           "tskl.md"
         ],
         "mode": "reference"
+      },
+      ".agents": {
+        "skills": [
+          "taskless"
+        ],
+        "mode": "reference"
       }
     },
     "cliVersion": "0.11.2"

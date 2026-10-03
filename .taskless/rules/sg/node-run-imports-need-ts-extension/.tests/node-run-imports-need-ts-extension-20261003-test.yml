@@ -1,0 +1,23 @@
+id: node-run-imports-need-ts-extension
+valid:
+  - |
+    import { SEAMUX_HOME } from "../app/lib/paths.server.ts";
+  - |
+    import type { Engine } from "./config.ts";
+  - |
+    export { supervise } from "./supervise.ts";
+  - |
+    import { spawn } from "node:child_process";
+  - |
+    const { setup } = await import("./setup.ts");
+invalid:
+  - |
+    import { SEAMUX_HOME } from "../app/lib/paths.server";
+  - |
+    import { setup } from "./setup.js";
+  - |
+    import { readStore } from "~/lib/store.server";
+  - |
+    export { supervise } from "./supervise";
+  - |
+    const { setup } = await import("./setup");

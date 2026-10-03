@@ -1,0 +1,35 @@
+id: actions-assert-from-board
+language: TypeScript
+severity: error
+message: A route's action must call assertFromBoard before it does anything.
+note: |
+  React Router's own Origin check doesn't cover a plain POST to a resource
+  route (knowledge/vite-and-react-router.md), so assertFromBoard in
+  app/lib/guard.server.ts is all that stands in front of every action
+  (CLAUDE.md, Rules). Call it first: `assertFromBoard(request);`.
+
+  /theme/set (app/routes/theme-set.ts) is the one exception, and keeps its
+  own Origin check instead.
+files:
+  - "app/routes/**/*.ts"
+ignores:
+  - app/routes/theme-set.ts
+rule:
+  any:
+    - kind: function_declaration
+      has:
+        field: name
+        kind: identifier
+        regex: ^action$
+    - kind: variable_declarator
+      has:
+        field: name
+        kind: identifier
+        regex: ^action$
+  inside:
+    kind: export_statement
+    stopBy: end
+  not:
+    has:
+      pattern: assertFromBoard($$$)
+      stopBy: end

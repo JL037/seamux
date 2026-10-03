@@ -1,0 +1,27 @@
+id: no-type-stripping-hostile-syntax
+language: TypeScript
+severity: error
+message: Node's type stripping rejects enums and constructor parameter properties.
+note: |
+  hooks/, scripts/ and server/serve.ts run under plain Node with type
+  stripping in a checkout, and so does everything they import, app/lib
+  included. Node rejects syntax that emits code, and neither tsc nor the
+  tests catch it (CLAUDE.md, Layout).
+
+  Use a union of string literals, or an `as const` object, in place of an
+  enum; declare the field and assign it in the constructor body in place of
+  `constructor(readonly x: T)`.
+# tests/ and tests-cmux/ run under Vitest, which compiles them, so they
+# can keep their constructor parameter properties.
+files:
+  - "app/**/*.ts"
+  - "hooks/**/*.ts"
+  - "scripts/**/*.ts"
+  - "server/**/*.ts"
+rule:
+  any:
+    - kind: enum_declaration
+    - kind: required_parameter
+      regex: ^(readonly|public|private|protected|override)\s
+    - kind: optional_parameter
+      regex: ^(readonly|public|private|protected|override)\s

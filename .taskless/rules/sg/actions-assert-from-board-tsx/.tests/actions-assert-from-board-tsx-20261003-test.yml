@@ -1,0 +1,38 @@
+id: actions-assert-from-board-tsx
+valid:
+  - |
+    export async function action({ request }: Route.ActionArgs) {
+      assertFromBoard(request);
+      const form = await request.formData();
+      return dispatch(form);
+    }
+  - |
+    export function action({ request }: Route.ActionArgs) {
+      assertFromBoard(request);
+      touchRestart();
+      return null;
+    }
+  - |
+    export const action = async ({ request }: Route.ActionArgs) => {
+      assertFromBoard(request);
+      return null;
+    };
+  - |
+    function action() {
+      return null;
+    }
+invalid:
+  - |
+    export async function action({ request }: Route.ActionArgs) {
+      const form = await request.formData();
+      return dispatch(form);
+    }
+  - |
+    export function action({ request }: Route.ActionArgs) {
+      touchRestart();
+      return null;
+    }
+  - |
+    export const action = async ({ request }: Route.ActionArgs) => {
+      return null;
+    };

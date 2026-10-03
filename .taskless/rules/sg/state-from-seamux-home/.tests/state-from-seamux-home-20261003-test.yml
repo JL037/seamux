@@ -1,0 +1,17 @@
+id: state-from-seamux-home
+valid:
+  - |
+    const store = join(SEAMUX_HOME, "data", "store.db");
+  - |
+    const LOGIN_BROWSER = packagePath("scripts/login-browser.sh");
+  - |
+    const cwd = card.cwd;
+invalid:
+  - |
+    const store = join(process.cwd(), "data", "store.db");
+  - |
+    const here = dirname(fileURLToPath(import.meta.url));
+  - |
+    const env = join(import.meta.dirname, "../../.env");
+  - |
+    const root = resolve(__dirname, "..");

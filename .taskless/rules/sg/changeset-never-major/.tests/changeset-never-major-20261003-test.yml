@@ -1,0 +1,27 @@
+id: changeset-never-major
+valid:
+  - |
+    ---
+    "seamux": patch
+    ---
+
+    A finished sign-in no longer leaves a card in Attention.
+  - |
+    ---
+    "seamux": minor
+    ---
+
+    Settings moved to ~/.seamux. Move your .env there.
+invalid:
+  - |
+    ---
+    "seamux": major
+    ---
+
+    Settings moved to ~/.seamux.
+  - |
+    ---
+    seamux: major
+    ---
+
+    The store moved.

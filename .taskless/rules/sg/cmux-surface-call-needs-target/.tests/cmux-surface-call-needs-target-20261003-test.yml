@@ -1,0 +1,26 @@
+id: cmux-surface-call-needs-target
+valid:
+  - |
+    await rpc("surface.send_key", { ...target(this.surface), key });
+  - |
+    const { text } = await rpc<{ text: string }>("surface.read_text", target(surface));
+  - |
+    await cmuxRpc("surface.close", { surface_id: id, workspace_id: ws });
+  - |
+    await rpc("surface.list", { workspace_id: surface.workspaceId });
+  - |
+    const { text } = await rpc<{ text: string }>(
+      "surface.read_text",
+      target(surface),
+    );
+invalid:
+  - |
+    const { text } = await rpc<{ text: string }>("surface.read_text", { workspace_id: ws });
+  - |
+    await rpc("surface.send_text", { text });
+  - |
+    await rpc("terminal.paste", { workspace_id: ws, text });
+  - |
+    const { text } = await cmuxRpc<{ text: string }>("surface.read_text", {});
+  - |
+    await rpc("surface.close");

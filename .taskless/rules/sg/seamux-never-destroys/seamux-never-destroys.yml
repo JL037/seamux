@@ -1,0 +1,50 @@
+id: seamux-never-destroys
+language: TypeScript
+severity: error
+message: seamux never deletes a session, worktree, branch or transcript itself.
+note: |
+  When something should be removed, the session that owns it does it:
+  seamux sends it a prompt asking (CLAUDE.md, Rules). This flags the
+  arguments of a command seamux would run itself, such as
+  `["worktree", "remove", path]`, `["branch", "-D", name]` or
+  `["rm", id]`. A prompt that asks a session to run `claude rm` is text,
+  and is fine.
+files:
+  - "app/**/*.ts"
+  - "scripts/**/*.ts"
+  - "server/**/*.ts"
+  - "hooks/**/*.ts"
+# An argv is an array, or the arguments of a helper that takes them spread,
+# such as land.ts's `git(cwd, "worktree", "list")`.
+utils:
+  argv:
+    any:
+      - kind: array
+      - kind: arguments
+rule:
+  any:
+    - matches: argv
+      all:
+        - has:
+            kind: string
+            regex: ^["']worktree["']$
+        - has:
+            kind: string
+            regex: ^["'](remove|prune)["']$
+    - matches: argv
+      all:
+        - has:
+            kind: string
+            regex: ^["']branch["']$
+        - has:
+            kind: string
+            regex: ^["'](-d|-D|--delete)["']$
+    - kind: array
+      has:
+        kind: string
+        regex: ^["']rm["']$
+    - kind: arguments
+      has:
+        kind: string
+        nthChild: 1
+        regex: ^["']rm["']$

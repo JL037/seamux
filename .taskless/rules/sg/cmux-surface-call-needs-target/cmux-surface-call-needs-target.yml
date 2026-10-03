@@ -1,0 +1,41 @@
+id: cmux-surface-call-needs-target
+language: TypeScript
+severity: error
+message: A cmux call that acts on a terminal must name its surface.
+note: |
+  cmux RPCs default to the caller's own surface, which is whatever terminal
+  seamux runs in, so a call without one types into, reads or closes the
+  wrong terminal (CLAUDE.md, Rules). Pass `target(surface)` from
+  app/lib/harness.server.ts, or spread it: `{ ...target(surface), text }`.
+files:
+  - "app/**/*.ts"
+  - "scripts/**/*.ts"
+  - "server/**/*.ts"
+  - "hooks/**/*.ts"
+rule:
+  kind: call_expression
+  all:
+    # A generic call after await, `await rpc<T>(...)`, parses as a call of
+    # the await expression.
+    - has:
+        field: function
+        any:
+          - kind: identifier
+            regex: ^(rpc|cmuxRpc)$
+          - kind: await_expression
+            regex: ^await\s+(rpc|cmuxRpc)$
+    - has:
+        field: arguments
+        has:
+          kind: string
+          nthChild: 1
+          regex: ^["'](surface\.(send_text|send_key|read_text|close)|terminal\.paste)["']$
+    - not:
+        has:
+          field: arguments
+          has:
+            stopBy: end
+            any:
+              - pattern: target($$$)
+              - kind: property_identifier
+                regex: ^surface_id$

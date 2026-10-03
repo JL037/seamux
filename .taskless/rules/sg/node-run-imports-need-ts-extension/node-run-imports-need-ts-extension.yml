@@ -1,0 +1,37 @@
+id: node-run-imports-need-ts-extension
+language: TypeScript
+severity: error
+message: Files Node runs directly import relative paths with their .ts extension, and never through ~/.
+note: |
+  hooks/, scripts/ and server/serve.ts run under plain Node with type
+  stripping in a checkout (CLAUDE.md, Layout). Node resolves no extensions
+  and knows nothing of Vite's `~/` alias, so `./setup` and `~/lib/store.server`
+  fail at startup while tsc and the tests pass. Write `./setup.ts` and
+  `../app/lib/store.server.ts`.
+
+  This checks the entry files only. The app/lib modules they import must
+  follow the same rule, transitively, which no single-file check can see.
+files:
+  - "hooks/**/*.ts"
+  - "scripts/**/*.ts"
+  - "server/**/*.ts"
+rule:
+  kind: string
+  regex: ^["'](~/|\.\.?/)
+  not:
+    kind: string
+    regex: ^["'](\.\.?/)[^"']*\.ts["']$
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

@@ -1,0 +1,28 @@
+id: no-type-stripping-hostile-syntax
+valid:
+  - |
+    type Engine = "claude" | "codex";
+  - |
+    const COLUMNS = ["working", "waiting", "done"] as const;
+  - |
+    class Login {
+      readonly service: string;
+      constructor(service: string) {
+        this.service = service;
+      }
+    }
+  - |
+    function send(text: string, readonlyMode?: boolean) {}
+invalid:
+  - |
+    enum Engine { Claude, Codex }
+  - |
+    export const enum Column { Working = "working" }
+  - |
+    class Login {
+      constructor(readonly service: string) {}
+    }
+  - |
+    class Login {
+      constructor(private child: unknown, public output?: string) {}
+    }

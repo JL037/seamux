@@ -1,0 +1,23 @@
+id: state-from-seamux-home
+language: TypeScript
+severity: error
+message: Find seamux's files through app/lib/paths.server.ts, never the working directory or a module's own path.
+note: |
+  `.env`, `.seamux.json` and `data/` live in SEAMUX_HOME: the checkout, or
+  ~/.seamux for an installed package, and the package itself is at
+  PACKAGE_ROOT (CLAUDE.md, Layout). The working directory is wherever
+  seamux was started, and a module's own path moves when `npm run build`
+  bundles it into dist/, so neither finds them. Import SEAMUX_HOME,
+  PACKAGE_ROOT or packagePath from paths.server.ts instead.
+files:
+  - "app/**/*.ts"
+ignores:
+  - app/lib/paths.server.ts
+rule:
+  any:
+    - pattern: process.cwd()
+    - pattern: import.meta.url
+    - pattern: import.meta.dirname
+    - pattern: import.meta.filename
+    - kind: identifier
+      regex: ^__(dirname|filename)$

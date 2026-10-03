@@ -1,0 +1,14 @@
+id: changeset-never-major
+language: Markdown
+severity: error
+message: A changeset is a patch or a minor bump, never major, while seamux is 0.y.z.
+note: |
+  Pick the bump by what someone running seamux has to do (CLAUDE.md,
+  Release notes): `minor` for a change they may have to migrate to or
+  adopt, saying in the note what they must do, and `patch` for a fix or a
+  small addition that asks nothing of them.
+files:
+  - ".changeset/*.md"
+rule:
+  kind: minus_metadata
+  regex: (?m)^\s*["']?seamux["']?\s*:\s*["']?major["']?\s*$
