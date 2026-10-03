@@ -9,7 +9,11 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { EDGE_CACHE_HEADER, remoteGate } from "~/lib/remote.server";
+import {
+  EDGE_CACHE_HEADER,
+  lowercaseHost,
+  remoteGate,
+} from "~/lib/remote.server";
 
 const DOMAIN = "board.example.com";
 
@@ -67,5 +71,21 @@ describe("remoteGate through the tunnel", () => {
   it("leaves a local request's caching alone", async () => {
     const { headers } = await pass(tunnelHome(), "localhost:54321");
     expect(headers[EDGE_CACHE_HEADER.toLowerCase()]).toBeUndefined();
+  });
+});
+
+// curl sends a .local name as typed, and Vite's allowedHosts matches case
+// for case (knowledge/mdns.md).
+describe("lowercaseHost", () => {
+  it("puts the Host in one case, port and all", () => {
+    const req = { headers: { host: "Osmium.LOCAL:54321" } } as IncomingMessage;
+    lowercaseHost(req);
+    expect(req.headers.host).toBe("osmium.local:54321");
+  });
+
+  it("leaves a request without a Host alone", () => {
+    const req = { headers: {} } as IncomingMessage;
+    lowercaseHost(req);
+    expect(req.headers.host).toBeUndefined();
   });
 });

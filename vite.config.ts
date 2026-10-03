@@ -10,6 +10,7 @@ import {
   lanHost,
   lanWanted,
   LISTEN_ENV,
+  lowercaseHost,
   remoteDomain,
   remoteGate,
 } from "./app/lib/remote.server.ts";
@@ -29,11 +30,14 @@ function needsPolling(): boolean {
   }
 }
 
-// The remote-access gate, ahead of everything Vite answers itself.
+// The remote-access gate, ahead of everything Vite answers itself. Vite
+// checks the Host against allowedHosts before any plugin's middleware, so
+// the Host is lowercased as the request arrives, ahead of that check too.
 function remoteAccess(): Plugin {
   return {
     name: "seamux-remote-access",
     configureServer(server) {
+      server.httpServer?.prependListener("request", lowercaseHost);
       server.middlewares.use(remoteGate(SEAMUX_HOME));
     },
   };

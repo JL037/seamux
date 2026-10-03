@@ -7,6 +7,7 @@ Entries about the web stack that live in other domains:
 - [The origin sees the public hostname as `Host`](cloudflare-tunnel.md#the-origin-sees-the-public-hostname-as-host): Vite's `allowedHosts`.
 - [cloudflared forwards over http, so React Router refuses actions](cloudflare-tunnel.md#cloudflared-forwards-over-http-so-react-router-refuses-actions): `allowedActionOrigins`.
 - [Vite's `host: true` listens on `*` over IPv6, dual-stack](mdns.md#vites-host-true-listens-on--over-ipv6-dual-stack).
+- [Vite refuses a `.local` name sent in capitals, before any plugin sees the request](mdns.md#vite-refuses-a-local-name-sent-in-capitals-before-any-plugin-sees-the-request): `allowedHosts`.
 
 ## React Router's dev server copies `.env` into `process.env`, and never takes a variable back out
 

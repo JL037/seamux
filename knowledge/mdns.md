@@ -24,3 +24,11 @@ An IPv4 peer shows up as `::ffff:192.168.1.151`, and IPv4 loopback as `::ffff:12
 
 - **Measured:** macOS 26.5.1, Vite 8.3.0.
 - **In seamux:** `isLoopback` in [remote.server.ts](../app/lib/remote.server.ts).
+
+## Vite refuses a `.local` name sent in capitals, before any plugin sees the request
+
+`curl` to `http://Osmium.local:54321/` sends `Host: Osmium.local:54321` as typed, and the dev server answered 403 "Blocked request. This host ("Osmium.local") is not allowed.", while `Host: osmium.local:54321` got the board. A browser lowercases the name before sending it, so only scripts and Shortcuts met it. Vite's `isHostAllowed` compares the Host with `server.allowedHosts` case for case, and `lanHost` gives the name lowercased, as `osmium.local`. Vite adds that check to its middleware before it runs any plugin's `configureServer`, so seamux's own gate, a `configureServer` middleware, never saw the request. A `request` listener prepended on Vite's `httpServer` runs ahead of both.
+
+- **Measured:** Vite 8.3.0, macOS 26.5.1.
+- **In seamux:** `lowercaseHost` in [remote.server.ts](../app/lib/remote.server.ts), which [vite.config.ts](../vite.config.ts) prepends to the dev server's `request` listeners and [server/serve.ts](../server/serve.ts) runs first.
+- **See also:** [`scutil --get LocalHostName` is the name Bonjour answers for](#scutil---get-localhostname-is-the-name-bonjour-answers-for).

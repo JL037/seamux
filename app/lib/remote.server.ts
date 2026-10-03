@@ -403,6 +403,16 @@ export async function checkTunnelRequest(
 // before the response goes on to the browser.
 export const EDGE_CACHE_HEADER = "Cloudflare-CDN-Cache-Control";
 
+// A hostname is the same in any case, and browsers send it lowercased, but
+// curl and Shortcuts send it as typed: `Osmium.local`. Vite's allowedHosts
+// matches it case for case, and refused that before seamux saw it
+// (knowledge/mdns.md). Both servers call this on every request as it
+// arrives, ahead of everything else, so every check sees one spelling.
+export function lowercaseHost(req: IncomingMessage) {
+  const host = req.headers.host;
+  if (host) req.headers.host = host.toLowerCase();
+}
+
 // checkRequest, then the Access token for a request through the tunnel. As
 // middleware ahead of everything that answers requests: in dev, Vite's own
 // (modules, assets, files under the checkout) before the board's auth

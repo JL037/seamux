@@ -22,6 +22,7 @@ import { packagePath, SEAMUX_HOME } from "../app/lib/paths.server.ts";
 import {
   lanWanted,
   LISTEN_ENV,
+  lowercaseHost,
   remoteDomain,
   remoteGate,
 } from "../app/lib/remote.server.ts";
@@ -62,6 +63,11 @@ const domain = remoteDomain(SEAMUX_HOME);
 
 const app = express();
 app.disable("x-powered-by");
+// The Host in one case, as the dev server has it (lowercaseHost).
+app.use((req, _res, next) => {
+  lowercaseHost(req);
+  next();
+});
 app.use(remoteGate(SEAMUX_HOME));
 // Hashed file names, so they can be kept for good.
 app.use(
