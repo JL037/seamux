@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Check,
   ChevronRight,
+  Download,
   Ellipsis,
   Plus,
   RotateCcw,
@@ -11,6 +12,7 @@ import {
   Send,
   Settings,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 
@@ -47,9 +49,9 @@ import {
   NEW_THEME_LIGHT,
   parseThemeInput,
   printTheme,
+  readThemeFile,
   THEME_NAME,
-  WATERMARK_LABELS,
-  WATERMARKS,
+  themeFile,
 } from "~/lib/theme";
 import type { ThemeStatus } from "~/lib/theme.server";
 import { previewColor, previewTheme } from "~/lib/use-theme";
@@ -919,6 +921,34 @@ function ThemesTab({
 }) {
   const [selected, setSelected] = useState<string | null>(theme.active.name);
   const [adding, setAdding] = useState(false);
+  // A theme file's fields, for the new theme's editor to start from, and
+  // what reading it left out.
+  const [imported, setImported] = useState<{
+    name: string;
+    label: string;
+    light: string;
+    dark: string;
+  } | null>(null);
+  const [importNote, setImportNote] = useState<string | null>(null);
+  const [importCount, setImportCount] = useState(0);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const importFile = async (file: File) => {
+    const read = readThemeFile(await file.text(), file.name);
+    if (!read.ok) {
+      setImportNote(read.error);
+      return;
+    }
+    const { skipped, ...fields } = read;
+    setImported(fields);
+    setImportNote(
+      skipped.length > 0
+        ? `Left out what this seamux can't use: ${skipped.join(", ")}`
+        : null,
+    );
+    setImportCount((n) => n + 1);
+    setAdding(true);
+    setSelected(null);
+  };
   const remover = useConfigAction(() => setSelected(DEFAULT_THEME));
   const current = theme.themes.find((t) => t.name === selected);
   const previewed =
@@ -969,11 +999,13 @@ function ThemesTab({
               </li>
             ))}
           </ul>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
               onClick={() => {
+                setImported(null);
+                setImportNote(null);
                 setAdding(true);
                 setSelected(null);
               }}
@@ -981,6 +1013,25 @@ function ThemesTab({
               <Plus />
               Add
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => fileInput.current?.click()}
+            >
+              <Upload />
+              Import
+            </Button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void importFile(file);
+              }}
+            />
             <Button
               size="sm"
               variant="ghost"
@@ -994,12 +1045,18 @@ function ThemesTab({
             </Button>
           </div>
           {remover.error && <p className="text-destructive">{remover.error}</p>}
+          {importNote && (
+            <p className="whitespace-pre-line text-xs text-muted-foreground">
+              {importNote}
+            </p>
+          )}
         </div>
         {adding ? (
           <ThemeEditor
-            key="new"
+            key={`new:${importCount}`}
             name={null}
-            saved={{ label: "", light: NEW_THEME_LIGHT, dark: "", watermark: "" }}
+            saved={imported ?? { label: "", light: NEW_THEME_LIGHT, dark: "" }}
+            suggestedName={imported?.name ?? ""}
             active={false}
             onSaved={pick}
           />
@@ -1007,7 +1064,7 @@ function ThemesTab({
           // Keyed on what's saved, so a save, or a change from another board,
           // starts a fresh draft.
           <ThemeEditor
-            key={`${current.name}:${current.label}:${current.light}:${current.dark}:${current.watermark}`}
+            key={`${current.name}:${current.label}:${current.light}:${current.dark}`}
             name={current.name}
             saved={current}
             active={theme.active.name === current.name}
@@ -1049,25 +1106,41 @@ function BuiltInTheme({ active }: { active: boolean }) {
   );
 }
 
+// Saves what's saved, not the draft, as <name>.seamux-theme.json.
+function downloadThemeFile(
+  name: string,
+  saved: { label: string; light: string; dark: string },
+) {
+  const blob = new Blob([themeFile(name, saved)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name}.seamux-theme.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function ThemeEditor({
   name,
   saved,
+  suggestedName = "",
   active,
   onSaved,
 }: {
   // null for a theme not yet saved, which asks for its name.
   name: string | null;
-  saved: { label: string; light: string; dark: string; watermark: string };
+  saved: { label: string; light: string; dark: string };
+  // A new theme's name to start with, from a theme file.
+  suggestedName?: string;
   active: boolean;
   onSaved: (name: string) => void;
 }) {
   const saver = useConfigAction((fields) => onSaved(fields.name));
   const activator = useConfigAction();
-  const [newName, setNewName] = useState("");
+  const [newName, setNewName] = useState(suggestedName);
   const [label, setLabel] = useState(saved.label);
   const [light, setLight] = useState(saved.light);
   const [dark, setDark] = useState(saved.dark);
-  const [watermark, setWatermark] = useState(saved.watermark);
   // Opens on the variant this browser shows, and previews whichever tab is
   // picked, light or dark, on this browser alone.
   const [mode, setMode] = useState<"light" | "dark">(() =>
@@ -1087,28 +1160,16 @@ function ThemeEditor({
     name === null ||
     label !== saved.label ||
     light !== saved.light ||
-    dark !== saved.dark ||
-    watermark !== saved.watermark;
+    dark !== saved.dark;
   // The draft as it would print: shown on this browser, which previews the
   // theme being edited, after the saved theme's rules, so it wins.
-  const draft = parseThemeInput({
-    label: label || themeName,
-    light,
-    dark,
-    watermark,
-  });
+  const draft = parseThemeInput({ label: label || themeName, light, dark });
   const preview =
     name !== null && dirty && draft.ok
       ? printTheme(themeName, draft.theme)
       : "";
   const save = () =>
-    saver.submit("save-theme", {
-      name: themeName,
-      label,
-      light,
-      dark,
-      watermark,
-    });
+    saver.submit("save-theme", { name: themeName, label, light, dark });
   const text = mode === "light" ? light : dark;
   const setText = mode === "light" ? setLight : setDark;
   return (
@@ -1137,24 +1198,6 @@ function ThemeEditor({
           placeholder="Duck"
           className="rounded-md border bg-transparent px-2 py-1 text-sm"
         />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">
-          Watermark: drawn by seamux, its stripes coloured by{" "}
-          <code>--watermark-1</code> to <code>--watermark-6</code>
-        </span>
-        <select
-          value={watermark}
-          onChange={(e) => setWatermark(e.target.value)}
-          className="rounded-md border bg-background px-2 py-1 text-sm"
-        >
-          <option value="">None</option>
-          {WATERMARKS.map((w) => (
-            <option key={w} value={w}>
-              {WATERMARK_LABELS[w]}
-            </option>
-          ))}
-        </select>
       </label>
       <div role="tablist" className="flex gap-1 border-b">
         {(["light", "dark"] as const).map((m) => (
@@ -1224,7 +1267,6 @@ function ThemeEditor({
                   setLabel(saved.label);
                   setLight(saved.light);
                   setDark(saved.dark);
-                  setWatermark(saved.watermark);
                   setMenu(false);
                 }}
               >
@@ -1242,6 +1284,17 @@ function ThemeEditor({
               >
                 <Check className="size-4" />
                 {active ? "Active" : "Make active"}
+              </button>
+              <button
+                type="button"
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+                onClick={() => {
+                  downloadThemeFile(name, saved);
+                  setMenu(false);
+                }}
+              >
+                <Download className="size-4" />
+                Export
               </button>
             </PopoverContent>
           </Popover>

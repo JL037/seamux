@@ -54,4 +54,21 @@ app.css's `html[data-theme]` rules derive a theme's surfaces from `--brand-secon
 An `<svg>` appended to `<body>` with `position: fixed; z-index: -1` showed on the board in light and dark, over `body`'s background colour and its radial-gradient wash, and under every card, the dispatch bar and the column headers: a card that overlapped it covered it. `<html>` sets no background, so `body`'s propagates to the canvas, which paints beneath everything in the root stacking context, including what sits at `z-index: -1`. Give `<html>` a background, or make `body` a stacking context, and the watermark would vanish behind it.
 
 - **Measured:** Chrome 154.0.8037.95, macOS 26.5.1, on the board at 1440 by 900, through the DevTools protocol.
-- **In seamux:** `.watermark` in [app.css](../app/app.css), drawn by [watermark.tsx](../app/components/watermark.tsx).
+- **In seamux:** `.watermark` in [app.css](../app/app.css), the element [root.tsx](../app/root.tsx) puts first in `<body>` for a theme's `--watermark-image`.
+
+## Only a `data:` URL that seamux writes itself keeps a theme off the network
+
+Forty stylesheets, each meant to make Chrome request a URL on a local server, were loaded on one page, then checked with stylelint 17.16.0 and css-tree 3.2.1. Chrome fetched for 33 of them. Besides plain `url()` in every property that takes an image (`background`, `mask-image`, `border-image-source`, `list-style-image`, `content`, `filter`, `shape-outside`, `@font-face`'s `src`, `@property`'s `initial-value`), and inside `@media`, `@supports`, `@layer` and nesting, it fetched for:
+
+- `url` spelled with escapes: `\75 rl(…)`, `u\72 l(…)`, `\000075rl(…)`, quoted or not.
+- An escape inside the address: `url(h\74tp://…)`, `url("\68ttp://…")`.
+- A bare string where an image goes, with no `url` at all: `image-set("…" 1x)`, `-webkit-image-set("…" 1x)`, `\69 mage-set("…" 1x)`, and a string reaching `image-set` through a custom property, `--a:"…"; image-set(var(--a) 1x)`.
+- `@import "…"` and `@import url(…)`.
+
+It didn't fetch for `src("…")`, `attr(data-u type(<url>))`, `image-set(attr(data-u) 1x)`, `ur/**/l(…)`, `@namespace url(…)`, or a `url()` inside `@container` on an element that isn't in a container. Nor for an SVG given as a `data:` image that holds `<image href="http://…">` or `<style>@import url(…)</style>`: an SVG drawn as an image loads nothing.
+
+stylelint's `function-url-scheme-allowed-list: ["data"]` and `at-rule-disallowed-list: ["import"]` missed 11 of the 33: every escaped `url`, both escapes inside the address, and every `image-set` string. css-tree decodes an escape inside a URL, but it doesn't take `\75 rl(` for `url()`, nor know a string in `image-set` is a URL, and its output, regenerated from its tree, still fetched for the same 11. Checking function and at-rule names against an allowlist, decoded first, and refusing anything it couldn't parse, refused all 33.
+
+- **Measured:** Chrome 154.0.8037.95, macOS 26.5.1, stylelint 17.16.0, css-tree 3.2.1, through headless Chrome's `--dump-dom` and a server logging each request.
+- **In seamux:** why a theme sets tokens rather than free CSS, and why an image is a token's value that `parseImage` in [theme.ts](../app/lib/theme.ts) keeps as bytes and `printValue` writes back as a `data:` URL of its own, so nothing the author typed reaches the page.
+- **See also:** [A CSS escape spells `url(` past a ban on the text](#a-css-escape-spells-url-past-a-ban-on-the-text).

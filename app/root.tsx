@@ -12,7 +12,6 @@ import {
 import type { Route } from "./+types/root";
 import { StuckBoard } from "~/components/stuck-board";
 import { THEME_KEY } from "~/components/theme-toggle";
-import { Watermarks } from "~/components/watermark";
 import { BLUR_KEY } from "~/lib/use-blur";
 import { Toaster } from "~/components/ui/sonner";
 import { requireAuth } from "~/lib/auth.server";
@@ -129,7 +128,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       </head>
       <body>
-        <Watermarks />
+        {/* A theme's watermark, from its --watermark-image (app.css). */}
+        <div className="watermark" aria-hidden="true" />
         {children}
         <StuckBoard />
         <ScrollRestoration />

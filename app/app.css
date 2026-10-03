@@ -108,14 +108,11 @@
   --column-done: color-mix(in oklch, var(--success) 60%, transparent);
   --column-pinned: var(--pinned);
   --column-attention: var(--attention);
-  /* A theme's watermark: its stripes, the pride flag's unless the theme
-     sets its own, and how strongly it shows. */
-  --watermark-1: #e40303;
-  --watermark-2: #ff8c00;
-  --watermark-3: #ffed00;
-  --watermark-4: #008026;
-  --watermark-5: #24408e;
-  --watermark-6: #732982;
+  /* A theme's images, none unless it sets them: behind the page, behind
+     every text box, and its watermark, with how strongly that shows. */
+  --background-image: none;
+  --input-image: none;
+  --watermark-image: none;
   --watermark-opacity: 0.2;
   /* The line a file opens at. */
   --line-highlight: oklch(82.8% 0.189 84.429 / 25%);
@@ -286,20 +283,18 @@ html[data-theme].dark {
   --sidebar-ring: var(--primary);
 }
 
-/* A theme's watermark (app/components/watermark.tsx), tilted in the
-   bottom-right corner behind the board: hidden unless the theme on the page
-   picks it, by a rule printTheme writes. At z-index -1 it paints above the
+/* A theme's watermark (root.tsx), its --watermark-image fitted into the
+   bottom-right corner behind the board. At z-index -1 it paints above the
    page's background and under everything else (knowledge/themes.md). */
 @layer components {
   .watermark {
-    display: none;
     position: fixed;
     z-index: -1;
     right: 3rem;
     bottom: 2.5rem;
     width: 240px;
     height: 220px;
-    rotate: -15deg;
+    background: var(--watermark-image) center / contain no-repeat;
     opacity: var(--watermark-opacity);
     pointer-events: none;
   }
@@ -334,8 +329,13 @@ html[data-theme].dark {
         50rem 22rem at 90% -10rem,
         color-mix(in oklch, var(--brand-secondary) 11%, transparent),
         transparent
-      );
+      ),
+      /* A theme's own, under the wash, filling the window. */
+      var(--background-image);
     background-repeat: no-repeat;
+    background-size: auto, auto, cover;
+    background-position: 0 0, 0 0, center;
+    background-attachment: scroll, scroll, fixed;
   }
   html {
     @apply font-sans;
@@ -388,6 +388,13 @@ html[data-theme].dark {
    a fixed 5px left small print readable. */
 [data-blur] .sensitive {
   filter: blur(0.5em);
+}
+
+/* A theme's --input-image behind a text box, filling it. */
+@utility bg-input-image {
+  background-image: var(--input-image);
+  background-size: cover;
+  background-position: center;
 }
 
 /* The mark's ramp: the primary action, and the edge of a working card. */

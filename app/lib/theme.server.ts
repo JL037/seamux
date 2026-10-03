@@ -9,7 +9,6 @@ import { openStore } from "./store.server.ts";
 import {
   DEFAULT_THEME,
   isThemeName,
-  isWatermark,
   printThemes,
   variantJson,
   type ActiveTheme,
@@ -209,14 +208,7 @@ export interface ThemeStatus {
   // Of the themes' rows: when it changes, the page fetches the CSS again.
   hash: string;
   // For the Themes tab, each variant as the JSON its editor shows.
-  // The watermark's name, "" for none.
-  themes: {
-    name: string;
-    label: string;
-    light: string;
-    dark: string;
-    watermark: string;
-  }[];
+  themes: { name: string; label: string; light: string; dark: string }[];
   swap: ThemeSwap;
 }
 
@@ -231,7 +223,6 @@ export function themeStatus(): ThemeStatus {
         label: typeof theme.label === "string" ? theme.label : name,
         light: variantJson(theme.light),
         dark: variantJson(theme.dark),
-        watermark: isWatermark(theme.watermark) ? theme.watermark : "",
       })),
       swap,
     };

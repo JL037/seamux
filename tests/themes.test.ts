@@ -5,10 +5,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  MAX_IMAGE_BYTES,
   parseColour,
+  parseImage,
   parseThemeInput,
   printTheme,
   printThemes,
+  readThemeFile,
+  themeFile,
   variantJson,
   type Theme,
 } from "~/lib/theme";
@@ -111,33 +115,56 @@ describe("parsing a theme", () => {
     expect(errors(`{${BRAND}, "--card": 5}`)).toHaveLength(1);
   });
 
-  it("takes a watermark seamux draws, and an opacity from 0 to 1", () => {
-    const ok = parseThemeInput({
-      label: "Duck",
-      light: `{${BRAND}, "--watermark-opacity": "0.3", "--watermark-1": "#fff"}`,
-      dark: "",
-      watermark: "pride-heart",
-    });
-    expect(ok.ok && ok.theme.watermark).toBe("pride-heart");
-    expect(ok.ok && ok.theme.light?.["--watermark-opacity"]).toEqual({
-      fraction: 0.3,
-    });
-    const none = parseThemeInput({ label: "Duck", light: `{${BRAND}}`, dark: "", watermark: "" });
-    expect(none.ok && none.theme.watermark).toBeUndefined();
-    const bad = parseThemeInput({
-      label: "Duck",
-      light: `{${BRAND}}`,
-      dark: "",
-      watermark: "url(x)",
-    });
-    expect(bad.ok ? [] : bad.errors).toEqual([
-      "watermark: not a watermark seamux draws",
-    ]);
+  it("takes an opacity from 0 to 1", () => {
+    expect(
+      parsed(`{${BRAND}, "--watermark-opacity": "30%"}`).light?.[
+        "--watermark-opacity"
+      ],
+    ).toEqual({ fraction: 0.3 });
     for (const value of ["1.5", "-0.1", "120%", "#fff", "0.5rem"]) {
       expect(errors(`{${BRAND}, "--watermark-opacity": "${value}"}`)).toEqual([
         "light.--watermark-opacity: not a number from 0 to 1, or 0% to 100%",
       ]);
     }
+  });
+
+  it("keeps an image as its bytes, whichever way the data: URL spelled it", () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"/>`;
+    const base64 = btoa(svg);
+    for (const url of [
+      `data:image/svg+xml;base64,${base64}`,
+      `data:image/svg+xml,${encodeURIComponent(svg)}`,
+      `DATA:image/SVG+xml;charset=utf-8;base64,${base64}`,
+    ]) {
+      expect(parseImage(url)).toEqual({ mime: "image/svg+xml", base64 });
+    }
+    const png = `data:image/png;base64,${btoa("\x89PNG\r\n\x1a\n....")}`;
+    expect(parseImage(png)?.mime).toBe("image/png");
+    expect(
+      parsed(`{${BRAND}, "--input-image": "${png}"}`).light?.["--input-image"],
+    ).toEqual(parseImage(png));
+  });
+
+  it("refuses an image that names a server, isn't what it says, or is too large", () => {
+    const svg = btoa(`<svg xmlns="http://www.w3.org/2000/svg"/>`);
+    for (const url of [
+      "http://127.0.0.1/x.png",
+      "url(http://127.0.0.1/x.png)",
+      "\\75 rl(http://127.0.0.1/x.png)",
+      "//127.0.0.1/x.png",
+      "data:text/html;base64,PHNjcmlwdD4=",
+      `data:image/png;base64,${svg}`,
+      "data:image/svg+xml,<html><script>1</script></html>",
+      "data:image/svg+xml;base64,not*base64",
+      "data:image/svg+xml,",
+      `data:image/svg+xml;base64,${btoa(`<svg>${"x".repeat(MAX_IMAGE_BYTES)}</svg>`)}`,
+    ]) {
+      expect(parseImage(url)).toBeNull();
+    }
+    expect(errors(`{${BRAND}, "--input-image": "#fff"}`)).toHaveLength(1);
+    expect(
+      errors(`{${BRAND}, "--card": "data:image/svg+xml;base64,${svg}"}`),
+    ).toContain("light.--card: not a colour");
   });
 
   it("needs a brand in each variant, and at least one variant", () => {
@@ -174,27 +201,19 @@ describe("printing a theme", () => {
       [
         `:root[data-theme="duck"]:not(.dark){--brand-primary:#f5b301;--brand-secondary:#e0661b;--radius:0.5rem}`,
         `:root[data-theme="duck"].dark{--brand-primary:#f5b301;--brand-secondary:#e0661b}`,
-        `:root[data-theme="duck"] .watermark{display:none}`,
       ].join("\n"),
     );
   });
 
-  it("shows only the watermark the theme picks, after hiding them all", () => {
-    const theme = parseThemeInput({
-      label: "Duck",
-      light: `{${BRAND}, "--watermark-opacity": "35%"}`,
-      dark: "",
-      watermark: "pride-heart",
-    });
-    if (!theme.ok) throw new Error(theme.errors.join("\n"));
-    const css = printTheme("duck", theme.theme);
-    expect(css).toContain("--watermark-opacity:0.35");
-    expect(css.endsWith(
-      [
-        `:root[data-theme="duck"] .watermark{display:none}`,
-        `:root[data-theme="duck"] .watermark-pride-heart{display:block}`,
-      ].join("\n"),
-    )).toBe(true);
+  it("prints an image as a data: URL it writes itself", () => {
+    const svg = btoa(`<svg xmlns="http://www.w3.org/2000/svg"/>`);
+    const css = printTheme(
+      "duck",
+      parsed(`{${BRAND}, "--watermark-image": "data:image/svg+xml;base64,${svg}"}`),
+    );
+    expect(css).toContain(
+      `--watermark-image:url("data:image/svg+xml;base64,${svg}")`,
+    );
   });
 
   it("gives a missing variant the other's brand and nothing more", () => {
@@ -222,18 +241,65 @@ describe("printing a theme", () => {
         "--accent": { space: "rgb", r: 1e21, g: -5, b: 2, alpha: 9 },
         "display:none;--x": { space: "transparent" },
         "--watermark-opacity": { fraction: "1;background:url(x)" },
-        "--watermark-1": { fraction: 0.5 },
+        "--watermark-image": { mime: "image/png\");background:url(x", base64: "AAAA" },
+        "--input-image": { mime: "image/png", base64: "\");background:url(x)" },
+        "--background-image": { fraction: 0.5 },
       },
-      watermark: "pride-heart{display:block}body{background:url(x)",
     };
     const css = printThemes({ duck: evil, "</style>": evil, Duck: evil });
     expect(css).toBe(
       [
         `:root[data-theme="duck"]:not(.dark){--radius:4rem;--accent:rgb(255 0 2)}`,
         `:root[data-theme="duck"].dark{}`,
-        `:root[data-theme="duck"] .watermark{display:none}`,
       ].join("\n"),
     );
+  });
+});
+
+describe("theme files", () => {
+  it("writes a theme that reads back as the same fields", () => {
+    const saved = {
+      label: "Duck",
+      light: `{\n  "--brand-primary": "#f5b301",\n  "--brand-secondary": "#e0661b"\n}`,
+      dark: "",
+    };
+    const file = themeFile("duck", saved);
+    expect(JSON.parse(file)["seamux-theme"]).toBe(1);
+    expect(readThemeFile(file, "whatever.json")).toEqual({
+      ok: true,
+      name: "duck",
+      ...saved,
+      skipped: [],
+    });
+  });
+
+  it("leaves out and names what this seamux can't use", () => {
+    const read = readThemeFile(
+      JSON.stringify({
+        "seamux-theme": 2,
+        label: "Fox",
+        light: { "--brand-primary": "#fff", "--hologram": "#000", "--card": 5 },
+        dark: "nope",
+      }),
+      "My Fox.seamux-theme.json",
+    );
+    expect(read).toMatchObject({
+      ok: true,
+      name: "my-fox",
+      label: "Fox",
+      light: `{\n  "--brand-primary": "#fff"\n}`,
+      dark: "",
+      skipped: ["light.--hologram", "light.--card", "dark"],
+    });
+  });
+
+  it("refuses what isn't a theme file", () => {
+    expect(readThemeFile("{nope", "x.json")).toEqual({
+      ok: false,
+      error: "not a theme file: not JSON",
+    });
+    expect(readThemeFile(`{"label": "x"}`, "x.json")).toMatchObject({ ok: false });
+    expect(readThemeFile("[]", "x.json")).toMatchObject({ ok: false });
   });
 });
 
