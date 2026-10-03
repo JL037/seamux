@@ -157,7 +157,15 @@ export function ConfigDialog({
               </button>
             ))}
           </div>
-          <div className="-mx-4 overflow-y-auto px-4 pb-1">
+          {/* The Themes tab fills it, and scrolls its list and editor
+              instead; it scrolls only when the window is too short even
+              for those. */}
+          <div
+            className={cn(
+              "-mx-4 overflow-y-auto px-4 pb-1",
+              tab === "themes" && "flex flex-col",
+            )}
+          >
             {tab === "general" ? (
               <GeneralTab
                 config={config}
@@ -917,10 +925,10 @@ function ThemesTab({
     ...theme.themes.map((t) => ({ name: t.name, label: t.label })),
   ];
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid gap-4 md:grid-cols-[11rem_minmax(0,1fr)]">
-        <div className="flex flex-col gap-2">
-          <ul className="flex max-h-72 flex-col divide-y overflow-y-auto rounded-lg border">
+    <div className="flex min-h-80 flex-1 flex-col gap-6">
+      <div className="grid min-h-0 flex-1 gap-4 max-md:grid-rows-[minmax(5rem,10rem)_minmax(0,1fr)] md:grid-cols-[11rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col gap-2">
+          <ul className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto rounded-lg border">
             {entries.map((t) => (
               <li key={t.name}>
                 <button
@@ -1062,7 +1070,7 @@ function ThemeEditor({
   const text = mode === "light" ? light : dark;
   const setText = mode === "light" ? setLight : setDark;
   return (
-    <section className="flex min-w-0 flex-col gap-2">
+    <section className="flex min-h-0 min-w-0 flex-col gap-2">
       {preview && <style>{preview}</style>}
       {name === null ? (
         <label className="flex flex-col gap-1">
@@ -1115,10 +1123,10 @@ function ThemeEditor({
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        rows={12}
         spellCheck={false}
+        style={{ fieldSizing: "fixed" }}
         placeholder={`Empty: made from the ${mode === "light" ? "dark" : "light"} variant's brand colours`}
-        className="font-mono text-xs"
+        className="min-h-24 flex-1 resize-none font-mono text-xs"
       />
       <p className="text-xs text-muted-foreground">
         JSON of token to value. Colours as hex,{" "}
