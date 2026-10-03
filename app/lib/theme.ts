@@ -121,9 +121,16 @@ export interface Theme {
   light?: Variant;
   dark?: Variant;
 }
+export type ColorMode = "light" | "dark";
+
+// The board's theme, and light or dark when a swap last chose one for every
+// browser. Each is stamped when it changes, and a browser takes a change
+// only when its stamp is newer than the one it already took.
 export interface ActiveTheme {
   name: string;
   updatedAt: number;
+  color: ColorMode | null;
+  colorAt: number;
 }
 
 const NUMBER = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?`;

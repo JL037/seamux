@@ -1,7 +1,13 @@
 import { useEffect } from "react";
 import { useRevalidator, useRouteLoaderData } from "react-router";
 
-import { DEFAULT_THEME, type ActiveTheme } from "~/lib/theme";
+import { THEME_KEY } from "~/components/theme-toggle";
+import { DEFAULT_THEME, type ActiveTheme, type ColorMode } from "~/lib/theme";
+
+// The stamp of the last light-or-dark from a swap this browser took. Kept
+// in this browser, so one opened after the swap still takes it, and one
+// whose toggle has since been flipped isn't flipped back.
+export const COLOR_AT_KEY = "seamux:theme-color-at";
 
 // The board's theme, client side. Every theme's CSS comes with the root
 // loader, so choosing one is only an attribute on <html>; the active name
@@ -40,6 +46,25 @@ export function applyActiveTheme(active: ActiveTheme) {
   else root.setAttribute("data-theme", active.name);
 }
 
+// Light or dark from a swap, when it's newer than the last this browser
+// took: stored as the header toggle would store it, so the toggle flips it
+// back. root.tsx's inline script does the same before the first paint.
+export function applyColor(color: ColorMode | null, colorAt: number) {
+  if (!color) return;
+  try {
+    const taken = Number(JSON.parse(localStorage.getItem(COLOR_AT_KEY) ?? "0"));
+    if (colorAt <= taken) return;
+    const dark = color === "dark";
+    if (dark === matchMedia("(prefers-color-scheme: dark)").matches) {
+      localStorage.removeItem(THEME_KEY);
+    } else {
+      localStorage.setItem(THEME_KEY, JSON.stringify(color));
+    }
+    localStorage.setItem(COLOR_AT_KEY, JSON.stringify(colorAt));
+    document.documentElement.classList.toggle("dark", dark);
+  } catch {}
+}
+
 // Follows the poll: shows the active theme, and fetches the CSS again when
 // the poll's hash of the themes differs from the one the page has.
 export function useThemeSync(active: ActiveTheme, hash: string) {
@@ -51,6 +76,9 @@ export function useThemeSync(active: ActiveTheme, hash: string) {
   useEffect(() => {
     applyActiveTheme(active);
   }, [active.name, active.updatedAt]);
+  useEffect(() => {
+    applyColor(active.color, active.colorAt);
+  }, [active.color, active.colorAt]);
   useEffect(() => {
     cssWanted = loaded !== undefined && loaded !== hash;
     if (!cssWanted) return;

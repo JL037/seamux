@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { z } from "zod";
 
 import type { Route } from "./+types/debug-theme-swap";
 import { isLocalRequest } from "~/lib/guard.server";
@@ -7,26 +8,22 @@ import { isLanHost } from "~/lib/remote.server";
 import { DEFAULT_THEME } from "~/lib/theme";
 import { readThemes, readThemeSwap, setActiveTheme } from "~/lib/theme.server";
 
-// Remote theme swapping, from the Debug tab: picks the board's theme from
-// curl or a Shortcut. The one action that skips assertFromBoard, since a
-// script sends no Origin. remoteGate and the HTTP Basic check have already
-// run, and it can only choose among saved themes, never make or change one.
+// Remote theme swapping, from the Debug tab: picks the board's theme, and
+// light or dark if asked, from curl or a Shortcut, as JSON:
+// `{"name": "duck", "color": "dark"}`. The one action that skips
+// assertFromBoard, since a script sends no Origin. remoteGate and the HTTP
+// Basic check have already run, and it can only choose among saved themes,
+// never make or change one.
 
 // Never a GET, which any page the user visits could fire with an <img>.
 export function loader() {
   throw data(null, { status: 405, headers: { Allow: "POST" } });
 }
 
-async function nameOf(request: Request): Promise<unknown> {
-  const type = request.headers.get("content-type") ?? "";
-  if (type.includes("application/json")) {
-    const body = (await request.json().catch(() => null)) as {
-      name?: unknown;
-    } | null;
-    return body?.name;
-  }
-  return (await request.formData().catch(() => null))?.get("name");
-}
+const swapSchema = z.strictObject({
+  name: z.string(),
+  color: z.enum(["light", "dark"]).optional(),
+});
 
 export async function action({ request }: Route.ActionArgs) {
   // On this Mac, or this Mac's .local name; never through the tunnel.
@@ -43,13 +40,16 @@ export async function action({ request }: Route.ActionArgs) {
     throw data(null, { status: 403 });
   }
   if (!readThemeSwap().on) throw data(null, { status: 403 });
-  const name = await nameOf(request);
-  if (
-    typeof name !== "string" ||
-    (name !== DEFAULT_THEME && !Object.hasOwn(readThemes(), name))
-  ) {
+  // JSON only, which another site's page can't send without a CORS
+  // preflight, which the board never answers.
+  const type = request.headers.get("content-type") ?? "";
+  if (!/^application\/json\b/i.test(type)) throw data(null, { status: 415 });
+  const body = swapSchema.safeParse(await request.json().catch(() => null));
+  if (!body.success) throw data(null, { status: 400 });
+  const { name, color } = body.data;
+  if (name !== DEFAULT_THEME && !Object.hasOwn(readThemes(), name)) {
     throw data(null, { status: 404 });
   }
-  setActiveTheme(name);
+  setActiveTheme(name, color);
   return new Response(null, { status: 204 });
 }

@@ -11,6 +11,7 @@ import {
   printThemes,
   variantJson,
   type ActiveTheme,
+  type ColorMode,
   type Theme,
 } from "./theme.ts";
 
@@ -84,26 +85,41 @@ export function removeTheme(name: string) {
 
 export function readActiveTheme(): ActiveTheme {
   const saved = get("activeTheme") as Partial<ActiveTheme> | undefined;
-  const updatedAt =
-    typeof saved?.updatedAt === "number" ? saved.updatedAt : 0;
-  const name = saved?.name;
-  if (typeof name !== "string" || !isThemeName(name)) {
-    return { name: DEFAULT_THEME, updatedAt };
+  const stamp = (n: unknown) => (typeof n === "number" ? n : 0);
+  const updatedAt = stamp(saved?.updatedAt);
+  const color =
+    saved?.color === "light" || saved?.color === "dark" ? saved.color : null;
+  const colorAt = color ? stamp(saved?.colorAt) : 0;
+  let name = saved?.name;
+  if (typeof name !== "string" || !isThemeName(name)) name = DEFAULT_THEME;
+  else {
+    const exists = openStore()
+      .prepare(`SELECT 1 FROM config WHERE key = ?`)
+      .get(`${PREFIX}${name}`);
+    if (!exists) name = DEFAULT_THEME;
   }
-  const exists = openStore()
-    .prepare(`SELECT 1 FROM config WHERE key = ?`)
-    .get(`${PREFIX}${name}`);
-  return { name: exists ? name : DEFAULT_THEME, updatedAt };
+  return { name, updatedAt, color, colorAt };
 }
 
 // Stamps the change, always later than the last one, so a board never
-// takes an older answer for a newer one.
-export function setActiveTheme(name: string): ActiveTheme {
+// takes an older answer for a newer one. With `color`, every browser also
+// switches to light or dark, until its own toggle switches it back;
+// without, light or dark is left as each browser has it.
+export function setActiveTheme(
+  name: string,
+  color?: ColorMode,
+): ActiveTheme {
   if (name !== DEFAULT_THEME && !readThemes()[name]) {
     throw new Error("No such theme");
   }
-  const before = readActiveTheme().updatedAt;
-  const active = { name, updatedAt: Math.max(Date.now(), before + 1) };
+  const before = readActiveTheme();
+  const later = (than: number) => Math.max(Date.now(), than + 1);
+  const active: ActiveTheme = {
+    name,
+    updatedAt: later(before.updatedAt),
+    color: color ?? before.color,
+    colorAt: color ? later(before.colorAt) : before.colorAt,
+  };
   put("activeTheme", active);
   return active;
 }
@@ -169,7 +185,7 @@ export function themeStatus(): ThemeStatus {
     };
   } catch {
     return {
-      active: { name: DEFAULT_THEME, updatedAt: 0 },
+      active: { name: DEFAULT_THEME, updatedAt: 0, color: null, colorAt: 0 },
       hash: "",
       themes: [],
       swap: { on: false },

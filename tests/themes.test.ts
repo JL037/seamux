@@ -199,13 +199,33 @@ describe("themes in the store", () => {
 
   it("stamps each change of the active theme later than the last", () => {
     saveTheme("duck", parsed(`{${BRAND}}`));
-    expect(readActiveTheme()).toEqual({ name: "seamux", updatedAt: 0 });
+    expect(readActiveTheme()).toEqual({
+      name: "seamux",
+      updatedAt: 0,
+      color: null,
+      colorAt: 0,
+    });
     const first = setActiveTheme("duck");
     const second = setActiveTheme("seamux");
     const third = setActiveTheme("duck");
     expect(second.updatedAt).toBeGreaterThan(first.updatedAt);
     expect(third.updatedAt).toBeGreaterThan(second.updatedAt);
     expect(() => setActiveTheme("goose")).toThrow("No such theme");
+  });
+
+  it("keeps light or dark until a swap chooses it again", () => {
+    saveTheme("duck", parsed(`{${BRAND}}`));
+    const dark = setActiveTheme("duck", "dark");
+    expect(dark).toMatchObject({ name: "duck", color: "dark" });
+    expect(dark.colorAt).toBeGreaterThan(0);
+    // A swap without a colour leaves it, and its stamp, as they were, so no
+    // browser is switched back to it.
+    const plain = setActiveTheme("seamux");
+    expect(plain).toMatchObject({ color: "dark", colorAt: dark.colorAt });
+    const light = setActiveTheme("seamux", "light");
+    expect(light.color).toBe("light");
+    expect(light.colorAt).toBeGreaterThan(dark.colorAt);
+    expect(readActiveTheme()).toEqual(light);
   });
 
   it("puts the board back on seamux when the active theme goes", () => {
@@ -241,25 +261,21 @@ describe("the swap route", () => {
   });
 
   const swap = async (
-    fields: Record<string, string>,
+    body: unknown,
     {
       host = "localhost:54321",
-      json = false,
+      type = "application/json",
       origin,
-    }: { host?: string; json?: boolean; origin?: string } = {},
+    }: { host?: string; type?: string; origin?: string } = {},
   ) => {
     const request = new Request(`http://${host}/debug/theme-swap`, {
       method: "POST",
       headers: {
         host,
-        "content-type": json
-          ? "application/json"
-          : "application/x-www-form-urlencoded",
+        "content-type": type,
         ...(origin ? { origin } : {}),
       },
-      body: json
-        ? JSON.stringify(fields)
-        : new URLSearchParams(fields).toString(),
+      body: typeof body === "string" ? body : JSON.stringify(body),
     });
     try {
       const response = await action({ request } as never);
@@ -283,19 +299,39 @@ describe("the swap route", () => {
     expect(await swap({ name: "duck" })).toBe(403);
   });
 
-  it("swaps from a script, by form or JSON, and from the board itself", async () => {
+  it("swaps from a script and from the board itself", async () => {
     setThemeSwap(true);
     expect(await swap({ name: "duck" })).toBe(204);
-    expect(readActiveTheme().name).toBe("duck");
-    expect(await swap({ name: "seamux" }, { json: true })).toBe(204);
-    expect(readActiveTheme().name).toBe("seamux");
+    expect(readActiveTheme()).toMatchObject({ name: "duck", color: null });
     expect(
-      await swap({ name: "duck" }, { origin: "http://localhost:54321" }),
+      await swap({ name: "seamux" }, { origin: "http://localhost:54321" }),
     ).toBe(204);
+    expect(readActiveTheme().name).toBe("seamux");
+  });
+
+  it("chooses light or dark along with the theme", async () => {
+    setThemeSwap(true);
+    expect(await swap({ name: "duck", color: "light" })).toBe(204);
+    expect(readActiveTheme()).toMatchObject({ name: "duck", color: "light" });
+    expect(await swap({ name: "duck", color: "dark" })).toBe(204);
+    expect(readActiveTheme().color).toBe("dark");
+  });
+
+  it("takes only JSON of a name and maybe a colour", async () => {
+    setThemeSwap(true);
+    expect(
+      await swap("name=duck", { type: "application/x-www-form-urlencoded" }),
+    ).toBe(415);
+    expect(await swap('{"name":"duck"}', { type: "text/plain" })).toBe(415);
+    expect(await swap("{nope")).toBe(400);
+    expect(await swap({ name: "duck", color: "blue" })).toBe(400);
+    expect(await swap({ name: "duck", token: "x" })).toBe(400);
+    expect(await swap({})).toBe(400);
+    expect(readActiveTheme().name).toBe("seamux");
   });
 
   // React Router doesn't check the Origin on a route without a page, so this
-  // is what stops another site's form.
+  // is what stops another site's page.
   it("refuses another website, an unknown theme, and the tunnel", async () => {
     setThemeSwap(true);
     expect(

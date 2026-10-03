@@ -17,7 +17,11 @@ import { Toaster } from "~/components/ui/sonner";
 import { requireAuth } from "~/lib/auth.server";
 import { DEFAULT_THEME } from "~/lib/theme";
 import { readActiveTheme, themeStyles } from "~/lib/theme.server";
-import { themeCssWanted, type ThemeStyles } from "~/lib/use-theme";
+import {
+  COLOR_AT_KEY,
+  themeCssWanted,
+  type ThemeStyles,
+} from "~/lib/use-theme";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -41,7 +45,11 @@ export function loader(): { themes: ThemeStyles } {
     return { themes: { ...themeStyles(), active: readActiveTheme() } };
   } catch {
     return {
-      themes: { hash: "", css: "", active: { name: DEFAULT_THEME, updatedAt: 0 } },
+      themes: {
+        hash: "",
+        css: "",
+        active: { name: DEFAULT_THEME, updatedAt: 0, color: null, colorAt: 0 },
+      },
     };
   }
 }
@@ -96,7 +104,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Every saved theme, printed from numbers only (app/lib/theme.ts),
             and the active one as data-theme on <html>, before the first
             paint. Kept there if hydration strips it, like the class above;
-            useThemeSync changes it. */}
+            useThemeSync changes it. Light or dark from a swap this browser
+            hasn't taken yet is taken here too, as applyColor does. */}
         {themes?.css ? (
           <style
             id="seamux-themes"
@@ -105,7 +114,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         ) : null}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(()=>{const r=document.documentElement;window.__seamuxTheme=window.__seamuxTheme||${inline(themes?.active ?? { name: DEFAULT_THEME, updatedAt: 0 })};const s=()=>{const n=window.__seamuxTheme.name;const w=n===${inline(DEFAULT_THEME)}?null:n;if(r.getAttribute("data-theme")!==w){if(w===null)r.removeAttribute("data-theme");else r.setAttribute("data-theme",w)}};s();new MutationObserver(s).observe(r,{attributes:true,attributeFilter:["data-theme"]})})()`,
+            __html: `(()=>{const r=document.documentElement;window.__seamuxTheme=window.__seamuxTheme||${inline(themes?.active ?? { name: DEFAULT_THEME, updatedAt: 0, color: null, colorAt: 0 })};const a=window.__seamuxTheme;try{const at=Number(JSON.parse(localStorage.getItem(${inline(COLOR_AT_KEY)}))||0);if(a.color&&a.colorAt>at){const d=a.color==="dark";if(d===matchMedia("(prefers-color-scheme: dark)").matches)localStorage.removeItem(${inline(THEME_KEY)});else localStorage.setItem(${inline(THEME_KEY)},JSON.stringify(a.color));localStorage.setItem(${inline(COLOR_AT_KEY)},JSON.stringify(a.colorAt));r.classList.toggle("dark",d)}}catch{};const s=()=>{const n=window.__seamuxTheme.name;const w=n===${inline(DEFAULT_THEME)}?null:n;if(r.getAttribute("data-theme")!==w){if(w===null)r.removeAttribute("data-theme");else r.setAttribute("data-theme",w)}};s();new MutationObserver(s).observe(r,{attributes:true,attributeFilter:["data-theme"]})})()`,
           }}
         />
         {/* Blur for screenshots, from the Debug tab, before the first paint
