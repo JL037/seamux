@@ -217,8 +217,9 @@ function ApprovalButtons({
   );
 }
 
-// Any other numbered dialog, answered with the option's digit. No option is
-// singled out: which one is safe depends on the dialog.
+// Any other dialog, or a tool's own confirmation, answered with the option
+// picked, in the terminal's order. No option is singled out: which one is
+// safe depends on the dialog.
 function DialogButtons({
   card,
   dialog,
@@ -274,9 +275,13 @@ export function WaitingPanel({ card }: { card: Card }) {
         <ShieldQuestion className="mt-px size-3.5 shrink-0 text-warning" />
         <span className="min-w-0">
           <span className="font-medium">
-            {approval
-              ? "Needs approval"
-              : (w.dialog?.title ?? `Waiting: ${w.reason ?? "input"}`)}
+            {w.dialog ? (
+              <span className="sensitive">{w.dialog.title}</span>
+            ) : approval ? (
+              "Needs approval"
+            ) : (
+              `Waiting: ${w.reason ?? "input"}`
+            )}
             {w.tool && ` · ${w.tool}`}
           </span>
           {w.detail && (

@@ -81,7 +81,9 @@ export async function listLive(): Promise<Map<string, LiveSession>> {
   const { sessions } = JSON.parse(stdout) as { sessions: CmuxSession[] };
   const pidless = sessions.some(
     (s) =>
-      s.agent === "claude" && s.active_for_surface && s.stored_pid_exists == null,
+      s.agent === "claude" &&
+      s.active_for_surface &&
+      s.stored_pid_exists == null,
   );
   const running = pidless ? await runningClaudeSessions() : new Set<string>();
   const map = new Map<string, LiveSession>();
@@ -126,7 +128,10 @@ async function runningClaudeSessions(): Promise<Set<string>> {
     timeout: 10_000,
   }).then(
     ({ stdout }) =>
-      JSON.parse(stdout) as { pid?: number | null; sessionId?: string | null }[],
+      JSON.parse(stdout) as {
+        pid?: number | null;
+        sessionId?: string | null;
+      }[],
     () => [],
   );
   return new Set(
@@ -187,9 +192,7 @@ export async function answerQuestion(
   questions: Question[],
   answers: Answer[],
 ) {
-  await driving(sessionId, (s) =>
-    macros.answerQuestion(s, questions, answers),
-  );
+  await driving(sessionId, (s) => macros.answerQuestion(s, questions, answers));
 }
 
 // Answer an open permission prompt, as read off `engine`'s screen. Measured
@@ -207,34 +210,27 @@ export async function answerApproval(
 }
 
 const OPTION = /^(?:❯\s*)?([1-9])\.\s+(.+)$/;
+// A row of a dialog whose options have no numbers, untrimmed: the one under
+// the cursor led by " ❯ ", the rest indented to line up with it.
+const ROW = /^ (❯| ) (\S.*)$/;
 // A line made of one box-drawing character: the rule a dialog opens under.
 const RULE = /^([▔─━])\1{7,}$/;
 
-// The numbered dialog open at the bottom of the screen, or null. It must
-// end on Claude Code's "Esc to cancel" footer, so a numbered list in a
-// reply is never mistaken for one.
+// The dialog open at the bottom of the screen, or null. It must end on
+// Claude Code's "Esc to cancel" footer, so a list in a reply is never
+// mistaken for one.
 function parseDialog(screen: string): Dialog | null {
-  const lines = screen.split("\n").map((l) => l.trim());
-  while (lines.length && !lines.at(-1)) lines.pop();
-  if (!/Esc to cancel/.test(lines.at(-1) ?? "")) return null;
+  const raw = screen.split("\n").map((l) => l.trimEnd());
+  while (raw.length && !raw.at(-1)) raw.pop();
+  if (!/Esc to cancel/.test(raw.at(-1) ?? "")) return null;
+  const lines = raw.map((l) => l.trim());
 
-  // The options, read upwards from the footer down to option 1; lines
-  // between them are their descriptions.
-  let at = lines.length - 2;
-  while (at >= 0 && !OPTION.test(lines[at])) at--;
-  const last = Number(OPTION.exec(lines[at] ?? "")?.[1] ?? 0);
-  const options: string[] = [];
-  for (; at >= 0 && options.length < last; at--) {
-    const m = OPTION.exec(lines[at]);
-    if (!m) continue;
-    if (Number(m[1]) !== last - options.length) return null;
-    options.unshift(m[2].trim());
-  }
-  if (options.length < 2 || options.length !== last) return null;
+  const found = numberedOptions(lines) ?? cursorOptions(raw);
+  if (!found) return null;
 
-  // The dialog's own text, between its rule and option 1.
+  // The dialog's own text, between its rule and the first option.
   const text: string[] = [];
-  for (at--; at >= 0 && !RULE.test(lines[at]); at--) {
+  for (let at = found.at - 1; at >= 0 && !RULE.test(lines[at]); at--) {
     if (lines[at]) text.unshift(lines[at]);
   }
   if (text.length === 0) return null;
@@ -242,9 +238,50 @@ function parseDialog(screen: string): Dialog | null {
   return {
     title,
     detail,
-    options,
-    key: [...text, ...options].join("\n"),
+    options: found.options,
+    cursor: found.cursor,
+    key: [...text, ...found.options].join("\n"),
   };
+}
+
+interface Options {
+  // The line the first option is on.
+  at: number;
+  options: string[];
+  cursor: number | null;
+}
+
+// A numbered dialog's options, read upwards from the footer down to option
+// 1; lines between them are their descriptions.
+function numberedOptions(lines: string[]): Options | null {
+  let at = lines.length - 2;
+  while (at >= 0 && !OPTION.test(lines[at])) at--;
+  const last = Number(OPTION.exec(lines[at] ?? "")?.[1] ?? 0);
+  const options: string[] = [];
+  for (; at >= 0; at--) {
+    const m = OPTION.exec(lines[at]);
+    if (!m) continue;
+    if (Number(m[1]) !== last - options.length) return null;
+    options.unshift(m[2].trim());
+    if (options.length === last) break;
+  }
+  if (options.length < 2 || options.length !== last) return null;
+  return { at, options, cursor: null };
+}
+
+// The options of a dialog that numbers none, such as the Artifact tool's
+// "Permanently delete …?" (No, then Yes): the rows just above the footer,
+// one of them under the cursor.
+function cursorOptions(raw: string[]): Options | null {
+  let end = raw.length - 1;
+  while (end > 0 && !raw[end - 1]) end--;
+  let at = end;
+  while (at > 0 && ROW.test(raw[at - 1])) at--;
+  const rows = raw.slice(at, end).map((l) => ROW.exec(l)!);
+  const cursor = rows.findIndex((m) => m[1] === "❯");
+  if (rows.length < 2 || cursor < 0) return null;
+  if (rows.some((m, i) => i !== cursor && m[1] === "❯")) return null;
+  return { at, options: rows.map((m) => m[2].trim()), cursor };
 }
 
 export async function readDialog(surface: Surface): Promise<Dialog | null> {
@@ -257,8 +294,9 @@ export async function readCodexApproval(surface: Surface) {
 
 // Pick an option in the dialog read as `key`. Measured against Claude Code
 // 2.1.281 on /exit's "Background work is running": a digit picks and
-// confirms in one go. The screen is read again first, so a digit never
-// lands in the prompt box once the dialog has gone.
+// confirms in one go. A dialog with no numbers takes arrows and Enter
+// instead (2.1.289). The screen is read again first, so no key ever lands
+// in the prompt box once the dialog has gone.
 export async function answerDialog(
   sessionId: string,
   key: string,
@@ -274,7 +312,7 @@ export async function answerDialog(
       option >= dialog.options.length
     )
       throw new Error("No such option");
-    await macros.pick(s, option);
+    await macros.pick(s, option, dialog.cursor);
   });
 }
 
@@ -550,8 +588,7 @@ export function installedEngines(): Record<Engine, boolean> {
   return Object.fromEntries(
     ENGINES.map((e) => [
       e,
-      existsSync(HARNESSES[e].wrapper) &&
-        findBin(HARNESSES[e].bin) !== null,
+      existsSync(HARNESSES[e].wrapper) && findBin(HARNESSES[e].bin) !== null,
     ]),
   ) as Record<Engine, boolean>;
 }

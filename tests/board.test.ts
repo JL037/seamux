@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -152,4 +153,74 @@ it("shows `!` commands, and what a backgrounded one wrote", async () => {
     },
     { role: "shell", command: "sleep 600", output: null, at: "2026-01-01T00:03:00Z" },
   ]);
+});
+
+it("offers a tool's own No/Yes confirmation as its options, not Approve", async () => {
+  // As Claude Code 2.1.289 shows the Artifact tool's delete: unnumbered,
+  // No first, and digits do nothing, so Approve's 1 would never answer it.
+  const sessionId = "3f0e8c1a-5b2d-4c3e-9f41-2a7d6b8e0c17";
+  const project = join(process.env.HOME!, ".claude/projects/-work");
+  mkdirSync(project, { recursive: true });
+  writeFileSync(
+    join(project, `${sessionId}.jsonl`),
+    JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-01-01T00:00:00Z",
+      message: {
+        role: "assistant",
+        stop_reason: "tool_use",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_1",
+            name: "Artifact",
+            input: { action: "delete", url: "https://claude.ai/artifact/x" },
+          },
+        ],
+      },
+    }) + "\n",
+  );
+  const agents = process.env.SEAMUX_TEST_CLAUDE_AGENTS!;
+  writeFileSync(
+    agents,
+    JSON.stringify([
+      {
+        pid: 1,
+        cwd: "/work",
+        kind: "interactive",
+        startedAt: 0,
+        sessionId,
+        name: "demo",
+        status: "waiting",
+        waitingFor: "permission prompt",
+      },
+    ]),
+  );
+  const { surface } = cmux.addSession(sessionId);
+  surface.screen = [
+    "⏺ Artifact(delete · https://claude.ai/artifact/x)",
+    "",
+    "────────────────────────────────",
+    ' Permanently delete "Demo Night"?',
+    "",
+    " ❯ No",
+    "   Yes",
+    "",
+    " Esc to cancel · Tab to amend",
+  ].join("\n");
+  try {
+    const board = await loadBoard();
+    const card = board.cards.find((c) => c.sessionId === sessionId);
+    expect(card?.waiting).toMatchObject({
+      tool: "Artifact",
+      approval: null,
+      dialog: {
+        title: 'Permanently delete "Demo Night"?',
+        options: ["No", "Yes"],
+        cursor: 0,
+      },
+    });
+  } finally {
+    rmSync(agents, { force: true });
+  }
 });

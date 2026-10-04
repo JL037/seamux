@@ -17,7 +17,26 @@ A Bash approval offers Yes, an always-allow, sometimes a switch to auto mode, th
 
 - **Measured:** Claude Code 2.1.281.
 - **In seamux:** `approve` and `deny` in [macros.server.ts](../app/lib/macros.server.ts), and `approveKey` in [harness.server.ts](../app/lib/harness.server.ts).
-- **See also:** [An open approval is a tool call with no output](codex.md#an-open-approval-is-a-tool-call-with-no-output), Codex's version.
+- **See also:** [An open approval is a tool call with no output](codex.md#an-open-approval-is-a-tool-call-with-no-output), Codex's version, and [A tool's own confirmation numbers nothing](#a-tools-own-confirmation-numbers-nothing-puts-no-first-and-ignores-digits), where 1 isn't Yes.
+
+## A tool's own confirmation numbers nothing, puts No first, and ignores digits
+
+The Artifact tool's delete doesn't open the usual permission prompt. `claude agents` still reports it as `waitingFor: "permission prompt"`, and the transcript holds the pending `Artifact` call, but the screen shows its own question with two unnumbered rows, the cursor on No:
+
+```
+ Permanently delete "Dialog Probe"?
+
+ ❯ No
+   Yes
+
+ Esc to cancel · Tab to amend
+```
+
+Against a throwaway artifact: `1`, `2` and `y` did nothing, and nothing reached the prompt box either. `down` moved the cursor to Yes, and `enter` deleted the artifact. A Bash approval in the same chat was still numbered, with Yes as 1. The tool checks the artifact exists before it asks, so a made-up URL fails without ever opening the dialog.
+
+- **Measured:** Claude Code 2.1.289, cmux 0.64.23.
+- **In seamux:** `cursorOptions` and `answerDialog` in [drive.server.ts](../app/lib/drive.server.ts), `pick` in [macros.server.ts](../app/lib/macros.server.ts), and the board swapping the approval for the dialog in [board.server.ts](../app/lib/board.server.ts).
+- **See also:** [A permission prompt's "No" has no fixed number](#a-permission-prompts-no-has-no-fixed-number), [A new folder stops on a trust dialog that nothing reports](launching.md#a-new-folder-stops-on-a-trust-dialog-that-nothing-reports), which is unnumbered the same way.
 
 ## AskUserQuestion answers by digit
 

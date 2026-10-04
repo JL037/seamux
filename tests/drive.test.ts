@@ -427,6 +427,44 @@ describe("dialogs", () => {
     expect(input(surface)).toEqual(["text:3"]);
   });
 
+  // A tool's own confirmation, as Claude Code 2.1.289 shows the Artifact
+  // tool's delete: no numbers, and digits do nothing.
+  const unnumbered = [
+    "────────────────────────────────",
+    ' Permanently delete "Demo Night"?',
+    "",
+    " ❯ No",
+    "   Yes",
+    "",
+    " Esc to cancel · Tab to amend",
+  ].join("\n");
+
+  it("reads a dialog with no numbers, and where its cursor is", async () => {
+    const { surface, workspace } = cmux.addSession("s");
+    surface.screen = unnumbered;
+    const dialog = await readDialog({
+      surfaceId: surface.id,
+      workspaceId: workspace.id,
+    });
+    expect(dialog).toMatchObject({
+      title: 'Permanently delete "Demo Night"?',
+      detail: [],
+      options: ["No", "Yes"],
+      cursor: 0,
+    });
+  });
+
+  it("walks the cursor to the option and presses Enter where digits do nothing", async () => {
+    const { surface, workspace } = cmux.addSession("s");
+    surface.screen = unnumbered;
+    const { key } = (await readDialog({
+      surfaceId: surface.id,
+      workspaceId: workspace.id,
+    }))!;
+    await answerDialog("s", key, 1);
+    expect(input(surface)).toEqual(["key:down", "key:enter"]);
+  });
+
   it("types nothing once the dialog has gone", async () => {
     const { surface } = cmux.addSession("s");
     surface.screen = "❯ ";

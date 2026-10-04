@@ -56,10 +56,20 @@ export async function deny(s: Session) {
   await s.press("escape");
 }
 
-// A numbered dialog's option, counted from 0: its digit picks and confirms
-// in one go.
-export async function pick(s: Session, option: number) {
-  await s.keys(String(option + 1));
+// A dialog's option, counted from 0. In a numbered dialog its digit picks
+// and confirms in one go. A dialog with no numbers ignores digits, so the
+// cursor, at `cursor`, walks to the option and Enter picks it.
+export async function pick(s: Session, option: number, cursor: number | null) {
+  if (cursor === null) {
+    await s.keys(String(option + 1));
+    return;
+  }
+  const arrow = option > cursor ? "down" : "up";
+  for (let n = Math.abs(option - cursor); n > 0; n--) {
+    await s.press(arrow);
+    await pause(KEY_GAP_MS);
+  }
+  await s.press("enter");
 }
 
 // Answer an open AskUserQuestion by driving its dialog, so the model gets a

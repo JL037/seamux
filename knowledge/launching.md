@@ -22,8 +22,10 @@ So neither `claude` nor `node` is on its `PATH`, and nor is anything else `~/.zs
 
 Before Claude Code starts, it asks whether the folder is trusted: no `claude agents` row, no transcript, cmux sees no input needed. Its default is "No, exit". Choosing a folder to dispatch into is that decision, so every launch watches the new surface for the dialog and answers yes.
 
-- **Measured:** not recorded.
+Its rows are unnumbered, No first, and `down` then `enter` accepts.
+
+- **Measured:** Claude Code 2.1.289, cmux 0.64.23.
 - **In seamux:** `acceptTrust` in [macros.server.ts](../app/lib/macros.server.ts), started from `launch` in [drive.server.ts](../app/lib/drive.server.ts).
-- **See also:** [Codex's trust dialog defaults to yes](codex.md#the-trust-dialog-defaults-to-yes), [Dialogs](dialogs.md).
+- **See also:** [Codex's trust dialog defaults to yes](codex.md#the-trust-dialog-defaults-to-yes), [Dialogs](dialogs.md), [A tool's own confirmation numbers nothing](dialogs.md#a-tools-own-confirmation-numbers-nothing-puts-no-first-and-ignores-digits).
 
 Resuming has a launch finding of its own: [A resumed chat is invisible for a few seconds](session-state.md#a-resumed-chat-is-invisible-for-a-few-seconds).

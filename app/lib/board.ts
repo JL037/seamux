@@ -75,17 +75,22 @@ export interface Waiting {
   ask: { toolUseId: string; questions: Question[] } | null;
   // An open permission prompt, which the board can approve or deny.
   approval: { toolUseId: string } | null;
-  // Any other numbered dialog, such as /exit's "Background work is
-  // running", read off the terminal since no tool call is behind it.
+  // Any other dialog, such as /exit's "Background work is running", read
+  // off the terminal since no tool call is behind it. Or a tool's own
+  // confirmation in place of `approval`, which its options answer and
+  // Approve can't.
   dialog: Dialog | null;
 }
 
-// A numbered dialog as the terminal shows it. `key` is its text, so an
-// answer only goes to the dialog it was meant for.
+// A dialog as the terminal shows it. `key` is its text, so an answer only
+// goes to the dialog it was meant for.
 export interface Dialog {
   title: string;
   detail: string[];
   options: string[];
+  // Which option the cursor is on in a dialog with no numbers, which arrows
+  // and Enter answer; null in a numbered one, which a digit answers.
+  cursor: number | null;
   key: string;
 }
 
@@ -188,9 +193,7 @@ export interface ServiceNotice {
 // Whether the notice asks something of the user, so it counts like a waiting
 // chat.
 export function needsAction(n: ServiceNotice): boolean {
-  return (
-    n.needsLogin || n.stopped.length > 0 || n.login?.state === "running"
-  );
+  return n.needsLogin || n.stopped.length > 0 || n.login?.state === "running";
 }
 
 // Whether the notice gets a card. A sign-in that just finished stays in the
@@ -250,11 +253,7 @@ export interface CmuxProblem {
 // socket refuses by default, or cmux wants a socket password seamux wasn't
 // given.
 export type CmuxTrouble =
-  | "not_installed"
-  | "not_running"
-  | "socket_off"
-  | "outside_cmux"
-  | "password";
+  "not_installed" | "not_running" | "socket_off" | "outside_cmux" | "password";
 
 export type ChatMessage =
   | { role: "user" | "assistant"; text: string; at: string | null }

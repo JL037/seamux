@@ -841,9 +841,17 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
           : null;
       const waiting = waitingOn(row, summary, needs);
       // A dialog with nothing in the transcript behind it can only be read
-      // off the screen.
-      if (waiting && surface && !waiting.ask && !waiting.approval) {
-        waiting.dialog = await readDialog(surface).catch(() => null);
+      // off the screen. So can a tool's own confirmation, such as the
+      // Artifact tool's "Permanently delete …?": No, then Yes, with no
+      // numbers, so Approve's digit does nothing there and the card offers
+      // the dialog's own options instead.
+      if (waiting && surface && !waiting.ask) {
+        const dialog = await readDialog(surface).catch(() => null);
+        if (!waiting.approval) waiting.dialog = dialog;
+        else if (dialog && dialog.cursor !== null) {
+          waiting.dialog = dialog;
+          waiting.approval = null;
+        }
       }
       return {
         sessionId: row.sessionId,
@@ -881,7 +889,13 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const codexLive = [...live].filter(([, l]) => l.engine === "codex");
   const codexCards = await Promise.all(
     codexLive.map(([sessionId, l]) =>
-      codexCard(sessionId, l, codexTranscripts.get(sessionId), names, workspaces),
+      codexCard(
+        sessionId,
+        l,
+        codexTranscripts.get(sessionId),
+        names,
+        workspaces,
+      ),
     ),
   );
   liveCards.push(...codexCards);
@@ -1096,7 +1110,10 @@ async function codexCard(
   let t = indexed;
   if (live.transcript && !t) {
     try {
-      t = { path: live.transcript, mtimeMs: (await stat(live.transcript)).mtimeMs };
+      t = {
+        path: live.transcript,
+        mtimeMs: (await stat(live.transcript)).mtimeMs,
+      };
     } catch {}
   }
   const s: CodexSummary = t
