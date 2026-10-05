@@ -17,6 +17,11 @@ export const EDGE: Partial<Record<Column, string>> = {
   working: "before:bg-edge-working",
 };
 
+// A board card's own outline, in place of the ring all round: a hairline on
+// the top and right only, since the card's shape and shadow already show
+// its other sides, and the color at the top right is what the eye looks for.
+export const CARD_OUTLINE = "ring-0 hairline-top-right";
+
 // Which agent runs the chat, as its top-right corner: Anthropic's orange for
 // Claude Code, OpenAI's teal for Codex.
 export const ENGINE_CORNER: Record<Engine, string> = {

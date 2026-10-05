@@ -43,7 +43,12 @@ import {
   attentionCount,
   useServiceAlerts,
 } from "~/components/attention";
-import { EDGE, EDGE_FRAME, ENGINE_CORNER } from "~/components/card-edge";
+import {
+  CARD_OUTLINE,
+  EDGE,
+  EDGE_FRAME,
+  ENGINE_CORNER,
+} from "~/components/card-edge";
 import { ChatModal } from "~/components/chat-modal";
 import { CmuxProblem } from "~/components/cmux-problem";
 import {
@@ -1012,6 +1017,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
         size="sm"
         className={cn(
           EDGE_FRAME,
+          CARD_OUTLINE,
           "relative shadow-sm transition-shadow hover:shadow-md dark:shadow-black/20",
           EDGE[card.column],
           ENGINE_CORNER[card.engine],
@@ -1165,6 +1171,7 @@ function StartingCard({ spawn }: { spawn: Spawning }) {
       size="sm"
       className={cn(
         EDGE_FRAME,
+        CARD_OUTLINE,
         "relative opacity-80 shadow-sm dark:shadow-black/20",
         EDGE.working,
         ENGINE_CORNER[spawn.engine],
