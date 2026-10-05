@@ -440,21 +440,6 @@ html[data-theme].dark {
   );
 }
 
-/* A board card's hairline, in place of the ring all round: only the top and
-   right sides, straight lines that stop short of the top-left and
-   bottom-right curves, so the left, the bottom and three corners show none.
-   The engine's corner draws the top-right curve over where they meet. */
-@utility hairline-top-right {
-  --frame: color-mix(in oklab, var(--foreground) 10%, transparent);
-  background-image:
-    linear-gradient(var(--frame), var(--frame)),
-    linear-gradient(var(--frame), var(--frame));
-  background-size:
-    calc(100% - var(--radius-xl)) 1px,
-    1px calc(100% - var(--radius-xl));
-  background-position: right top;
-  background-repeat: no-repeat;
-}
 
 /* Syntax highlighting, from highlight.js's classes: GitHub's palette in
    light, GitHub Dark's in dark. */

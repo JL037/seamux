@@ -9,18 +9,19 @@ import type { Engine } from "~/lib/config";
 export const EDGE_FRAME =
   "before:absolute before:inset-x-0 before:top-0 before:h-0.5 after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-5 after:rounded-tr-xl after:border-t-2 after:border-r-2 after:border-(--corner) after:mask-corner-fade";
 
-// The top edge: the ramp for a working chat, a fade in from nothing for one
-// idle or waiting.
-export const EDGE: Partial<Record<Column, string>> = {
+// The top edge: the ramp for a working chat, a fade in from nothing for any
+// other.
+export const EDGE: Record<Column, string> = {
   idle: "before:bg-edge-fade",
   waiting: "before:bg-edge-fade",
   working: "before:bg-edge-working",
+  done: "before:bg-edge-fade",
 };
 
-// A board card's own outline, in place of the ring all round: a hairline on
-// the top and right only, since the card's shape and shadow already show
-// its other sides, and the color at the top right is what the eye looks for.
-export const CARD_OUTLINE = "ring-0 hairline-top-right";
+// A board card has no outline or shadow of its own: its fill against the
+// board already shows its shape, so its only edges are the top and the
+// engine's corner, each fading out from the corner's color.
+export const CARD_OUTLINE = "ring-0 shadow-none";
 
 // Which agent runs the chat, as its top-right corner: Anthropic's orange for
 // Claude Code, OpenAI's teal for Codex.

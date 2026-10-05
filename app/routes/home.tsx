@@ -494,7 +494,7 @@ function ChatInput({
             <span className="font-normal text-muted-foreground">· draft</span>
           )}
         </Button>
-        <ContextBar context={card.context} />
+        <ContextBar context={card.context} className="border-transparent" />
       </div>
       {/* An open question is answered in its own form, above: the reply
           box would only be a second place to type. */}
@@ -1018,7 +1018,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
         className={cn(
           EDGE_FRAME,
           CARD_OUTLINE,
-          "relative shadow-sm transition-shadow hover:shadow-md dark:shadow-black/20",
+          "relative",
           EDGE[card.column],
           ENGINE_CORNER[card.engine],
           card.column === "done" && "opacity-70",
@@ -1172,7 +1172,7 @@ function StartingCard({ spawn }: { spawn: Spawning }) {
       className={cn(
         EDGE_FRAME,
         CARD_OUTLINE,
-        "relative opacity-80 shadow-sm dark:shadow-black/20",
+        "relative opacity-80",
         EDGE.working,
         ENGINE_CORNER[spawn.engine],
       )}
