@@ -65,9 +65,10 @@ export const DEFAULT_MACROS: Record<MacroName, string> = {
 
 You are working in a new git worktree, {{worktree}}, on branch {{branch}}. This repo has no worktree convention yet, so its worktrees go under worktrees/ in its main checkout, {{repo}}, which git should ignore. Worktrees never go inside other worktrees.
 
-1. Before anything else, check that the repo ignores worktrees/: \`git -C {{repo}} check-ignore -q worktrees/\` succeeds when it does. If it doesn't, add \`/worktrees/\` to .gitignore and commit that first, so the change lands with your work.
-2. Install the project's dependencies in this worktree before running any of its scripts. Package managers hoist dependencies inconsistently, so what is installed in {{repo}} may not resolve from here.
-3. Do all your work in this worktree, never in {{repo}}.`,
+1. Before anything else, unless you were told to start from a particular branch or commit, bring this branch up to the latest main, so your work starts from as recent a point as possible: fetch, then rebase onto whichever of the local main branch and the remote's is ahead.
+2. Check that the repo ignores worktrees/: \`git -C {{repo}} check-ignore -q worktrees/\` succeeds when it does. If it doesn't, add \`/worktrees/\` to .gitignore and commit that first, so the change lands with your work.
+3. Install the project's dependencies in this worktree before running any of its scripts. Package managers hoist dependencies inconsistently, so what is installed in {{repo}} may not resolve from here.
+4. Do all your work in this worktree, never in {{repo}}.`,
   closeSession: `Clean up after yourself: if you are working in a worktree, remove it and its branch.
 
 {{siblings}} Do not touch anything outside your own worktree, and do not run a bare \`git worktree prune\` or anything else that operates on the whole repo.
