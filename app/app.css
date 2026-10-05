@@ -143,7 +143,7 @@
   --project-color-10: oklch(0.61 0.25 293); /* violet */
   --project-color-11: oklch(0.67 0.29 322); /* magenta */
   --project-color-12: oklch(0.66 0.24 354); /* pink */
-  --background: oklch(0.982 0.005 262);
+  --background: oklch(0.962 0.005 262);
   --foreground: oklch(0.2 0.03 262);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.2 0.03 262);
@@ -225,7 +225,7 @@
    :root and .dark. What a theme doesn't set and these don't derive, states,
    project colours, highlighting, stays seamux's. */
 html[data-theme]:not(.dark) {
-  --background: oklch(from var(--brand-secondary) 0.982 0.005 calc(h - 10));
+  --background: oklch(from var(--brand-secondary) 0.962 0.005 calc(h - 10));
   --foreground: oklch(from var(--brand-secondary) 0.2 0.03 calc(h - 10));
   --card-foreground: var(--foreground);
   --popover-foreground: var(--foreground);
