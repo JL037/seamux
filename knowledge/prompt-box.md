@@ -67,6 +67,14 @@ Typing `!` first in Claude Code's prompt box puts it in shell mode: the box is l
 - **In seamux:** `inputLead` in each `Harness`, and `clearInput` in [harness.server.ts](../app/lib/harness.server.ts), which refuses to type into a box still in shell mode.
 - **See also:** [Ctrl+E, Ctrl+U and Backspace empty a prompt box](#ctrle-ctrlu-and-backspace-empty-a-prompt-box-a-line-at-a-time-in-claude-code-and-codex-alike), [A `!` command moves to the background after 120 seconds](transcripts.md#a--command-moves-to-the-background-after-120-seconds-and-its-output-leaves-the-transcript).
 
+## A suggested next prompt reads as a draft on the screen, and only its faint style and the cursor tell it apart
+
+After a turn, Claude Code can fill an empty prompt box with a suggestion of what to send next, such as `go ahead with 1-3` after a reply asking "Should I go ahead with 1–3?". It doesn't come after every turn. `surface.read_text` gives it as plain text after `❯ `, exactly as if it had been typed, and it once passed for a reply the user had typed and not sent. `terminal.replay` tells the two apart. Its `render_grid` has `row_spans`, each with a `style_id` into `styles`, and a `cursor`. The suggestion's span is `faint: true`, and the cursor stays at column 2, just after `❯ `. Typed text has `faint: false`, and the cursor sits after it. Typing anything clears the suggestion, even a prefix of it. Nothing in the transcript records it.
+
+- **Measured:** Claude Code 2.1.289, cmux 0.64.23.
+- **In seamux:** nothing yet. `readPromptBox` in [harness.server.ts](../app/lib/harness.server.ts) reads the box through `surface.read_text`, but only `submit` uses it, right after Enter, while the turn runs and no suggestion shows.
+- **See also:** [A prompt box in shell mode runs what it holds](#a-prompt-box-in-shell-mode-runs-what-it-holds-as-shell-commands).
+
 ## Ctrl+E, Ctrl+U and Backspace empty a prompt box a line at a time, in Claude Code and Codex alike
 
 Each typed on its own: Ctrl+E goes to the end of the line, Ctrl+U deletes back to its start, Backspace joins the empty line to the one above, and in an empty box in shell mode leaves it. Sent in one `send_text`, the three did less. None of them stops a running turn, where Esc and Ctrl+C do, and Ctrl+C on an idle chat also shows "Press Ctrl-C again to exit". `send_key` `ctrl+u` did nothing in Claude Code; the typed `\x15` works. Claude Code then shows "Ctrl+Y to paste deleted text". Up on the first line recalls history, so the cursor can't be moved to the end of the box that way.
