@@ -7,14 +7,14 @@ import {
   useSearchParams,
   type ShouldRevalidateFunctionArgs,
 } from "react-router";
-import { File, Folder, ListOrdered } from "lucide-react";
+import { Download, File, Folder, ListOrdered } from "lucide-react";
 
 import type { Route } from "./+types/file";
 import { Code } from "~/components/code";
 import { Markdown } from "~/components/markdown";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import {
   dirnameOf,
   fileRawUrl,
@@ -158,6 +158,17 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
           >
             <ListOrdered />
           </Button>
+        )}
+        {file.type === "file" && (
+          <a
+            href={`${fileRawUrl(file.path)}?dl=1`}
+            download
+            title="Download"
+            aria-label="Download"
+            className={buttonVariants({ variant: "ghost", size: "icon-xs" })}
+          >
+            <Download />
+          </a>
         )}
         <ThemeToggle />
       </header>

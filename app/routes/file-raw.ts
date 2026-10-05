@@ -16,9 +16,9 @@ import { assertLocalHost, assertLocalRead } from "~/lib/guard.server";
 // HTML file resolve beside it. The same file under SANDBOX_BASE is for that
 // frame, whose requests arrive cross-site. Every response is sandboxed: an
 // HTML file opened here, framed or not, runs with an opaque origin and
-// cannot act as the board.
+// cannot act as the board. `?dl=1` asks the browser to save it instead.
 export async function loader({ request }: Route.LoaderArgs) {
-  const { pathname } = new URL(request.url);
+  const { pathname, searchParams } = new URL(request.url);
   let prefix = "/file/raw";
   if (pathname.startsWith(`${SANDBOX_BASE}/`)) {
     assertLocalHost(request);
@@ -40,13 +40,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
   const type = contentType(found.path, await readHead(found.path, 8000));
   const body = Readable.toWeb(createReadStream(found.path)) as ReadableStream;
-  return new Response(body, {
-    headers: {
-      "Content-Type": type,
-      "Content-Length": String(found.stats.size),
-      "Content-Security-Policy": "sandbox allow-scripts allow-popups",
-      "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "no-store",
-    },
+  const headers = new Headers({
+    "Content-Type": type,
+    "Content-Length": String(found.stats.size),
+    "Content-Security-Policy": "sandbox allow-scripts allow-popups",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
   });
+  if (searchParams.get("dl") === "1") {
+    const name = found.path.split("/").pop() ?? "file";
+    headers.set(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+    );
+  }
+  return new Response(body, { headers });
 }
