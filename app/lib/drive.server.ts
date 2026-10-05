@@ -865,9 +865,8 @@ interface NewWorktree {
   branch: string;
   // The repo's main checkout, which holds every worktree.
   repo: string;
-  // Whether the repo already had somewhere for worktrees. Without one, the
-  // session is told how this one was set up.
-  convention: boolean;
+  // Where in it the worktrees go: .claude/worktrees/ or worktrees/.
+  home: string;
 }
 
 // A new worktree for dispatched work, branched from what the chosen checkout
@@ -877,8 +876,7 @@ interface NewWorktree {
 //
 // It goes in the repo's main checkout, even when the chosen checkout is
 // itself a worktree, so worktrees never nest: under .claude/worktrees if
-// that exists, else worktrees/. A repo with neither that directory nor
-// worktrees/ in its ignores has no convention yet, and gets worktrees/.
+// that exists, else worktrees/.
 //
 // The same prompt gives the same name, so a name whose worktree or branch
 // already exists, or that nameTaken says is taken elsewhere, gets the next
@@ -902,14 +900,10 @@ async function createWorktree(
   }
   // The main checkout is the first entry git lists, from any worktree.
   const repo = list.split("\n")[0].replace(/^worktree /, "");
-  const claudeHome = existsSync(join(repo, ".claude/worktrees"));
-  const home = join(repo, claudeHome ? ".claude/worktrees" : "worktrees");
-  const convention =
-    claudeHome ||
-    (await run("git", ["-C", repo, "check-ignore", "-q", "worktrees/"]).then(
-      () => true,
-      () => false,
-    ));
+  const relHome = existsSync(join(repo, ".claude/worktrees"))
+    ? ".claude/worktrees/"
+    : "worktrees/";
+  const home = join(repo, relHome);
   const taken = async (candidate: string) =>
     existsSync(join(home, candidate)) ||
     (await run("git", [
@@ -930,20 +924,21 @@ async function createWorktree(
   const branch = `worktree-${name}${suffix}`;
   // HEAD as the chosen checkout sees it, not the main checkout's.
   await run("git", ["-C", cwd, "worktree", "add", path, "-b", branch, "HEAD"]);
-  return { suffix, path, branch, repo, convention };
+  return { suffix, path, branch, repo, home: relHome };
 }
 
 // The first prompt of a dispatched session: the new-session macro around
-// what was typed, with How to worktree when a new worktree needs it. A
-// macro customised without {{how_to_worktree}} gets it at the end.
+// what was typed, with How to worktree when it has a new worktree. A macro
+// customised without {{how_to_worktree}} gets it at the end.
 function firstPrompt(prompt: string, cwd: string, wt: NewWorktree | null) {
   const { macros } = configOrDefaults();
   const howTo =
-    wt && !wt.convention
+    wt
       ? renderMacro(macros.howToWorktree.text, {
           worktree: wt.path,
           branch: wt.branch,
           repo: wt.repo,
+          worktrees: wt.home,
         }).trim()
       : "";
   let text = macros.newSession.text;
