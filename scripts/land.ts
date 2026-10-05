@@ -29,8 +29,8 @@
 //    their in-memory state, such as the queue's timer, from before, and when
 //    the dev server's own config did.
 // 6. Checks the board still answers, then pushes main to GitHub, so local
-//    main and GitHub never drift apart. A rejected push leaves the landing in
-//    place and says how to bring GitHub's new commits in.
+//    main and GitHub never drift apart. A failed push, whether GitHub moved
+//    during the landing or couldn't be reached, leaves the landing in place.
 //
 // It never deletes the branch or its worktree.
 
@@ -340,7 +340,7 @@ async function main() {
     step("Pushing main");
     const refused = pushMain();
     pushed = refused
-      ? ` Not pushed: GitHub refused it, most likely because it moved during the landing:\n\n${refused}\n\nBring its new commits in and push with /push.`
+      ? ` Not pushed:\n\n${refused}\n\nPush with /push, which brings in any commits GitHub gained meanwhile.`
       : " Pushed to GitHub.";
   }
   console.log(
