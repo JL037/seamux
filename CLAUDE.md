@@ -25,10 +25,13 @@ A board over every Claude Code session on this Mac, and the tools to drive and d
 
 The board runs from the main checkout, on `main`, under `npm run seamux`, which keeps the dev server up and restarts it when needed. Never edit the main checkout directly: it is what the board serves.
 
-1. Work in your own worktree, on your own branch. A session dispatched from the board with "new worktree" already has one, under `.claude/worktrees/`, branched from main; otherwise make one under `worktrees/<name>`.
-2. If the change alters what someone running seamux gets, add a changeset in the same commit (see Release notes below). Commit, then run `npm run land` from the worktree. It waits for any other landing to finish, rebases your branch onto main, typechecks it, fast-forwards main, and restarts the board if dependencies or any `.server.ts` module changed; otherwise hot reload picks the change up within seconds.
-3. If it reports a conflict, rebase onto main yourself, resolve, and run it again. main is untouched until a landing succeeds.
-4. Once landed, as your very last step, remove your own worktree and branch (`git -C <main checkout> worktree remove <your worktree>`, then `git branch -d`), and never anyone else's. The user closes the chat from the board.
+1. Work in your own worktree, on your own branch. A session dispatched from the board with "new worktree" already has one, under `.claude/worktrees/`; otherwise make one under `worktrees/<name>`. Run `npm install` in it, and never symlink `node_modules` into it.
+2. Before any work, unless told to start from somewhere else, bring your branch up to the latest main, so it starts from as recent a point as possible. `git fetch origin main`; if `git log --oneline main..origin/main` lists anything, GitHub has commits local main lacks, so bring them in first as the push skill's step 3 does (`.claude/skills/push/SKILL.md`). Then `git rebase main`. A worktree Claude Code made itself branches from `origin/HEAD`, which is behind local main whenever main hasn't been pushed, so this matters there most.
+3. If the change alters what someone running seamux gets, add a changeset in the same commit (see Release notes below). Commit.
+4. When the work is done, ask the user whether to land it on main or open a pull request, and wait for the answer. Do neither unasked.
+5. **To land:** run `npm run land` from the worktree. It waits for any other landing to finish, rebases your branch onto main, typechecks it, fast-forwards main, and restarts the board if dependencies or any `.server.ts` module changed; otherwise hot reload picks the change up within seconds. If it reports a conflict, rebase onto main yourself, resolve, and run it again; main is untouched until a landing succeeds. Then push main with the push skill (`/push`), so local main and GitHub never drift apart.
+6. **To open a pull request:** push your branch and open the PR against `main` with `gh pr create`, and give the user its link. Keep the worktree and branch for fixes from review.
+7. Once landed and pushed, as your very last step, remove your own worktree and branch (`git -C <main checkout> worktree remove <your worktree>`, then `git branch -d`), and never anyone else's. The user closes the chat from the board.
 
 ## Release notes
 
