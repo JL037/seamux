@@ -1,11 +1,11 @@
 ---
 name: push
-description: Push seamux's local main to GitHub once this worktree's work has landed. Checks the branch is already on main and stops if not, makes sure every user-facing change has a changeset, pulls origin/main in first, resolves conflicts if there are any, then pushes. Use when asked to "push", "push main", or "/push", usually right after landing.
+description: Push seamux's local main to GitHub when a landing didn't, as after `npm run land -- --no-push`, offline, or when GitHub moved during the landing. Checks the branch is already on main and stops if not, makes sure every user-facing change has a changeset, merges origin/main in when both have moved, resolves conflicts if there are any, then pushes. Use when asked to "push", "push main", or "/push", or when land says it didn't push.
 ---
 
 # Push main
 
-`npm run land` fast-forwards the local `main` but never pushes it. This pushes it, for collaborators on `thecodedrift/seamux`. Run each step from the current worktree; never edit the main checkout directly, since it is what the board serves.
+`npm run land` pushes `main` after landing, unless it was run with `--no-push`, couldn't reach GitHub, or GitHub refused the push because it moved during the landing. This pushes it then, for collaborators on `thecodedrift/seamux`. Run each step from the current worktree; never edit the main checkout directly, since it is what the board serves.
 
 ```sh
 REPO=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')   # the main checkout
@@ -51,7 +51,7 @@ git log --oneline main..origin/main   # what GitHub has that local main lacks
 
   If `BRANCH` is `main` (a session running in the main checkout), stop and ask the user instead: merging there edits what the board serves.
 
-`npm run land` does this check too: it fetches origin/main and refuses to land anything while local main lacks some of its commits, and points here. A branch that contains origin/main, such as this merge, is the exception, so this is also how to unblock a land refused that way.
+`npm run land` does this check too. When main is simply behind origin/main it lands on origin/main by itself; when each has commits the other lacks it refuses, and points here. A branch that contains origin/main, such as this merge, is the exception, so this is also how to unblock a land refused that way.
 
 ## 4. Resolve conflicts, if any
 
@@ -63,7 +63,7 @@ Then land the merge, which typechecks it, fast-forwards main, and restarts the b
 npm run land
 ```
 
-Land lets this branch past its origin/main check, since main has everything GitHub has once it lands. It never rebases a merge, or any branch carrying origin's commits, since that would turn them into copies that main could never be pushed over. If main moved since the merge, land stops and says so: `git merge --no-edit main` on this branch, and land again. Land never merges or pulls by itself.
+Land pushes main once it lands, so check whether step 5 is left: `git log --oneline origin/main..main` is empty when it isn't. Land lets this branch past its origin/main check, since main has everything GitHub has once it lands. It never rebases a merge, or any branch carrying origin's commits, since that would turn them into copies that main could never be pushed over. If main moved since the merge, land stops and says so: `git merge --no-edit main` on this branch, and land again. Land never merges or pulls by itself.
 
 ## 5. Push
 

@@ -3,24 +3,23 @@
 //
 //   npm run land              (from a worktree: lands its current branch)
 //   npm run land -- <branch>  (from anywhere in the repo)
+//   npm run land -- --no-push (lands without pushing main to GitHub)
 //
 // Landings are serialised by a lock, so many agents can land at once: each
 // waits its turn, then rebases onto main as it is at that moment.
 //
-// 1. Fetches origin/main and refuses to land while main lacks any of its
-//    commits, such as GitHub's release commit: landing on top of a main
-//    that's behind is how local main and GitHub drift apart. A branch that
-//    already contains origin/main, such as the push skill's merge of it,
-//    lands anyway, since main has everything once it does. Land never merges
-//    or pulls by itself; it only fast-forwards main. If the fetch fails, as
-//    it does offline, it warns and lands without the check.
-// 2. Rebases the branch onto main in its own worktree, so main only ever
-//    fast-forwards. A conflict stops here, with main untouched. A branch
-//    already on top of main isn't rebased, and one with a merge commit or
-//    origin/main's commits never is: a rebase flattens the merge into copies
-//    of the commits it brought in, so a merge of origin/main would leave main
-//    with copies of GitHub's commits, which it could then never be pushed
-//    over.
+// 1. Fetches origin/main. When GitHub has commits main lacks, such as its
+//    release commit, and main has nothing GitHub lacks, the branch lands on
+//    origin/main instead, bringing them into main with it. When both have
+//    commits the other lacks, it refuses: they need a merge (the push skill's
+//    step 3), which land never makes itself. A branch that already contains
+//    origin/main, such as that merge, lands anyway. If the fetch fails, as it
+//    does offline, it warns, lands on main, and doesn't push.
+// 2. Rebases the branch onto that base in its own worktree, so main only
+//    ever fast-forwards. A conflict stops here, with main untouched. A branch
+//    already on top of it isn't rebased, and one with a merge commit or with
+//    GitHub's commits that main lacks never is: a rebase would turn them into
+//    copies of commits main could then never be pushed over.
 // 3. Typechecks the rebased branch in its worktree.
 // 4. Fast-forwards main, and records the files it changed in
 //    data/board.landed, which the dev server replays as file changes: hot
@@ -29,7 +28,9 @@
 //    restarts it too when server modules changed, since hot reload keeps
 //    their in-memory state, such as the queue's timer, from before, and when
 //    the dev server's own config did.
-// 6. Checks the board still answers.
+// 6. Checks the board still answers, then pushes main to GitHub, so local
+//    main and GitHub never drift apart. A rejected push leaves the landing in
+//    place and says how to bring GitHub's new commits in.
 //
 // It never deletes the branch or its worktree.
 
@@ -169,9 +170,25 @@ async function boardAnswers(): Promise<boolean> {
   return false;
 }
 
+// Pushes main, which only ever fast-forwards GitHub's. Returns why it
+// didn't, if it didn't.
+function pushMain(): string | null {
+  try {
+    execFileSync("git", ["push", "origin", "main"], {
+      cwd: REPO,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    return null;
+  } catch (err) {
+    return String((err as { stderr?: Buffer }).stderr ?? err).trim();
+  }
+}
+
 async function main() {
+  const args = process.argv.slice(2);
+  const push = !args.includes("--no-push");
   const branch =
-    process.argv[2] ??
+    args.find((a) => !a.startsWith("--")) ??
     (process.cwd().startsWith(`${REPO}/`) || process.cwd() === REPO
       ? git(process.cwd(), "branch", "--show-current")
       : "");
@@ -201,43 +218,48 @@ async function main() {
       "! Couldn't fetch origin/main, so landing without checking main has everything GitHub has.",
     );
   }
-  // Whether the branch carries origin/main's commits that main lacks, which
-  // a rebase would copy. Those main already has aren't rebased, so a branch
-  // made from main rebases as usual. Unknown, and taken as not, when the
+  // What the branch lands on: main, or origin/main when GitHub is simply
+  // ahead of it. hasOrigin is whether the branch carries GitHub's commits
+  // that its base lacks, which a rebase would copy; a branch made from main
+  // carries only those main already has. Unknown, and taken as not, when the
   // fetch fails.
+  let base = "main";
   let hasOrigin = false;
   if (fetched) {
-    hasOrigin =
-      isAncestor(REPO, "origin/main", branch) &&
-      !isAncestor(REPO, "origin/main", "main");
     const missing = git(REPO, "log", "--oneline", "main..origin/main");
-    if (missing && !hasOrigin) {
-      fail(
-        `main is missing commits GitHub has:\n\n${missing}\n\nBring them into main first, as the push skill's step 3 does: in a worktree, merge origin/main into a branch on main (git merge --ff-only main, then git merge --no-edit origin/main) and land that branch. Then land ${branch} again.`,
-      );
+    if (missing && isAncestor(REPO, "main", "origin/main")) {
+      step("GitHub is ahead of main: landing on origin/main");
+      base = "origin/main";
+    } else if (missing) {
+      hasOrigin = isAncestor(REPO, "origin/main", branch);
+      if (!hasOrigin) {
+        fail(
+          `main and GitHub have each moved: GitHub has\n\n${missing}\n\nwhich main lacks, and main has commits GitHub lacks. Merge them as the push skill's step 3 does: in a worktree, merge origin/main into a branch on main (git merge --ff-only main, then git merge --no-edit origin/main) and land that branch. Then land ${branch} again.`,
+        );
+      }
     }
   }
 
   const worktree = worktreeFor(branch);
   if (worktree) {
     if (!isClean(worktree)) fail(`${worktree} has uncommitted changes.`);
-    if (isAncestor(worktree, "main", "HEAD")) {
-      step(`${branch} is already on top of main`);
+    if (isAncestor(worktree, base, "HEAD")) {
+      step(`${branch} is already on top of ${base}`);
     } else if (
       hasOrigin ||
-      git(worktree, "rev-list", "--merges", "main..HEAD") !== ""
+      git(worktree, "rev-list", "--merges", `${base}..HEAD`) !== ""
     ) {
       fail(
-        `${branch} has ${hasOrigin ? "origin/main's commits" : "a merge commit"} and main has moved since, and a rebase would turn ${hasOrigin ? "them" : "what it merged"} into copies. Merge main into it in ${worktree} (git merge --no-edit main), then land again.`,
+        `${branch} has ${hasOrigin ? "GitHub's commits that main lacks" : "a merge commit"} and ${base} has moved since, and a rebase would turn ${hasOrigin ? "them" : "what it merged"} into copies. Merge ${base} into it in ${worktree} (git merge --no-edit ${base}), then land again.`,
       );
     } else {
-      step(`Rebasing ${branch} onto main in ${worktree}`);
+      step(`Rebasing ${branch} onto ${base} in ${worktree}`);
       try {
-        git(worktree, "rebase", "main");
+        git(worktree, "rebase", base);
       } catch {
         git(worktree, "rebase", "--abort");
         fail(
-          `${branch} conflicts with main. Rebase it by hand in ${worktree}, then land again.`,
+          `${branch} conflicts with ${base}. Rebase it by hand in ${worktree}, then land again.`,
         );
       }
     }
@@ -255,6 +277,9 @@ async function main() {
   }
 
   const before = git(REPO, "rev-parse", "HEAD");
+  // What this landing added, without GitHub's commits it brought along,
+  // which reverting would undo on GitHub too.
+  const ours = fetched ? git(REPO, "rev-parse", base) : before;
   step(`Fast-forwarding main to ${branch}`);
   try {
     git(REPO, "merge", "--ff-only", branch);
@@ -266,6 +291,11 @@ async function main() {
   const after = git(REPO, "rev-parse", "HEAD");
   if (before === after) {
     console.log("\nNothing to land: main already contains it.");
+    if (push && fetched && !isAncestor(REPO, "main", "origin/main")) {
+      step("Pushing main");
+      const refused = pushMain();
+      if (refused) fail(`GitHub refused the push:\n\n${refused}`);
+    }
     return;
   }
 
@@ -301,12 +331,25 @@ async function main() {
 
   step("Checking the board");
   const ok = await boardAnswers();
+  // A landing the board can't serve stays off GitHub until it's fixed.
+  let pushed = "";
+  if (!ok) pushed = " Not pushed, since the board isn't answering.";
+  else if (!push) pushed = " Not pushed (--no-push): push main with /push.";
+  else if (!fetched) pushed = " Not pushed, since GitHub couldn't be reached.";
+  else {
+    step("Pushing main");
+    const refused = pushMain();
+    pushed = refused
+      ? ` Not pushed: GitHub refused it, most likely because it moved during the landing:\n\n${refused}\n\nBring its new commits in and push with /push.`
+      : " Pushed to GitHub.";
+  }
   console.log(
     `\n${ok ? "✓" : "✗"} Landed ${before.slice(0, 7)}..${after.slice(0, 7)} on main.` +
       (ok
         ? ""
         : ` The board is not answering at ${BOARD}; see the terminal running \`npm run seamux\`.`) +
-      `\nTo undo: git revert ${before.slice(0, 7)}..${after.slice(0, 7)}`,
+      pushed +
+      `\nTo undo: git revert ${ours.slice(0, 7)}..${after.slice(0, 7)}`,
   );
   if (!ok) process.exit(1);
 }
