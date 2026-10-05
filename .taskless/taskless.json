@@ -26,15 +26,15 @@
         "mode": "reference"
       }
     },
-    "cliVersion": "0.11.2",
+    "cliVersion": "0.12.0-20261002181147x023048f",
     "onboarded": true
   },
-  "version": 7,
+  "version": 10,
   "rules": {
-    "reconciledTo": "0.11.2",
+    "reconciledTo": "0.12.0-20261002181147x023048f",
     "engines": {
       "sg": "0.45.3",
-      "vale": "3.21.0"
+      "vale": "3.23.0"
     }
   }
 }

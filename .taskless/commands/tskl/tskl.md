@@ -20,8 +20,8 @@ with Taskless before proceeding.
 Otherwise, follow the same flow as the `taskless` skill:
 
 1. Identify the topic from `$ARGUMENTS` using the table below.
-2. Fetch the canonical recipe with `npx @taskless/cli agent <topic>` (or
-   `npx @taskless/cli agent <topic> --anonymous` if the user is offline or
+2. Fetch the canonical recipe with `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent <topic>` (or
+   `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent <topic> --anonymous` if the user is offline or
    explicitly asked for anonymous mode).
 3. Follow the recipe step-by-step. The recipe is canonical for the
    currently-installed CLI version; do not improvise from prior knowledge.
@@ -34,13 +34,13 @@ Otherwise, follow the same flow as the `taskless` skill:
 
 | User wants                 | Topic                                 |
 | -------------------------- | ------------------------------------- |
-| Update Taskless skills     | run `npx @taskless/cli update`         |
-| Create a new rule          | `npx @taskless/cli agent route`        |
-| Improve an existing rule   | `npx @taskless/cli agent improve-rule` |
-| Delete a rule              | `npx @taskless/cli agent delete-rule`  |
-| Check code against rules   | `npx @taskless/cli agent check`        |
-| Log in, log out, or status | `npx @taskless/cli agent auth`         |
-| Wire into CI               | `npx @taskless/cli agent ci`           |
+| Update Taskless skills     | run `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f update`         |
+| Create a new rule          | `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent route`        |
+| Improve an existing rule   | `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent improve-rule` |
+| Delete a rule              | `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent delete-rule`  |
+| Check code against rules   | `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent check`        |
+| Log in, log out, or status | `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent auth`         |
+| Wire into CI               | `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent ci`           |
 
-If unsure, run `npx @taskless/cli agent` (no args) for the topic
+If unsure, run `npx @taskless/cli-nightly@0.12.0-20261002181147x023048f agent` (no args) for the topic
 disambiguation table.
