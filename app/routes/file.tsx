@@ -218,12 +218,13 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
           </article>
         ) : view === "rendered" && file.kind === "html" ? (
           // Scripts run, but in an opaque origin: the page can't read the
-          // board, call its actions, or reach this window.
+          // board, call its actions, or reach this window. Its links may
+          // still download, such as a report's exported CSV.
           <iframe
             key={file.mtime}
             title={file.path}
             src={fileRawUrl(file.path, sandboxBase)}
-            sandbox="allow-scripts allow-popups"
+            sandbox="allow-scripts allow-popups allow-downloads"
             className="block size-full bg-white"
           />
         ) : file.kind === "image" ? (

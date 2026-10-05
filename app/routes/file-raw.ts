@@ -43,7 +43,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const headers = new Headers({
     "Content-Type": type,
     "Content-Length": String(found.stats.size),
-    "Content-Security-Policy": "sandbox allow-scripts allow-popups",
+    "Content-Security-Policy": "sandbox allow-scripts allow-popups allow-downloads",
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store",
   });

@@ -22,6 +22,9 @@ describe("file raw", () => {
     const response = await get();
     expect(await response.text()).toBe("hello");
     expect(response.headers.get("content-disposition")).toBeNull();
+    expect(response.headers.get("content-security-policy")).toBe(
+      "sandbox allow-scripts allow-popups allow-downloads",
+    );
   });
 
   it("asks the browser to save it with ?dl=1", async () => {
