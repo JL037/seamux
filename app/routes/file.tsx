@@ -7,16 +7,17 @@ import {
   useSearchParams,
   type ShouldRevalidateFunctionArgs,
 } from "react-router";
-import { Download, File, Folder, ListOrdered } from "lucide-react";
+import { File, Folder, ListOrdered } from "lucide-react";
 
 import type { Route } from "./+types/file";
 import { Code } from "~/components/code";
 import { Markdown } from "~/components/markdown";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { ThemeToggle } from "~/components/theme-toggle";
-import { Button, buttonVariants } from "~/components/ui/button";
+import { Button } from "~/components/ui/button";
 import {
   dirnameOf,
+  fileDownloadUrl,
   fileRawUrl,
   fileViewerUrl,
   type FileView,
@@ -132,19 +133,25 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
           <select
             aria-label="Display"
             value={view}
-            onChange={(e) =>
+            onChange={(e) => {
+              // Download saves the file and leaves the view as it was.
+              if (e.target.value === "download") {
+                window.location.assign(fileDownloadUrl(file.path));
+                return;
+              }
               setParams(
                 (p) => {
                   p.set("view", e.target.value);
                   return p;
                 },
                 { replace: true, preventScrollReset: true },
-              )
-            }
+              );
+            }}
             className="h-7 shrink-0 rounded-md border bg-background px-2 text-xs text-foreground"
           >
             <option value="raw">Raw</option>
             {renderable && <option value="rendered">Rendered</option>}
+            <option value="download">Download</option>
           </select>
         )}
         {numbered && (
@@ -158,17 +165,6 @@ export default function FileViewer({ loaderData }: Route.ComponentProps) {
           >
             <ListOrdered />
           </Button>
-        )}
-        {file.type === "file" && (
-          <a
-            href={`${fileRawUrl(file.path)}?dl=1`}
-            download
-            title="Download"
-            aria-label="Download"
-            className={buttonVariants({ variant: "ghost", size: "icon-xs" })}
-          >
-            <Download />
-          </a>
         )}
         <ThemeToggle />
       </header>

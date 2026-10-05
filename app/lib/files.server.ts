@@ -2,10 +2,11 @@
 // else here: nothing in this module writes, moves or deletes.
 
 import { randomBytes } from "node:crypto";
-import type { Stats } from "node:fs";
+import { createReadStream, type Stats } from "node:fs";
 import { open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join } from "node:path";
+import { Readable } from "node:stream";
 
 // A rendered HTML page runs sandboxed, in an opaque origin, so its own
 // stylesheets and scripts arrive as cross-site requests with no Referer:
@@ -127,6 +128,32 @@ function kindOf(path: string, sample: Buffer): FileKind {
     return "text";
   }
   return "binary";
+}
+
+// A file's bytes, sandboxed: an HTML file opened from here, framed or not,
+// runs in an opaque origin and cannot act as the board. Its links may still
+// download, such as a report's exported CSV. `download` asks the browser to
+// save the file under its own name instead of showing it.
+export async function fileResponse(
+  found: { path: string; stats: Stats },
+  { download = false } = {},
+): Promise<Response> {
+  const headers = new Headers({
+    "Content-Type": contentType(found.path, await readHead(found.path, 8000)),
+    "Content-Length": String(found.stats.size),
+    "Content-Security-Policy": "sandbox allow-scripts allow-popups allow-downloads",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
+  });
+  if (download) {
+    const name = found.path.split("/").pop() ?? "file";
+    headers.set(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+    );
+  }
+  const body = Readable.toWeb(createReadStream(found.path)) as ReadableStream;
+  return new Response(body, { headers });
 }
 
 export async function readHead(path: string, bytes: number): Promise<Buffer> {

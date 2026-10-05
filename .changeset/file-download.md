@@ -2,4 +2,4 @@
 "seamux": patch
 ---
 
-The file viewer has a Download button beside its display switch, which saves the file as is. `/file/raw/<path>?dl=1` does the same from a link or script.
+The file viewer's display switch offers Download beside Raw and Rendered, which saves the file as is. `/file/download?path=/abs/path` does the same from a link or script.

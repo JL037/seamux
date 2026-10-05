@@ -16,6 +16,7 @@ export default [
   route("restart", "routes/restart.ts"),
   route("file", "routes/file.tsx"),
   route("file/stat", "routes/file-stat.ts"),
+  route("file/download", "routes/file-download.ts"),
   route("file/raw/*", "routes/file-raw.ts", { id: "file-raw" }),
   route("file/sandbox/*", "routes/file-raw.ts", { id: "file-sandbox" }),
 ] satisfies RouteConfig;

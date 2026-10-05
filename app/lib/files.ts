@@ -62,6 +62,11 @@ export function fileViewerUrl(path: string, view?: FileView): string {
   return `/file?${params}`;
 }
 
+// The file, to save rather than show.
+export function fileDownloadUrl(path: string): string {
+  return `/file/download?${new URLSearchParams({ path })}`;
+}
+
 // The file's bytes, at a URL whose path mirrors the file's, so that a
 // rendered page's relative `style.css` or `img/a.png` resolves beside it.
 // `base` is `/file/raw` for the board's own requests, or the viewer's
