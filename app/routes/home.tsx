@@ -1424,7 +1424,11 @@ function BoardColumn({
         // the tab strip above shows there is more.
         // Its cards keep their height and the column scrolls, rather than
         // squeezing them and clipping what's at their foot.
-        "max-md:h-full max-md:w-full max-md:shrink-0 max-md:*:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        // Its foot is a spacer, not padding, which a scrolling flex column can
+        // leave off its end in Safari: with the gap above it, 20px past the last card,
+        // plus the home indicator, so the list visibly ends and its last card
+        // sits clear of the swipe to dismiss.
+        "max-md:h-full max-md:w-full max-md:shrink-0 max-md:*:shrink-0 max-md:snap-start max-md:snap-always max-md:overflow-y-auto max-md:after:h-[calc(0.5rem+env(safe-area-inset-bottom))] max-md:after:shrink-0",
         className,
       )}
     >
