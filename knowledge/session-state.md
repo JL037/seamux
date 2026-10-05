@@ -10,6 +10,14 @@ Claude Code also sets `busy` while internal helper agents run between turns, and
 - **In seamux:** `turnActive` and `turnRunning` in [board.server.ts](../app/lib/board.server.ts).
 - **See also:** [Helper agents fire `SubagentStop` with an empty `agent_type`](subagents.md#helper-agents-fire-subagentstop-with-an-empty-agent_type-and-never-fire-subagentstart), [A `!` command moves to the background after 120 seconds](transcripts.md#a--command-moves-to-the-background-after-120-seconds-and-its-output-leaves-the-transcript).
 
+## A task notification after its hand-back does not wake the model
+
+A subagent that finishes reaches the model first as an `<agent-message from="<task id>">` hand-back, a user turn the model answers. Since 2.1.285 the `<task-notification>` for the same run is logged after that answer, as a user message with `origin.kind: "task-notification"`, and nothing answers it, so it is the last message in the transcript until the next prompt. A notification with no hand-back before it still wakes the model. Across this Mac's transcripts, all 111 such notifications up to 2.1.283 woke it, and 19 of 22 from 2.1.285 to 2.1.289 did not. With a background shell running, `claude agents` stays `busy` the whole time, so taking the notification for a pending turn left a chat in Working for as long as the shell ran.
+
+- **Measured:** Claude Code 2.1.272 to 2.1.289.
+- **In seamux:** `notificationHandedBack` in [board.server.ts](../app/lib/board.server.ts) passes over it when settling the turn.
+- **See also:** [`status: busy` does not mean a turn is running](#status-busy-does-not-mean-a-turn-is-running).
+
 ## Idle and waiting are separate `status` values
 
 `claude agents` reports `status: waiting` while a dialog is open, with `waitingFor` set to `input needed` for AskUserQuestion or `permission prompt` for an approval. The board once assumed only `idle` and `busy`, and so used to depend on cmux for WAITING and missed sessions outside it.

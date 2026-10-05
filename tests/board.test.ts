@@ -224,3 +224,66 @@ it("offers a tool's own No/Yes confirmation as its options, not Approve", async 
     rmSync(agents, { force: true });
   }
 });
+
+it("takes a task notification after its answered hand-back as no turn", async () => {
+  // As Claude Code 2.1.289 logs a subagent's return: the <agent-message>
+  // hand-back wakes the model, and the task notification for the same run
+  // lands after the answer without waking it. A background shell keeps
+  // `claude agents` at busy all the while.
+  const project = join(process.env.HOME!, ".claude/projects/-work");
+  mkdirSync(project, { recursive: true });
+  const user = (content: string) => ({
+    type: "user",
+    timestamp: "2026-01-01T00:00:00Z",
+    message: { role: "user", content },
+  });
+  const reply = {
+    type: "assistant",
+    timestamp: "2026-01-01T00:00:00Z",
+    message: {
+      role: "assistant",
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "Both passes are done." }],
+    },
+  };
+  const notification = (id: string) =>
+    user(
+      `<task-notification>\n<task-id>${id}</task-id>\n<status>completed</status>\n</task-notification>`,
+    );
+  const write = (sessionId: string, lines: object[]) =>
+    writeFileSync(
+      join(project, `${sessionId}.jsonl`),
+      lines.map((l) => JSON.stringify(l)).join("\n") + "\n",
+    );
+  const handedBack = "3f0e8c1a-5b2d-4c3e-9f41-2a7d6b8e0c18";
+  const notYet = "3f0e8c1a-5b2d-4c3e-9f41-2a7d6b8e0c19";
+  write(handedBack, [
+    user("review the PR"),
+    reply,
+    user(
+      'Another Claude session sent a message:\n<agent-message from="a9dd2f7e8a0e90819">\nNo findings.\n</agent-message>',
+    ),
+    reply,
+    notification("a9dd2f7e8a0e90819"),
+  ]);
+  write(notYet, [user("review the PR"), reply, notification("a9dd2f7e8a0e90819")]);
+  const agents = process.env.SEAMUX_TEST_CLAUDE_AGENTS!;
+  const row = (sessionId: string) => ({
+    pid: 1,
+    cwd: "/work",
+    kind: "interactive",
+    startedAt: 0,
+    sessionId,
+    name: "demo",
+    status: "busy",
+  });
+  writeFileSync(agents, JSON.stringify([row(handedBack), row(notYet)]));
+  try {
+    const board = await loadBoard();
+    const card = (id: string) => board.cards.find((c) => c.sessionId === id);
+    expect(card(handedBack)?.turnRunning).toBe(false);
+    expect(card(notYet)?.turnRunning).toBe(true);
+  } finally {
+    rmSync(agents, { force: true });
+  }
+});

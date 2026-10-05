@@ -278,6 +278,32 @@ function turnActive(o: any): boolean {
   return !SYNTHETIC_PROMPT.test(text);
 }
 
+// A subagent's result reaches the model first as an <agent-message> hand-back,
+// which the model answers. Since Claude Code 2.1.285 the task notification for
+// the same run is logged after that answer without waking the model, so it
+// settles nothing. True when the line at `at` is such a notification: a
+// hand-back from its task sits between it and that task's last notification.
+function notificationHandedBack(lines: string[], at: number, o: any): boolean {
+  const text = (textOf(o.message?.content) ?? "").trimStart();
+  if (!text.startsWith("<task-notification")) return false;
+  const id = /<task-id>([^<]+)<\/task-id>/.exec(text)?.[1];
+  if (!id) return false;
+  for (let i = at - 1; i >= 0; i--) {
+    if (!lines[i]?.includes(id)) continue;
+    let p: any;
+    try {
+      p = JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+    if (p.type !== "user" || p.isSidechain) continue;
+    const prior = textOf(p.message?.content) ?? "";
+    if (prior.includes(`<agent-message from="${id}"`)) return true;
+    if (prior.trimStart().startsWith("<task-notification")) return false;
+  }
+  return false;
+}
+
 // The last tool call in an assistant message that stopped to run tools. When
 // the session is waiting, its dialog belongs to this call.
 function pendingTool(o: any): TranscriptSummary["pendingTool"] {
@@ -369,7 +395,8 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       summary.turnActive == null &&
       (o.type === "user" || o.type === "assistant") &&
       !o.isSidechain &&
-      !o.isMeta
+      !o.isMeta &&
+      !notificationHandedBack(lines, i, o)
     ) {
       summary.turnActive = turnActive(o);
       summary.pendingTool = pendingTool(o);
