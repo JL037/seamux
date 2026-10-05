@@ -201,11 +201,15 @@ async function main() {
       "! Couldn't fetch origin/main, so landing without checking main has everything GitHub has.",
     );
   }
-  // Whether the branch carries origin/main's commits, which a rebase would
-  // copy. Unknown, and taken as not, when the fetch fails.
+  // Whether the branch carries origin/main's commits that main lacks, which
+  // a rebase would copy. Those main already has aren't rebased, so a branch
+  // made from main rebases as usual. Unknown, and taken as not, when the
+  // fetch fails.
   let hasOrigin = false;
   if (fetched) {
-    hasOrigin = isAncestor(REPO, "origin/main", branch);
+    hasOrigin =
+      isAncestor(REPO, "origin/main", branch) &&
+      !isAncestor(REPO, "origin/main", "main");
     const missing = git(REPO, "log", "--oneline", "main..origin/main");
     if (missing && !hasOrigin) {
       fail(
