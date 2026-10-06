@@ -1,6 +1,8 @@
 import { Check, CircleDashed, LoaderCircle } from "lucide-react";
 
-import type { Subagent } from "~/lib/board";
+import type { ReactNode } from "react";
+
+import { SUBAGENT_VISIBLE_MS, type Subagent } from "~/lib/board";
 import { cn } from "~/lib/utils";
 
 function since(ms: number | null, now: number): string {
@@ -57,15 +59,51 @@ export function SubagentSummary({
       {finished > 0 && (
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Check className="size-3 shrink-0 text-success" />
-          {finished} subagent{finished === 1 ? "" : "s"} finished in the last
-          30m
+          {finished} subagent{finished === 1 ? "" : "s"} finished in the last{" "}
+          {SUBAGENT_VISIBLE_MS / 60000}m
         </div>
       )}
     </div>
   );
 }
 
-// In the modal: every subagent with what it handed back.
+// Something finished, in the side rail: one line, which opens to what it
+// handed back.
+export function Finished({
+  icon,
+  label,
+  note,
+  children,
+}: {
+  icon: ReactNode;
+  label: ReactNode;
+  note: ReactNode;
+  children?: ReactNode;
+}) {
+  const line = (
+    <>
+      {icon}
+      <span className="sensitive min-w-0 truncate">{label}</span>
+      <span className="sensitive ml-auto shrink-0 text-muted-foreground">
+        {note}
+      </span>
+    </>
+  );
+  if (!children) {
+    return <div className="flex items-center gap-1.5">{line}</div>;
+  }
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
+        {line}
+      </summary>
+      <div className="sensitive flex flex-col gap-1 pt-1 pl-4.5">{children}</div>
+    </details>
+  );
+}
+
+// In the modal: every subagent, running ones in full with what they're
+// doing, finished ones a line each.
 export function SubagentDetail({
   subagents,
   now,
@@ -78,29 +116,37 @@ export function SubagentDetail({
   }
   return (
     <ul className="flex flex-col gap-3 text-xs">
-      {subagents.map((s) => (
-        <li key={s.agentId} className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5">
-            <StatusIcon agent={s} />
-            <span className="sensitive font-medium">{label(s)}</span>
-          </div>
-          <div className="sensitive pl-4.5 text-muted-foreground">
-            {[
-              s.type,
-              s.stale
-                ? "stale"
-                : s.running
-                  ? `running ${since(s.startedAt, now)}`
-                  : `finished ${since(s.stoppedAt, now)} ago`,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </div>
-          {s.lastMessage && (
-            <p className="sensitive pl-4.5">{s.lastMessage}</p>
-          )}
-        </li>
-      ))}
+      {subagents.map((s) =>
+        s.running ? (
+          <li key={s.agentId} className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <StatusIcon agent={s} />
+              <span className="sensitive font-medium">{label(s)}</span>
+            </div>
+            <div className="sensitive pl-4.5 text-muted-foreground">
+              {[s.type, s.stale ? "stale" : `running ${since(s.startedAt, now)}`]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+            {s.lastMessage && (
+              <p className="sensitive pl-4.5">{s.lastMessage}</p>
+            )}
+          </li>
+        ) : (
+          <li key={s.agentId}>
+            <Finished
+              icon={<StatusIcon agent={s} />}
+              label={label(s)}
+              note={`${since(s.stoppedAt, now)} ago`}
+            >
+              {s.type && (
+                <span className="text-muted-foreground">{s.type}</span>
+              )}
+              {s.lastMessage && <p>{s.lastMessage}</p>}
+            </Finished>
+          </li>
+        ),
+      )}
     </ul>
   );
 }

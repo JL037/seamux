@@ -285,13 +285,15 @@ export interface SlashCommand {
   argumentHint: string;
 }
 
-// Finished subagents stay on their card for this long.
-export const SUBAGENT_VISIBLE_MS = 30 * 60 * 1000;
+// Finished subagents stay on their card for this long, and a settled
+// fan-out's workers on their parent's this long after the last reported
+// or ended.
+export const SUBAGENT_VISIBLE_MS = 10 * 60 * 1000;
+export const FANOUT_VISIBLE_MS = 10 * 60 * 1000;
 // A running subagent whose transcript is quiet this long is marked stale.
 export const SUBAGENT_STALE_MS = 15 * 60 * 1000;
 
-// DONE cards stay visible for this long after the chat closes, and a
-// settled fan-out this long after its last worker reported or ended.
+// DONE cards stay visible for this long after the chat closes.
 export const DONE_VISIBLE_MS = 30 * 60 * 1000;
 
 // Whether the turn is over and no dialog is open, so what's typed lands in

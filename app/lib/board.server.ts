@@ -14,6 +14,7 @@ import { shortenAttachments } from "./attachments";
 import {
   ASKED_IN_REPLY,
   DONE_VISIBLE_MS,
+  FANOUT_VISIBLE_MS,
   SUBAGENT_STALE_MS,
   SUBAGENT_VISIBLE_MS,
   type BackgroundSession,
@@ -1292,10 +1293,10 @@ export async function knownDirectories(): Promise<string[]> {
   return [...new Set(all)];
 }
 
-// Fan-outs still waiting on workers, and settled ones for as long as a DONE
-// card stays. A set settles once every worker has reported or its session
-// has ended; a worker that ended goes at its transcript's last write, as
-// its DONE card does.
+// Fan-outs still waiting on workers, and settled ones for FANOUT_VISIBLE_MS.
+// A set settles once every worker has reported or its session has ended; a
+// worker that ended goes at its transcript's last write, as its DONE card
+// does.
 function loadDispatchSets(
   now: number,
   alive: Alive,
@@ -1315,7 +1316,7 @@ function loadDispatchSets(
       const settledAt = s.complete
         ? Math.max(m.createdAt, ...m.workers.map(endedAt))
         : null;
-      if (settledAt !== null && now - settledAt > DONE_VISIBLE_MS) continue;
+      if (settledAt !== null && now - settledAt > FANOUT_VISIBLE_MS) continue;
       sets.push({
         id,
         title: m.title,

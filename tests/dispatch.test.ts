@@ -7,7 +7,7 @@ import { rmSync, writeFileSync } from "node:fs";
 
 import { afterEach, beforeEach, expect, it } from "vitest";
 
-import { DONE_VISIBLE_MS } from "~/lib/board";
+import { FANOUT_VISIBLE_MS } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
 import { sessionsAlive } from "~/lib/drive.server";
 import {
@@ -127,7 +127,7 @@ it("declares no worker gone when the sessions can't be listed", async () => {
   await cmux.start();
 });
 
-it("drops a settled set after the DONE window, counted from when it settled", async () => {
+it("drops a settled set after its window, counted from when it settled", async () => {
   const now = Date.now();
   // Started two days ago, but its last worker reported ten minutes ago.
   declare("d-00000004", ["a", "b"], now - 48 * 60 * MINUTE);
@@ -135,13 +135,13 @@ it("drops a settled set after the DONE window, counted from when it settled", as
   report("d-00000004", "b", now - 10 * MINUTE);
   // Settled just past the window.
   declare("d-00000005", ["c"], now - 2 * 60 * MINUTE);
-  report("d-00000005", "c", now - DONE_VISIBLE_MS - MINUTE);
+  report("d-00000005", "c", now - FANOUT_VISIBLE_MS - MINUTE);
 
   const sets = (await loadBoard(now)).dispatches;
   expect(sets.map((s) => s.id)).toEqual(["d-00000004"]);
   expect(sets[0].settledAt).toBe(now - 10 * MINUTE);
 
-  const later = now + DONE_VISIBLE_MS;
+  const later = now + FANOUT_VISIBLE_MS;
   expect((await loadBoard(later)).dispatches).toEqual([]);
 });
 

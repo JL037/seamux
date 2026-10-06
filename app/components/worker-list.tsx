@@ -1,5 +1,6 @@
 import { Check, CircleDashed, Ghost, X } from "lucide-react";
 
+import { Finished } from "~/components/subagent-list";
 import type { DispatchSet, WorkerState } from "~/lib/board";
 
 function WorkerStatus({ status }: { status: WorkerState }) {
@@ -15,14 +16,16 @@ function WorkerStatus({ status }: { status: WorkerState }) {
 const STATE: Record<NonNullable<WorkerState>, string> = {
   ok: "reported",
   failed: "failed",
-  gone: "closed without reporting",
+  gone: "gone",
 };
 
 export function workerCount(fanouts: DispatchSet[]): number {
   return fanouts.reduce((n, d) => n + d.workers.length, 0);
 }
 
-// In the modal: every worker of the chat's fan-outs, with its handback.
+// In the modal: every worker of the chat's fan-outs. One still out gets its
+// own lines; one that has reported or ended, a line that opens to its
+// handback.
 export function WorkerDetail({ fanouts }: { fanouts: DispatchSet[] }) {
   return (
     <div className="flex flex-col gap-4 text-xs">
@@ -35,17 +38,28 @@ export function WorkerDetail({ fanouts }: { fanouts: DispatchSet[] }) {
           )}
           <ul className="flex flex-col gap-3">
             {d.workers.map((w) => (
-              <li key={w.key} className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <WorkerStatus status={w.status} />
-                  <span className="sensitive font-mono font-medium">
-                    {w.key}
-                  </span>
-                </div>
-                <div className="pl-4.5 text-muted-foreground">
-                  {w.status ? STATE[w.status] : "not reported yet"}
-                </div>
-                {w.summary && <p className="sensitive pl-4.5">{w.summary}</p>}
+              <li key={w.key}>
+                {w.status ? (
+                  <Finished
+                    icon={<WorkerStatus status={w.status} />}
+                    label={<span className="font-mono">{w.key}</span>}
+                    note={STATE[w.status]}
+                  >
+                    {w.summary && <p>{w.summary}</p>}
+                  </Finished>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <WorkerStatus status={null} />
+                      <span className="sensitive font-mono font-medium">
+                        {w.key}
+                      </span>
+                    </div>
+                    <div className="pl-4.5 text-muted-foreground">
+                      not reported yet
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
