@@ -3,7 +3,7 @@
 
 import { readFileSync } from "node:fs";
 
-import { dispatch } from "../app/lib/drive.server.ts";
+import { dispatch, sessionsAlive } from "../app/lib/drive.server.ts";
 import {
   dispatchStatus,
   listDispatches,
@@ -35,7 +35,8 @@ seamux uninstall                    remove them, and keep the board from startin
 seamux fanout <manifest.json | ->   declare a set of workers, then spawn each
                                     as its own top-level session
 seamux wait <dispatch-id>           barrier: block until every worker has
-                                    reported, then print all handbacks
+                                    reported or its session has ended, then
+                                    print all handbacks
 seamux done <dispatch-id> <worker> --summary "…" [--result <path>] [--status ok|failed]
                                     a worker's completion marker
 seamux status <dispatch-id>         where a dispatch stands, without waiting
@@ -75,6 +76,7 @@ async function fanout() {
       dispatchId: manifest.id,
       worker: worker.key,
     });
+    worker.spawnedAt = Date.now();
     writeManifest(manifest);
   }
 
@@ -83,7 +85,7 @@ async function fanout() {
     workers: Object.fromEntries(
       manifest.workers.map((w) => [w.key, w.sessionId]),
     ),
-    next: `seamux wait ${manifest.id}   (run it in the background; it exits when every worker has reported)`,
+    next: `seamux wait ${manifest.id}   (run it in the background; it exits when every worker has reported or ended)`,
   });
 }
 
@@ -95,13 +97,14 @@ async function wait() {
   const deadline = Date.now() + timeout;
 
   for (;;) {
-    const status = dispatchStatus(id);
+    const status = dispatchStatus(id, await sessionsAlive());
     if (status.complete || Date.now() >= deadline) {
       print({
         dispatch: id,
         title: status.manifest.title,
         complete: status.complete,
         pending: status.pending,
+        gone: status.gone,
         failed: Object.values(status.markers)
           .filter((m) => m.status === "failed")
           .map((m) => m.worker),
@@ -133,33 +136,38 @@ function done() {
   print({ dispatch: id, worker, status, recorded: true });
 }
 
-function status() {
+async function status() {
   const id = rest[0];
   if (!id) usage();
-  const s = dispatchStatus(id);
+  const s = dispatchStatus(id, await sessionsAlive());
   print({
     dispatch: id,
     title: s.manifest.title,
     complete: s.complete,
     pending: s.pending,
+    gone: s.gone,
     workers: s.manifest.workers.map((w) => ({
       key: w.key,
       sessionId: w.sessionId,
-      status: s.markers[w.key]?.status ?? "pending",
+      status:
+        s.markers[w.key]?.status ??
+        (s.gone.includes(w.key) ? "gone" : "pending"),
     })),
   });
 }
 
-function list() {
+async function list() {
+  const alive = await sessionsAlive();
   print(
     listDispatches().map((id) => {
       const m = readManifest(id);
-      const s = dispatchStatus(id);
+      const s = dispatchStatus(id, alive);
       return {
         dispatch: id,
         title: m.title,
         complete: s.complete,
         pending: s.pending,
+        gone: s.gone,
       };
     }),
   );
@@ -169,8 +177,8 @@ try {
   if (command === "fanout") await fanout();
   else if (command === "wait") await wait();
   else if (command === "done") done();
-  else if (command === "status") status();
-  else if (command === "list") list();
+  else if (command === "status") await status();
+  else if (command === "list") await list();
   else usage();
 } catch (err) {
   process.stderr.write(`seamux: ${(err as Error).message}\n`);

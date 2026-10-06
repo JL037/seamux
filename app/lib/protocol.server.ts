@@ -40,7 +40,9 @@ export interface Manifest {
   title: string;
   parentSessionId: string | null;
   createdAt: number;
-  workers: (WorkerSpec & { sessionId: string | null })[];
+  // spawnedAt is when fanout started the worker's session; manifests from
+  // before it was recorded have none.
+  workers: (WorkerSpec & { sessionId: string | null; spawnedAt?: number })[];
 }
 
 export interface Marker {
@@ -128,15 +130,46 @@ export function readMarkers(id: string): Record<string, Marker> {
 export interface DispatchStatus {
   manifest: Manifest;
   markers: Record<string, Marker>;
+  // Workers still expected to report.
   pending: string[];
+  // Workers whose session ended without reporting.
+  gone: string[];
+  // Nothing left to wait for: every worker reported or is gone.
   complete: boolean;
 }
 
-export function dispatchStatus(id: string): DispatchStatus {
+// A just-spawned session can take a while to show in `claude agents` or
+// cmux, so a worker is never declared gone this soon after fanout started
+// it. A worker fanout never started is gone this long after its last spawn.
+export const SPAWN_GRACE_MS = 5 * 60 * 1000;
+
+// Whether a session is still running, or null when that can't be told, as
+// when `claude agents` or cmux didn't answer: then no worker is gone.
+export type Alive = ((sessionId: string) => boolean) | null;
+
+export function dispatchStatus(
+  id: string,
+  alive: Alive = null,
+  now = Date.now(),
+): DispatchStatus {
   const manifest = readManifest(id);
   const markers = readMarkers(id);
-  const pending = manifest.workers.map((w) => w.key).filter((k) => !markers[k]);
-  return { manifest, markers, pending, complete: pending.length === 0 };
+  const lastSpawn = Math.max(
+    manifest.createdAt,
+    ...manifest.workers.map((w) => w.spawnedAt ?? 0),
+  );
+  const isGone = (w: Manifest["workers"][number]) => {
+    if (!alive) return false;
+    if (!w.sessionId) return now - lastSpawn > SPAWN_GRACE_MS;
+    const spawned = w.spawnedAt ?? manifest.createdAt;
+    return now - spawned > SPAWN_GRACE_MS && !alive(w.sessionId);
+  };
+  const unreported = manifest.workers.filter((w) => !markers[w.key]);
+  const gone = unreported.filter(isGone).map((w) => w.key);
+  const pending = unreported
+    .map((w) => w.key)
+    .filter((k) => !gone.includes(k));
+  return { manifest, markers, pending, gone, complete: pending.length === 0 };
 }
 
 export function listDispatches(): string[] {

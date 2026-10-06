@@ -13,7 +13,6 @@ import { promisify } from "node:util";
 import { shortenAttachments } from "./attachments";
 import {
   ASKED_IN_REPLY,
-  DISPATCH_VISIBLE_MS,
   DONE_VISIBLE_MS,
   SUBAGENT_STALE_MS,
   SUBAGENT_VISIBLE_MS,
@@ -55,7 +54,11 @@ import {
   packageVersion,
   SEAMUX_HOME,
 } from "./paths.server";
-import { dispatchStatus, listDispatches } from "./protocol.server";
+import {
+  dispatchStatus,
+  listDispatches,
+  type Alive,
+} from "./protocol.server";
 import { serviceNotices } from "./service.server";
 import {
   clip,
@@ -1055,7 +1058,12 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const pinRank = new Map(pinRows.map((p, i) => [p.session_id, i]));
   const rank = (c: Card) => pinRank.get(c.sessionId) ?? pinRows.length;
   cards.sort((a, b) => rank(a) - rank(b));
-  const dispatches = loadDispatchSets(now, warnings);
+  // Without both sources, a worker missing from them may still run.
+  const alive: Alive =
+    agentsKnown && liveKnown ? (id) => !closed(id) : null;
+  const lastWrite = (id: string) =>
+    (transcripts.get(id) ?? codexTranscripts.get(id))?.mtimeMs ?? null;
+  const dispatches = loadDispatchSets(now, alive, lastWrite, warnings);
   const reported = new Map(
     dispatches.flatMap((d) =>
       d.workers.map((w) => [`${d.id}/${w.key}`, w.status]),
@@ -1291,22 +1299,41 @@ export async function knownDirectories(): Promise<string[]> {
   return [...new Set(all)];
 }
 
-// Fan-outs still waiting on workers, and complete ones from the last day.
-function loadDispatchSets(now: number, warnings: string[]): DispatchSet[] {
+// Fan-outs still waiting on workers, and settled ones for as long as a DONE
+// card stays. A set settles once every worker has reported or its session
+// has ended; a worker that ended goes at its transcript's last write, as
+// its DONE card does.
+function loadDispatchSets(
+  now: number,
+  alive: Alive,
+  lastWrite: (sessionId: string) => number | null,
+  warnings: string[],
+): DispatchSet[] {
   const sets: DispatchSet[] = [];
   for (const id of listDispatches()) {
     try {
-      const s = dispatchStatus(id);
-      if (s.complete && now - s.manifest.createdAt > DISPATCH_VISIBLE_MS)
-        continue;
+      const s = dispatchStatus(id, alive, now);
+      const m = s.manifest;
+      const endedAt = (w: (typeof m.workers)[number]) =>
+        s.markers[w.key]?.at ??
+        (w.sessionId ? lastWrite(w.sessionId) : null) ??
+        w.spawnedAt ??
+        m.createdAt;
+      const settledAt = s.complete
+        ? Math.max(m.createdAt, ...m.workers.map(endedAt))
+        : null;
+      if (settledAt !== null && now - settledAt > DONE_VISIBLE_MS) continue;
       sets.push({
         id,
-        title: s.manifest.title,
-        createdAt: s.manifest.createdAt,
-        workers: s.manifest.workers.map((w) => ({
+        title: m.title,
+        createdAt: m.createdAt,
+        settledAt,
+        workers: m.workers.map((w) => ({
           key: w.key,
           sessionId: w.sessionId,
-          status: s.markers[w.key]?.status ?? null,
+          status:
+            s.markers[w.key]?.status ??
+            (s.gone.includes(w.key) ? "gone" : null),
         })),
       });
     } catch (err) {

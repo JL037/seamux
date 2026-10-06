@@ -128,7 +128,7 @@ export interface Card {
   worker: {
     dispatchId: string;
     key: string;
-    reported: "ok" | "failed" | null;
+    reported: WorkerState;
   } | null;
   // Running in a cmux surface, so the board can send into it.
   drivable: boolean;
@@ -208,15 +208,21 @@ export interface QueuedMessage {
   queuedAt: number;
 }
 
+// Where a fan-out worker stands: reported ok or failed, its session ended
+// without reporting ("gone"), or still expected to report (null).
+export type WorkerState = "ok" | "failed" | "gone" | null;
+
 // A fan-out set from the protocol, and which workers have reported.
 export interface DispatchSet {
   id: string;
   title: string;
   createdAt: number;
+  // When the last worker reported or ended; null while any is pending.
+  settledAt: number | null;
   workers: {
     key: string;
     sessionId: string | null;
-    status: "ok" | "failed" | null;
+    status: WorkerState;
   }[];
 }
 
@@ -278,10 +284,8 @@ export const SUBAGENT_VISIBLE_MS = 30 * 60 * 1000;
 // A running subagent whose transcript is quiet this long is marked stale.
 export const SUBAGENT_STALE_MS = 15 * 60 * 1000;
 
-// Complete fan-outs stay on the board for this long.
-export const DISPATCH_VISIBLE_MS = 24 * 60 * 60 * 1000;
-
-// DONE cards stay visible for this long after the chat closes.
+// DONE cards stay visible for this long after the chat closes, and a
+// settled fan-out this long after its last worker reported or ended.
 export const DONE_VISIBLE_MS = 30 * 60 * 1000;
 
 // Whether the turn is over and no dialog is open, so what's typed lands in

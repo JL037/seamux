@@ -1,14 +1,20 @@
 import { useState } from "react";
-import { Check, CircleDashed, X } from "lucide-react";
+import { Check, CircleDashed, Ghost, X } from "lucide-react";
 
-import type { DispatchSet } from "~/lib/board";
+import type { DispatchSet, WorkerState } from "~/lib/board";
 import { cn } from "~/lib/utils";
 
-export function WorkerStatus({ status }: { status: "ok" | "failed" | null }) {
+export function WorkerStatus({ status }: { status: WorkerState }) {
   if (status === "ok") return <Check className="size-3 text-success" />;
   if (status === "failed") return <X className="size-3 text-destructive" />;
+  // Its session ended without reporting.
+  if (status === "gone")
+    return <Ghost className="size-3 text-warning" aria-label="gone" />;
   return <CircleDashed className="size-3 text-muted-foreground" />;
 }
+
+const reportedOf = (workers: DispatchSet["workers"]) =>
+  workers.filter((w) => w.status === "ok" || w.status === "failed").length;
 
 // Fan-outs from the protocol: each set, and which workers have reported.
 // Below md they fold into one line that opens them.
@@ -16,7 +22,7 @@ export function DispatchStrip({ sets }: { sets: DispatchSet[] }) {
   const [open, setOpen] = useState(false);
   if (sets.length === 0) return null;
   const workers = sets.flatMap((s) => s.workers);
-  const reported = workers.filter((w) => w.status).length;
+  const reported = reportedOf(workers);
   return (
     <section className="flex flex-col gap-2">
       <button
@@ -36,14 +42,15 @@ export function DispatchStrip({ sets }: { sets: DispatchSet[] }) {
         </span>
       </button>
       {sets.map((set) => {
-        const reported = set.workers.filter((w) => w.status).length;
-        const complete = reported === set.workers.length;
+        const reported = reportedOf(set.workers);
+        const gone = set.workers.filter((w) => w.status === "gone").length;
+        const settled = set.settledAt !== null;
         return (
           <div
             key={set.id}
             className={cn(
               "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-card px-3 py-2 text-sm",
-              complete && "opacity-70",
+              settled && "opacity-70",
               !open && "max-md:hidden",
             )}
           >
@@ -52,9 +59,10 @@ export function DispatchStrip({ sets }: { sets: DispatchSet[] }) {
               {set.id}
             </span>
             <span className="text-xs text-muted-foreground">
-              {complete
+              {reported === set.workers.length
                 ? "all reported"
                 : `${reported}/${set.workers.length} reported`}
+              {gone > 0 && `, ${gone} gone`}
             </span>
             <span className="flex flex-wrap gap-2">
               {set.workers.map((w) => (

@@ -85,13 +85,13 @@ A session can split a task into several at once with the `seamux-dispatch` skill
 
 ```
 seamux fanout <manifest.json | ->   declare the workers, then start each as its own session
-seamux wait <dispatch-id>           wait until every worker has reported, then print every handback
+seamux wait <dispatch-id>           wait until every worker has reported or ended, then print every handback
 seamux done <dispatch-id> <worker> --summary "…" [--result <path>] [--status ok|failed]
 seamux status <dispatch-id>         where a dispatch stands, without waiting
 seamux list                         every dispatch
 ```
 
-A worker counts as finished only when it writes its `done` marker, not when its output file appears. The parent waits for all of them at once instead of reacting to each as it arrives. The board shows each fan-out and which workers have reported.
+A worker counts as finished only when it writes its `done` marker, not when its output file appears. The parent waits for all of them at once instead of reacting to each as it arrives. A worker whose session closes without reporting counts as gone, never within a few minutes of `fanout` starting it, so the wait ends rather than running to its timeout, and lists it under `gone`. The board shows each fan-out and which workers have reported or gone; once none is left to wait for, the fan-out leaves the board 30 minutes later, as a DONE card does.
 
 ### Rules it keeps
 

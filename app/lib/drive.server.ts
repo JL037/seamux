@@ -33,6 +33,7 @@ import {
 } from "./harness.server.ts";
 import * as macros from "./macros.server.ts";
 import { projectOf } from "./project-colors.ts";
+import type { Alive } from "./protocol.server.ts";
 import { recordDispatch } from "./store.server.ts";
 
 const run = promisify(execFile);
@@ -139,6 +140,38 @@ async function runningClaudeSessions(): Promise<Set<string>> {
       .filter((a) => a.sessionId && a.pid && processAlive(a.pid))
       .map((a) => a.sessionId!),
   );
+}
+
+// Whether a session still runs, told as the board tells a closed chat:
+// `claude agents` lists it, cmux hosts it, or it went on as a background
+// job under its short id. null when either couldn't be asked. For
+// `seamux wait`, which runs without the board.
+export async function sessionsAlive(): Promise<Alive> {
+  try {
+    const [agents, live] = await Promise.all([
+      run("claude", ["agents", "--json", "--all"], {
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: 10_000,
+      }).then(
+        ({ stdout }) =>
+          JSON.parse(stdout) as {
+            id?: string | null;
+            sessionId?: string | null;
+          }[],
+        (err: NodeJS.ErrnoException) => {
+          // No Claude Code installed: only cmux's sessions run.
+          if (err.code === "ENOENT") return [];
+          throw err;
+        },
+      ),
+      listLive(),
+    ]);
+    const known = new Set([...agents.map((a) => a.sessionId), ...live.keys()]);
+    const jobs = new Set(agents.map((a) => a.id));
+    return (id) => known.has(id) || jobs.has(id.slice(0, 8));
+  } catch {
+    return null;
+  }
 }
 
 function processAlive(pid: number): boolean {
