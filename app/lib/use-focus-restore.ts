@@ -4,6 +4,9 @@ const FOCUS_KEY = "seamux:focus";
 // How long a reload waits for the remembered box to appear: drafts come back
 // in effects of their own, and a reopened chat modal renders a little later.
 const WAIT_MS = 2000;
+// How long a box taken out from under the cursor waits for its new self: an
+// open chat modal reopens a render after its card mounts.
+const FOLLOW_MS = 1000;
 
 type Remembered = { key: string; start: number | null; end: number | null };
 
@@ -48,8 +51,7 @@ export function useFocusRestore() {
           `[data-focus-key="${CSS.escape(key)}"]`,
         );
         // Wait until the box exists and its draft is back in it.
-        const ready =
-          isTextBox(el) && (end === null || el.value.length >= end);
+        const ready = isTextBox(el) && (end === null || el.value.length >= end);
         if (!ready && Date.now() < deadline) {
           frame = requestAnimationFrame(place);
           return;
@@ -86,23 +88,77 @@ export function useFocusRestore() {
       if (focusKeyOf(document.activeElement)) record();
     };
 
+    // A card that moves to another column mounts afresh, its chat modal with
+    // it, and the box being typed in goes with the old one: follow the cursor
+    // into the new box. Only a box taken out from under the cursor is
+    // followed; one left by clicking elsewhere stays left.
+    let typing: {
+      box: HTMLInputElement | HTMLTextAreaElement;
+      key: string;
+    } | null = null;
+    const track = () => {
+      const el = document.activeElement;
+      const key = focusKeyOf(el);
+      if (key && isTextBox(el)) typing = { box: el, key };
+      else if (document.hasFocus()) typing = null;
+    };
+    const onLeave = () =>
+      setTimeout(() => {
+        if (typing?.box.isConnected && document.activeElement !== typing.box)
+          typing = null;
+      }, 0);
+    const follow = new MutationObserver(() => {
+      if (!typing || typing.box.isConnected) return;
+      const { box, key } = typing;
+      typing = null;
+      const deadline = Date.now() + FOLLOW_MS;
+      const place = () => {
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
+        const next = document.querySelector(
+          `[data-focus-key="${CSS.escape(key)}"]`,
+        );
+        if (!isTextBox(next)) {
+          if (Date.now() < deadline) frame = requestAnimationFrame(place);
+          return;
+        }
+        if (next.disabled) return;
+        next.focus({ preventScroll: true });
+        const n = next.value.length;
+        next.setSelectionRange(
+          Math.min(box.selectionStart ?? n, n),
+          Math.min(box.selectionEnd ?? n, n),
+        );
+      };
+      place();
+    });
+    follow.observe(document.body, { childList: true, subtree: true });
+
     document.addEventListener("focusin", record);
+    document.addEventListener("focusin", track);
     document.addEventListener("focusout", onFocusOut);
+    document.addEventListener("focusout", onLeave);
     window.addEventListener("pagehide", onPageHide);
     return () => {
       cancelAnimationFrame(frame);
+      follow.disconnect();
       document.removeEventListener("focusin", record);
+      document.removeEventListener("focusin", track);
       document.removeEventListener("focusout", onFocusOut);
+      document.removeEventListener("focusout", onLeave);
       window.removeEventListener("pagehide", onPageHide);
     };
   }, []);
 }
 
 // Called once a box's text is sent: the box lets go of focus, so a reload
-// after sending doesn't land back in it.
+// after sending doesn't land back in it. Sending empties the box, so text in
+// it now was typed since, and the box keeps the cursor for the next message.
 export function releaseFocus(key: string) {
-  if (focusKeyOf(document.activeElement) === key) {
-    (document.activeElement as HTMLElement).blur();
+  const el = document.activeElement;
+  if (focusKeyOf(el) === key) {
+    if (isTextBox(el) && el.value !== "") return;
+    (el as HTMLElement).blur();
   }
   try {
     if (read()?.key === key) sessionStorage.removeItem(FOCUS_KEY);
