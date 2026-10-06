@@ -24,6 +24,7 @@ import { Markdown } from "~/components/markdown";
 import { useSlashMenu } from "~/components/slash-menu";
 import { SubagentDetail } from "~/components/subagent-list";
 import { Textarea } from "~/components/ui/textarea";
+import { WorkerDetail, workerCount } from "~/components/worker-list";
 import { WaitingPanel } from "~/components/waiting-panel";
 import {
   fitAttachments,
@@ -182,6 +183,9 @@ export function ChatModal({
     onOpenChange(false);
   };
 
+  const workers = workerCount(card.fanouts);
+  const rail = workers > 0 || card.subagents.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -220,24 +224,27 @@ export function ChatModal({
             )}
             {messages && <Conversation messages={messages} cwd={card.cwd} />}
           </div>
-          {card.subagents.length > 0 && (
+          {rail && (
             <aside className="hidden w-72 shrink-0 overflow-y-auto border-l px-4 py-3 md:block">
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Subagents
-              </h3>
-              <SubagentDetail subagents={card.subagents} now={Date.now()} />
+              <SideRail card={card} />
             </aside>
           )}
         </div>
 
         {/* The side panel has no room below md: a fold instead. */}
-        {card.subagents.length > 0 && (
+        {rail && (
           <details className="max-h-56 shrink-0 overflow-y-auto md:hidden">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Subagents ({card.subagents.length})
+              {[
+                workers > 0 && `Workers (${workers})`,
+                card.subagents.length > 0 &&
+                  `Subagents (${card.subagents.length})`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </summary>
             <div className="pt-2">
-              <SubagentDetail subagents={card.subagents} now={Date.now()} />
+              <SideRail card={card} />
             </div>
           </details>
         )}
@@ -560,6 +567,29 @@ function ShellRun({ run }: { run: Extract<ChatMessage, { role: "shell" }> }) {
           {run.output}
         </pre>
       ) : null}
+    </div>
+  );
+}
+
+const RAIL_HEADING =
+  "mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+
+// The fan-out workers the chat started, then its subagents.
+function SideRail({ card }: { card: Card }) {
+  return (
+    <div className="flex flex-col gap-6">
+      {card.fanouts.length > 0 && (
+        <section>
+          <h3 className={RAIL_HEADING}>Workers</h3>
+          <WorkerDetail fanouts={card.fanouts} />
+        </section>
+      )}
+      {card.subagents.length > 0 && (
+        <section>
+          <h3 className={RAIL_HEADING}>Subagents</h3>
+          <SubagentDetail subagents={card.subagents} now={Date.now()} />
+        </section>
+      )}
     </div>
   );
 }

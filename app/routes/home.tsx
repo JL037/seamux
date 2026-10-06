@@ -61,7 +61,7 @@ import { useSlashMenu } from "~/components/slash-menu";
 import { ConfigDialog } from "~/components/config-dialog";
 import { ContextBar } from "~/components/context-bar";
 import { DispatchBar } from "~/components/dispatch-bar";
-import { WorkerStatus } from "~/components/worker-status";
+import { workerCount } from "~/components/worker-list";
 import { Markdown } from "~/components/markdown";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
@@ -1085,12 +1085,6 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             {errors.map((e) => (
               <ActionError key={e} error={e} />
             ))}
-            {card.worker && (
-              <p className="flex items-center gap-1.5 font-mono text-muted-foreground">
-                <WorkerStatus status={card.worker.reported} />
-                worker {card.worker.key} · {card.worker.dispatchId}
-              </p>
-            )}
             {card.intent && (
               <p className="sensitive line-clamp-2 rounded-md bg-muted px-2 py-1">
                 <span className="font-medium">
@@ -1154,6 +1148,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
             <CardState
               column={card.column}
               queued={card.terminalQueue.length + card.boardQueue.length}
+              workers={workerCount(card.fanouts)}
               onOpen={() => setChatOpen(true)}
             />
             <ChatInput card={card} open={chatOpen} setOpen={setChatOpen} />
@@ -1206,14 +1201,18 @@ function StartingCard({ spawn }: { spawn: Spawning }) {
 
 // Waiting shows no state here: the card already carries the prompt or tool
 // that is waiting, and done cards are over. Anything queued shows as +N, and
-// the line then opens the chat, where the queue is listed.
+// the line then opens the chat, where the queue is listed. A chat that fanned
+// out says how many workers it has, which opens the chat too: its side rail
+// lists them.
 function CardState({
   column,
   queued,
+  workers,
   onOpen,
 }: {
   column: Column;
   queued: number;
+  workers: number;
   onOpen: () => void;
 }) {
   const state =
@@ -1230,30 +1229,44 @@ function CardState({
     ) : null;
   const tone =
     column === "working" ? "text-brand-primary" : "text-muted-foreground";
-  if (queued === 0) {
-    return (
-      state && (
-        <span className={cn("flex items-center gap-1.5", tone)}>{state}</span>
-      )
-    );
-  }
-  if (column === "done") return null;
-  const when =
-    column === "idle"
-      ? "seamux sends it on its next check"
-      : column === "working"
-        ? "sent once this turn ends"
-        : "sent once the chat is ready again";
-  return (
+  const fanout = workers > 0 && (
     <button
       type="button"
       onClick={onOpen}
-      title={`${queued} queued, ${when}. Open the chat to see or edit it`}
-      className={cn("flex w-fit items-center gap-1.5 hover:underline", tone)}
+      title="Open the chat to see its workers"
+      className="cursor-pointer text-muted-foreground hover:underline"
     >
-      {state}
-      <span>{state ? `+${queued}` : `+${queued} queued`}</span>
+      ({workers} worker{workers === 1 ? "" : "s"})
     </button>
+  );
+  let main: ReactNode = state && (
+    <span className={cn("flex items-center gap-1.5", tone)}>{state}</span>
+  );
+  if (queued > 0 && column !== "done") {
+    const when =
+      column === "idle"
+        ? "seamux sends it on its next check"
+        : column === "working"
+          ? "sent once this turn ends"
+          : "sent once the chat is ready again";
+    main = (
+      <button
+        type="button"
+        onClick={onOpen}
+        title={`${queued} queued, ${when}. Open the chat to see or edit it`}
+        className={cn("flex w-fit items-center gap-1.5 hover:underline", tone)}
+      >
+        {state}
+        <span>{state ? `+${queued}` : `+${queued} queued`}</span>
+      </button>
+    );
+  }
+  if (!main && !fanout) return null;
+  return (
+    <span className="flex w-fit items-center gap-1.5">
+      {main}
+      {fanout}
+    </span>
   );
 }
 

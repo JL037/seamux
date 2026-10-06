@@ -3,7 +3,7 @@
 // no worker is still expected to report, and a settled set leaves the board
 // with the DONE cards.
 
-import { rmSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 
 import { afterEach, beforeEach, expect, it } from "vitest";
 
@@ -39,11 +39,17 @@ const MINUTE = 60 * 1000;
 
 // A dispatch whose workers were spawned `ago` ms before now, each with a
 // session id of its own key.
-function declare(id: string, keys: string[], createdAt: number, ago = 0) {
+function declare(
+  id: string,
+  keys: string[],
+  createdAt: number,
+  ago = 0,
+  parentSessionId: string | null = null,
+) {
   const manifest: Manifest = {
     id,
     title: `Set ${id}`,
-    parentSessionId: null,
+    parentSessionId,
     createdAt,
     workers: keys.map((key) => ({
       key,
@@ -137,4 +143,37 @@ it("drops a settled set after the DONE window, counted from when it settled", as
 
   const later = now + DONE_VISIBLE_MS;
   expect((await loadBoard(later)).dispatches).toEqual([]);
+});
+
+it("lists a fan-out's workers on the card of the chat that started it", async () => {
+  const now = Date.now();
+  const agents = process.env.SEAMUX_TEST_CLAUDE_AGENTS!;
+  writeFileSync(
+    agents,
+    JSON.stringify([
+      {
+        pid: 1,
+        cwd: "/work",
+        kind: "interactive",
+        startedAt: 0,
+        sessionId: "parent",
+        name: "parent",
+        status: "idle",
+      },
+    ]),
+  );
+  try {
+    declare("d-00000006", ["one", "two"], now - 20 * MINUTE, 0, "parent");
+    report("d-00000006", "one", now - MINUTE);
+    cmux.addSession("session-two");
+    const board = await loadBoard(now);
+    const card = board.cards.find((c) => c.sessionId === "parent");
+    expect(card?.fanouts.map((d) => d.id)).toEqual(["d-00000006"]);
+    expect(card?.fanouts[0].workers).toMatchObject([
+      { key: "one", status: "ok", summary: "Done" },
+      { key: "two", status: null, summary: null },
+    ]);
+  } finally {
+    rmSync(agents, { force: true });
+  }
 });

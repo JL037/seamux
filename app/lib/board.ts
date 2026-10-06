@@ -128,8 +128,9 @@ export interface Card {
   worker: {
     dispatchId: string;
     key: string;
-    reported: WorkerState;
   } | null;
+  // The fan-outs this session started, listed in its chat's side rail.
+  fanouts: DispatchSet[];
   // Running in a cmux surface, so the board can send into it.
   drivable: boolean;
   // The chat's own turn is running, so Esc has something to stop. A card can
@@ -216,6 +217,8 @@ export type WorkerState = "ok" | "failed" | "gone" | null;
 export interface DispatchSet {
   id: string;
   title: string;
+  // The session that ran `seamux fanout`, whose card lists the workers.
+  parentSessionId: string | null;
   createdAt: number;
   // When the last worker reported or ended; null while any is pending.
   settledAt: number | null;
@@ -223,6 +226,8 @@ export interface DispatchSet {
     key: string;
     sessionId: string | null;
     status: WorkerState;
+    // What the worker said when it reported.
+    summary: string | null;
   }[];
 }
 
@@ -231,8 +236,7 @@ export interface Board {
   // The commit the board is serving, so a landed change is visible.
   version: { hash: string; subject: string } | null;
   cards: Card[];
-  // Fan-outs, for each worker card's report status. The board shows no
-  // strip of them: a worker's card says where it stands.
+  // Every fan-out still on the board; each is also on its parent's card.
   dispatches: DispatchSet[];
   // Background sessions not matched to an open chat. Every one `claude
   // agents` still lists can be brought back with `claude attach`.

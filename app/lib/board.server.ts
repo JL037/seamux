@@ -901,6 +901,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         intent: null,
         forkedFrom: null,
         worker: null,
+        fanouts: [],
         drivable: surfaces.has(row.sessionId),
         turnRunning: busy,
         pinned: false,
@@ -980,6 +981,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         intent: null,
         forkedFrom: null,
         worker: null,
+        fanouts: [],
         drivable: false,
         turnRunning: false,
         pinned: false,
@@ -1039,11 +1041,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         card.intent = excerpt(shortenAttachments(d.prompt));
         card.forkedFrom = d.forked_from;
         if (d.dispatch_id && d.worker) {
-          card.worker = {
-            dispatchId: d.dispatch_id,
-            key: d.worker,
-            reported: null,
-          };
+          card.worker = { dispatchId: d.dispatch_id, key: d.worker };
         }
       }
     }
@@ -1064,16 +1062,10 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const lastWrite = (id: string) =>
     (transcripts.get(id) ?? codexTranscripts.get(id))?.mtimeMs ?? null;
   const dispatches = loadDispatchSets(now, alive, lastWrite, warnings);
-  const reported = new Map(
-    dispatches.flatMap((d) =>
-      d.workers.map((w) => [`${d.id}/${w.key}`, w.status]),
-    ),
-  );
   for (const card of cards) {
-    if (card.worker) {
-      card.worker.reported =
-        reported.get(`${card.worker.dispatchId}/${card.worker.key}`) ?? null;
-    }
+    card.fanouts = dispatches.filter(
+      (d) => d.parentSessionId === card.sessionId,
+    );
   }
   return {
     generatedAt: now,
@@ -1121,6 +1113,7 @@ function codexFields(
     intent: null,
     forkedFrom: null,
     worker: null,
+    fanouts: [],
     drivable: false,
     pinned: false,
     clearedFrom: null,
@@ -1326,6 +1319,7 @@ function loadDispatchSets(
       sets.push({
         id,
         title: m.title,
+        parentSessionId: m.parentSessionId,
         createdAt: m.createdAt,
         settledAt,
         workers: m.workers.map((w) => ({
@@ -1334,6 +1328,7 @@ function loadDispatchSets(
           status:
             s.markers[w.key]?.status ??
             (s.gone.includes(w.key) ? "gone" : null),
+          summary: s.markers[w.key]?.summary ?? null,
         })),
       });
     } catch (err) {
