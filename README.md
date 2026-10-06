@@ -91,7 +91,7 @@ seamux status <dispatch-id>         where a dispatch stands, without waiting
 seamux list                         every dispatch
 ```
 
-A worker counts as finished only when it writes its `done` marker, not when its output file appears. The parent waits for all of them at once instead of reacting to each as it arrives. A worker whose session closes without reporting counts as gone, never within a few minutes of `fanout` starting it, so the wait ends rather than running to its timeout, and lists it under `gone`. The board shows each fan-out and which workers have reported or gone; once none is left to wait for, the fan-out leaves the board 30 minutes later, as a DONE card does.
+A worker counts as finished only when it writes its `done` marker, not when its output file appears. The parent waits for all of them at once instead of reacting to each as it arrives. A worker whose session closes without reporting counts as gone, never within a few minutes of `fanout` starting it, so the wait ends rather than running to its timeout, and lists it under `gone`. On the board, each worker's card says whether it has reported, failed or gone; fan-outs get no strip of their own.
 
 ### Rules it keeps
 

@@ -231,6 +231,8 @@ export interface Board {
   // The commit the board is serving, so a landed change is visible.
   version: { hash: string; subject: string } | null;
   cards: Card[];
+  // Fan-outs, for each worker card's report status. The board shows no
+  // strip of them: a worker's card says where it stands.
   dispatches: DispatchSet[];
   // Background sessions not matched to an open chat. Every one `claude
   // agents` still lists can be brought back with `claude attach`.

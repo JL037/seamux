@@ -61,7 +61,7 @@ import { useSlashMenu } from "~/components/slash-menu";
 import { ConfigDialog } from "~/components/config-dialog";
 import { ContextBar } from "~/components/context-bar";
 import { DispatchBar } from "~/components/dispatch-bar";
-import { DispatchStrip, WorkerStatus } from "~/components/dispatch-strip";
+import { WorkerStatus } from "~/components/worker-status";
 import { Markdown } from "~/components/markdown";
 import { SeamuxMark } from "~/components/seamux-mark";
 import { SubagentSummary } from "~/components/subagent-list";
@@ -2002,7 +2002,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 onDispatched={() => setDispatchOpen(false)}
               />
             </div>
-            <DispatchStrip sets={board.dispatches} />
             <Warnings warnings={board.warnings} />
             {board.cmux && <CmuxProblem problem={board.cmux} />}
 
