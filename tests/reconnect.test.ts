@@ -62,7 +62,7 @@ it("leaves a chat that is working, closing, closed, or out of reach", () => {
   expect(due(card({ column: "working" }), now, STARTED, undefined)).toBe(false);
   expect(due(card({ column: "done" }), now, STARTED, undefined)).toBe(false);
   expect(due(card({ drivable: false }), now, STARTED, undefined)).toBe(false);
-  expect(due(card({ closing: { state: "cleaning", note: null } }), now, STARTED, undefined)).toBe(false);
+  expect(due(card({ closing: { state: "cleaning", note: null, retry: false } }), now, STARTED, undefined)).toBe(false);
   expect(due(card({ engine: "codex" }), now, STARTED, undefined)).toBe(false);
 });
 

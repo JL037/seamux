@@ -404,11 +404,14 @@ export async function closeChat(sessionId: string) {
 // starts or never ends, when it ends on a question, or when it leaves
 // uncommitted changes or its worktree behind: the session said why in its
 // reply, which the user should read before it goes. Closing a held chat
-// again exits it without the macro.
+// again exits it without the macro, unless the turn never started: then
+// nothing ran, so closing again sends the macro again.
 export interface Closing {
   state: "cleaning" | "held";
   note: string | null;
   since: number;
+  // Held because the macro's turn never started, so the next close retries.
+  retry: boolean;
 }
 
 // The prompt a held chat was last given when it was held, to tell when it
@@ -445,8 +448,8 @@ export function cancelClose(sessionId: string) {
   if (closing.get(sessionId)?.state === "cleaning") closing.delete(sessionId);
 }
 
-function hold(sessionId: string, note: string, card?: Card) {
-  closing.set(sessionId, { state: "held", note, since: Date.now() });
+function hold(sessionId: string, note: string, card?: Card, retry = false) {
+  closing.set(sessionId, { state: "held", note, since: Date.now(), retry });
   if (card) heldOn.set(sessionId, card.lastPrompt);
   else heldOn.delete(sessionId);
 }
@@ -510,7 +513,7 @@ export async function closeSession(
     throw new Error("Already cleaning up before it closes");
   }
   const macro = configOrDefaults().macros.closeSession.text.trim();
-  if (!macro || current?.state === "held") {
+  if (!macro || (current?.state === "held" && !current.retry)) {
     closing.delete(sessionId);
     await closeChat(sessionId);
     return;
@@ -521,7 +524,12 @@ export async function closeSession(
     siblings: describeSiblings(card, cards),
   });
   const sentAt = Date.now();
-  closing.set(sessionId, { state: "cleaning", note: null, since: sentAt });
+  closing.set(sessionId, {
+    state: "cleaning",
+    note: null,
+    since: sentAt,
+    retry: false,
+  });
   try {
     await sendMessage(sessionId, text);
   } catch (err) {
@@ -555,8 +563,9 @@ async function finishClose(
     if (!started && waited > CLOSE_START_MS) {
       hold(
         sessionId,
-        "The close-session macro never started a turn, so it was left open",
+        "The close-session macro never started a turn, so it was left open. Close again to send it again",
         card,
+        true,
       );
       return;
     }
@@ -965,15 +974,14 @@ async function createWorktree(
 // customised without {{how_to_worktree}} gets it at the end.
 function firstPrompt(prompt: string, cwd: string, wt: NewWorktree | null) {
   const { macros } = configOrDefaults();
-  const howTo =
-    wt
-      ? renderMacro(macros.howToWorktree.text, {
-          worktree: wt.path,
-          branch: wt.branch,
-          repo: wt.repo,
-          worktrees: wt.home,
-        }).trim()
-      : "";
+  const howTo = wt
+    ? renderMacro(macros.howToWorktree.text, {
+        worktree: wt.path,
+        branch: wt.branch,
+        repo: wt.repo,
+        worktrees: wt.home,
+      }).trim()
+    : "";
   let text = macros.newSession.text;
   if (howTo && !usesVariable(text, "how_to_worktree"))
     text += "\n\n{{how_to_worktree}}";

@@ -652,7 +652,8 @@ function CardControl({ card }: { card: BoardCard }) {
     );
   }
   if (closable(card)) {
-    const held = card.closing?.state === "held";
+    // A close held after the macro's turn never started sends it again.
+    const held = card.closing?.state === "held" && !card.closing.retry;
     return (
       <Button
         size="icon-xs"

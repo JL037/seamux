@@ -147,8 +147,13 @@ export interface Card {
   // than a reply, such as an expired login or an overloaded server.
   apiError: ApiError | null;
   // Set while the board is closing it through the close-session macro, or
-  // when such a close was held and left the chat open.
-  closing: { state: "cleaning" | "held"; note: string | null } | null;
+  // when such a close was held and left the chat open. `retry` when the
+  // next close sends the macro again rather than exiting straight away.
+  closing: {
+    state: "cleaning" | "held";
+    note: string | null;
+    retry: boolean;
+  } | null;
   background: BackgroundSession[];
   subagents: Subagent[];
 }

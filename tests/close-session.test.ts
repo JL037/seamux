@@ -3,6 +3,8 @@
 // starts or never ends, ends on a question, or leaves uncommitted changes or
 // its worktree behind. Then the close is held, the chat left open with a
 // note, since exiting would lose what the session meant the user to read.
+// Closing a held chat again exits it, unless the turn never started, when it
+// sends the macro again.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -114,9 +116,27 @@ describe("closeSession", () => {
       expect(c.state()).toMatchObject({
         state: "held",
         note: expect.stringMatching(/never started a turn/),
+        retry: true,
       }),
     );
     expect(c.exited()).toBe(false);
+  });
+
+  it("sends the macro again when closing a chat whose macro never started a turn", async () => {
+    const c = chat();
+    await closeSession(c.card, [c.card], c.lookup);
+    await vi.advanceTimersByTimeAsync(63_000);
+    await vi.waitFor(() => expect(c.state()).toMatchObject({ retry: true }));
+    const typed = c.surface.input.length;
+
+    await closeSession(c.card, [c.card], c.lookup);
+    const again = c.surface.input
+      .slice(typed)
+      .map((i) => i.value)
+      .join("");
+    expect(again).toContain("Clean up after yourself");
+    expect(c.exited()).toBe(false);
+    expect(c.state()).toMatchObject({ state: "cleaning" });
   });
 
   it("keeps waiting while the clean-up runs, however long", async () => {
@@ -204,9 +224,14 @@ describe("closeSession", () => {
   });
 
   it("exits a held chat on the next close, without the macro", async () => {
-    const c = chat();
+    const repo = gitRepo();
+    writeFileSync(join(repo, "notes.txt"), "unsaved");
+    const c = chat(repo);
     await closeSession(c.card, [c.card], c.lookup);
-    await vi.advanceTimersByTimeAsync(63_000);
+    turnStarts(c.card);
+    await poll();
+    c.card.column = "idle";
+    await poll();
     await vi.waitFor(() => expect(c.state()).toMatchObject({ state: "held" }));
     const typed = c.surface.input.length;
 
