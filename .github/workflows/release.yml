@@ -4,8 +4,14 @@
 #   check    Whether main's version needs publishing, with no npm credential
 #            and no OIDC identity. It runs on every push to main and reads
 #            package.json from the repo, so nothing untrusted reaches a shell.
+#            It says yes only when the push itself changed the version and
+#            npm doesn't have that version yet.
 #   publish  Exists only when `check` says yes, which is right after the
-#            Version Packages PR merges. It authenticates with a short-lived
+#            Version Packages PR merges. Every other push leaves it out, even
+#            while a release is unpublished: otherwise each later merge would
+#            queue another run waiting on the npm-production approval, and
+#            approving a stale one would publish an old version as latest. To
+#            retry a failed release, re-run that release's own run. It authenticates with a short-lived
 #            token from GitHub OIDC (npm trusted publishing), so there is no
 #            stored NPM_TOKEN to leak.
 #   tag      Tags the released commit v<version> and creates its GitHub
@@ -50,12 +56,27 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+      # The version before this push comes from the API, so the checkout
+      # stays shallow. A push with no parent (BEFORE all zeros) counts as a
+      # change.
       - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
         run: |
+          set -euo pipefail
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if npm view "$name@$version" version >/dev/null 2>&1; then
+          previous=""
+          if [ -n "${BEFORE//0/}" ]; then
+            previous=$(gh api "repos/${GITHUB_REPOSITORY}/contents/package.json?ref=${BEFORE}" \
+              --jq '.content' | base64 --decode | jq -r '.version')
+          fi
+          if [ "$previous" = "$version" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "This push didn't change the version ($version) — nothing to do."
+          elif npm view "$name@$version" version >/dev/null 2>&1; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "$name@$version already published — nothing to do."
           else
