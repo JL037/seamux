@@ -28,7 +28,7 @@ The board you're running serves from your checkout, and hot reload applies every
 1. Make a worktree, under `worktrees/` or `.claude/worktrees/` (both gitignored), branched from the latest `main`, and run `npm install` in it. Don't symlink `node_modules` into it.
 2. Commit, then run `npm run land` from the worktree. It rebases your branch onto `main`, typechecks it, fast-forwards `main`, restarts the board if dependencies or a `.server.ts` module changed, and pushes `main` to `origin`. Run `npm run land -- --no-push` to keep the landing local, as in a clone you can't push from.
 
-For a pull request, push your branch and open the PR against `main` instead of landing it.
+For a pull request, push your branch and open the PR against `main` instead of landing it. A maintainer can ask Claude about it with a comment: `@claude /review` reviews it (incrementally after the first time; `@claude /review all` from scratch), and `@claude /focus` (or `@claude /focus 5`) points a human reviewer at the few sections most worth their attention. Both only read and comment, and never run for anyone but a maintainer.
 
 ## Checking a change
 
