@@ -1,0 +1,24 @@
+version = 1
+agents = ["claude"]
+
+[[skills]]
+name = "dotagents"
+source = "getsentry/dotagents"
+
+[trust]
+github_repos = ["getsentry/dotagents", "taskless/cli"]
+
+[[skills]]
+name = "iterate-pr"
+source = "taskless/cli"
+path = ".agents/skills/iterate-pr"
+
+[[skills]]
+name = "code-simplifier"
+source = "taskless/cli"
+path = ".agents/skills/code-simplifier"
+
+[[skills]]
+name = "worktrees-pnpm"
+source = "taskless/cli"
+path = ".agents/skills/worktrees-pnpm"
