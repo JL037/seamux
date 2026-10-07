@@ -114,6 +114,12 @@ jobs:
       - run: npm install -g npm@12.0.1 --ignore-scripts
       - run: npm run build
 
+      # npm matches both of these against the repo as GitHub spells it now,
+      # case and all: the trusted publisher on npmjs.com, which answers a
+      # mismatch with a bare 404, and package.json's repository.url, which
+      # gets a 422. Renaming the GitHub account, even only its case, breaks
+      # both.
+      #
       # --ignore-scripts: the build above already ran, so prepack needn't.
       - name: Publish (skipping a version already on npm)
         run: |
