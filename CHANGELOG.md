@@ -1,6 +1,6 @@
 # seamux
 
-## 0.3.0
+## 0.3.1
 
 ### Minor Changes
 
@@ -8,6 +8,7 @@
 
 ### Patch Changes
 
+- Publish to npm again. 0.3.0 never reached npm: the GitHub account behind seamux is now `theCodeDrift`, and npm refused a release whose `repository` URL still said `thecodedrift`. This release carries everything listed here for 0.3.0, which has none of its own.
 - a8aabec: A card on the board drops its outline and shadow: its only edges are along the top and down the right, each fading out from the engine's colored top-right corner, and a Done card's top edge now fades in like the others. The light board's background is a shade darker, so the cards stand out against it. On a phone, the context bar under Open chat loses its own border, so it reads as the button's foot.
 - e688bf5: On a phone, each board column ends with space under its last card, so the list visibly stops and that card sits clear of the home indicator's swipe.
 - 8aee875: Code blocks in a card's reply, the chat and the file viewer have a copy button in their top right, shown on hover, that copies the block's text.
