@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for reporting. seamux sits between cmux and Claude Code or Codex, and all three change often, so the versions below are usually what tells us where a bug lives.
 
-        Found a security problem? Don't report it here: see [SECURITY.md](https://github.com/thecodedrift/seamux/blob/main/SECURITY.md).
+        Found a security problem? Don't report it here: see [SECURITY.md](https://github.com/theCodeDrift/seamux/blob/main/SECURITY.md).
 
   - type: textarea
     id: what-happened

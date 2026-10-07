@@ -6,11 +6,11 @@
   "author": "Jakob Heuser <jakob@codedrift.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thecodedrift/seamux.git"
+    "url": "git+https://github.com/theCodeDrift/seamux.git"
   },
-  "homepage": "https://github.com/thecodedrift/seamux#readme",
+  "homepage": "https://github.com/theCodeDrift/seamux#readme",
   "bugs": {
-    "url": "https://github.com/thecodedrift/seamux/issues"
+    "url": "https://github.com/theCodeDrift/seamux/issues"
   },
   "type": "module",
   "os": [

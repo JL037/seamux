@@ -4,7 +4,7 @@ labels: [enhancement]
 body:
   - type: markdown
     attributes:
-      value: Before you write it up, read [what makes a proposal fit](https://github.com/thecodedrift/seamux/blob/main/CONTRIBUTING.md#proposing-a-change) seamux.
+      value: Before you write it up, read [what makes a proposal fit](https://github.com/theCodeDrift/seamux/blob/main/CONTRIBUTING.md#proposing-a-change) seamux.
 
   - type: textarea
     id: problem
