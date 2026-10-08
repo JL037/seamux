@@ -26,7 +26,8 @@ type Intent =
   | "queue-send"
   | "queue-drop"
   | "draft-send"
-  | "draft-take";
+  | "draft-take"
+  | "send-failure-dismiss";
 
 // Where each verb puts the card, shown as it is sent, ahead of the poll.
 // Answering a question or approving a tool sets the turn going again.

@@ -34,6 +34,7 @@ import {
   promptBoxDraft,
   type ReplayGrid,
 } from "~/lib/harness.server";
+import { failureFor, recordFailure } from "~/lib/send-failures.server";
 import { FakeCmux, plainGrid, type FakeSurface } from "./fake-cmux";
 
 let cmux: FakeCmux;
@@ -235,6 +236,17 @@ describe("unsent drafts", () => {
       /no longer holds/,
     );
     expect(input(surface)).toEqual([]);
+    // The board was out of date: nothing failed to send.
+    expect(failureFor("s")).toBeNull();
+  });
+
+  it("forgets a failed send once its message is taken back to edit", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = promptBox("fix the login");
+    cmux.onInput(emptying);
+    recordFailure("s", "fix the login", new UnsentError());
+    await takeDraft("s", "fix the login");
+    expect(failureFor("s")).toBeNull();
   });
 });
 
@@ -369,6 +381,16 @@ describe("sendMessage", () => {
       "text:\r",
       "text:\r",
     ]);
+    // The card shows it, with the message, until one goes.
+    expect(failureFor("s")).toMatchObject({
+      text: "fix the login",
+      error: expect.stringMatching(/didn't send/),
+    });
+    cmux.onInput((s, i) => {
+      if (i.value === "enter") s.screen = promptBox("");
+    });
+    await sendMessage("s", "fix the login");
+    expect(failureFor("s")).toBeNull();
   });
 
   // A draft in the prompt box, which takes the clearing keys as Claude Code

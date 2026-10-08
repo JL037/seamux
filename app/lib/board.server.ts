@@ -83,6 +83,7 @@ import {
   type PinRow,
   type SubagentRow,
 } from "./store.server";
+import { failureFor } from "./send-failures.server";
 
 const run = promisify(execFile);
 const CLAUDE_DIR = join(homedir(), ".claude");
@@ -937,6 +938,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         context: summary?.context ?? null,
         terminalQueue: summary?.queued ?? [],
         unsentDraft,
+        sendFailure: failureFor(row.sessionId),
         boardQueue: [],
         workspaceRef: ws?.ref ?? null,
         intent: null,
@@ -1028,6 +1030,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         context: s.context,
         terminalQueue: [],
         unsentDraft: null,
+        sendFailure: null,
         boardQueue: [],
         workspaceRef: null,
         intent: null,
@@ -1161,6 +1164,7 @@ function codexFields(
     context: s.context,
     terminalQueue: [],
     unsentDraft: null,
+    sendFailure: failureFor(sessionId),
     boardQueue: [],
     workspaceRef: null,
     intent: null,

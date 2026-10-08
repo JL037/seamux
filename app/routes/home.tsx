@@ -103,6 +103,7 @@ import {
   type Board,
   type Card as BoardCard,
   type Column,
+  type SendFailure,
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
 import { ENGINE_FEATURES, ENGINE_LABELS, type Engine } from "~/lib/config";
@@ -200,6 +201,30 @@ function useDoneToasts(cards: BoardCard[]) {
       if (card.column !== "done" || was === undefined || was === "done")
         continue;
       toast(`${card.name} is done`, { id: `done:${card.sessionId}` });
+    }
+  }, [cards]);
+}
+
+// An error toast for each message the board fails to send, from a card or
+// seamux's queue, as its card first shows the failure. null until the first
+// board is seen, so opening the tab doesn't announce old failures.
+function useSendFailureToasts(cards: BoardCard[]) {
+  const seen = useRef<Map<string, number> | null>(null);
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = new Map(
+      cards.flatMap((c) =>
+        c.sendFailure ? [[c.sessionId, c.sendFailure.at] as const] : [],
+      ),
+    );
+    if (!before) return;
+    for (const card of cards) {
+      const failure = card.sendFailure;
+      if (!failure || before.get(card.sessionId) === failure.at) continue;
+      toast.error(`A message to ${card.name} didn't send`, {
+        id: `send-failed:${card.sessionId}`,
+        description: failure.error,
+      });
     }
   }, [cards]);
 }
@@ -494,13 +519,7 @@ function ChatInput({
 
   return (
     <div className="flex flex-col gap-1">
-      {card.unsentDraft && card.drivable && (
-        <UnsentDraft
-          sessionId={card.sessionId}
-          text={card.unsentDraft}
-          onTake={moveIn}
-        />
-      )}
+      <StuckMessage card={card} onTake={moveIn} />
       {/* A phone's card has no room to write in, so it opens the chat,
           with the context bar hung under it as it is under the input. */}
       <div className="flex flex-col md:hidden">
@@ -586,7 +605,10 @@ function ChatInput({
           {!multiline && expand}
         </div>
       )}
-      {error && <ActionError error={error} />}
+      {/* A failed send shows above, with its message. */}
+      {error && error !== card.sendFailure?.error && (
+        <ActionError error={error} />
+      )}
       <ChatModal
         card={card}
         open={open}
@@ -613,31 +635,111 @@ function ActionError({ error }: { error: string }) {
   return <p className="text-destructive">{error}</p>;
 }
 
-// A message left in the chat's prompt box and never sent, such as one the
-// board sent that the chat didn't take: sent from here as it stands, or
-// moved into the card's input to edit, emptying the chat's box.
-function UnsentDraft({
-  sessionId,
-  text,
+// A message that didn't reach the chat: one the board failed to send, with
+// why, or one left in the chat's prompt box and never sent, such as one the
+// chat didn't take or one typed in the terminal. Often both are one, when
+// the failed message sits in the box. One in the box is sent from here as
+// it stands, or moved into the card's input to edit, emptying the chat's
+// box; one that never reached the box can only be moved into the input.
+function StuckMessage({
+  card,
   onTake,
 }: {
-  sessionId: string;
-  text: string;
+  card: BoardCard;
   onTake: (text: string) => void;
 }) {
+  const failure = card.sendFailure;
+  const draft = card.drivable ? card.unsentDraft : null;
   const taking = useRef("");
   const took = useCallback(() => onTake(taking.current), [onTake]);
-  const sender = useSessionAction(sessionId);
-  const taker = useSessionAction(sessionId, took);
+  const sender = useSessionAction(card.sessionId);
+  const taker = useSessionAction(card.sessionId, took);
+  const dismisser = useSessionAction(card.sessionId);
   useReportError("draft-send", sender.error);
   useReportError("draft-take", taker.error);
-  const pending = sender.pending || taker.pending;
+  useReportError("send-failure-dismiss", dismisser.error);
+  const pending = sender.pending || taker.pending || dismisser.pending;
+  // The failed message and the one in the box are one, as the box wraps it.
+  const same =
+    failure !== null &&
+    draft !== null &&
+    squash(failure.text) === squash(draft);
+  const dismiss = () => dismisser.submit("send-failure-dismiss");
+  const inBox = draft && (
+    <Stuck
+      failed={same ? failure : null}
+      text={draft}
+      pending={pending}
+      onDismiss={dismiss}
+      onSend={() => sender.submit("draft-send", { text: draft })}
+      onTake={() => {
+        taking.current = draft;
+        taker.submit("draft-take", { text: draft });
+      }}
+    />
+  );
   return (
-    <div className="flex flex-col gap-1 rounded-md bg-warning/10 px-2 py-1 text-warning-text">
+    <>
+      {failure && !same && (
+        <Stuck
+          failed={failure}
+          text={failure.text}
+          pending={pending}
+          onDismiss={dismiss}
+          onTake={() => {
+            onTake(failure.text);
+            dismiss();
+          }}
+        />
+      )}
+      {inBox}
+    </>
+  );
+}
+
+function Stuck({
+  failed,
+  text,
+  pending,
+  onDismiss,
+  onSend,
+  onTake,
+}: {
+  failed: SendFailure | null;
+  text: string;
+  pending: boolean;
+  onDismiss: () => void;
+  // Only for a message in the chat's prompt box.
+  onSend?: () => void;
+  onTake: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1 rounded-md px-2 py-1",
+        failed
+          ? "bg-destructive/10 text-destructive"
+          : "bg-warning/10 text-warning-text",
+      )}
+    >
       <span className="flex items-center gap-1 font-medium">
-        <MessageSquareWarning className="size-3.5" />
-        Unsent in the chat
+        <MessageSquareWarning className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1">
+          {failed ? "Didn't send" : "Unsent in the chat"}
+        </span>
+        {failed && (
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            title="Dismiss"
+            disabled={pending}
+            onClick={onDismiss}
+          >
+            <X />
+          </Button>
+        )}
       </span>
+      {failed && <span className="break-words">{failed.error}</span>}
       <Faded
         from="start"
         className="sensitive max-h-12 whitespace-pre-wrap text-foreground"
@@ -645,23 +747,22 @@ function UnsentDraft({
         {text}
       </Faded>
       <div className="flex gap-1">
-        <Button
-          size="xs"
-          disabled={pending}
-          onClick={() => sender.submit("draft-send", { text })}
-        >
-          <SendHorizontal />
-          Send
-        </Button>
+        {onSend && (
+          <Button size="xs" disabled={pending} onClick={onSend}>
+            <SendHorizontal />
+            Send
+          </Button>
+        )}
         <Button
           size="xs"
           variant="outline"
           disabled={pending}
-          title="Move it into this card's input, and empty the chat's prompt box"
-          onClick={() => {
-            taking.current = text;
-            taker.submit("draft-take", { text });
-          }}
+          title={
+            onSend
+              ? "Move it into this card's input, and empty the chat's prompt box"
+              : "Move it into this card's input"
+          }
+          onClick={onTake}
         >
           <Pencil />
           Edit
@@ -670,6 +771,9 @@ function UnsentDraft({
     </div>
   );
 }
+
+// Text as a comparison sees it, whatever the box did to its spacing.
+const squash = (text: string) => text.replace(/\s/g, "");
 
 // Errors from a card's own controls: its pin, stop, close or resume, and
 // its rename. Their titles carry them too, but a title only shows on hover,
@@ -1848,6 +1952,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const optimistic = useOptimisticBoard(board.cards);
   const { cards, starting } = optimistic;
   useDoneToasts(cards);
+  useSendFailureToasts(cards);
   useServiceAlerts(board.attention, notifications.enabled);
   // Attention only takes a column while a service needs looking at, and
   // Pinned only while something is pinned.

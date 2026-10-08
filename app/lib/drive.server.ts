@@ -38,11 +38,13 @@ import {
   Session,
   target,
   type Surface,
+  UnsentError,
   writingTo,
 } from "./harness.server.ts";
 import * as macros from "./macros.server.ts";
 import { projectOf } from "./project-colors.ts";
 import type { Alive } from "./protocol.server.ts";
+import { clearFailure, recordFailure } from "./send-failures.server.ts";
 import { recordDispatch } from "./store.server.ts";
 
 const run = promisify(execFile);
@@ -178,7 +180,7 @@ export async function listSurfaces(): Promise<Map<string, Surface>> {
   return new Map([...live].map(([id, l]) => [id, l.surface]));
 }
 
-export { UnsentError } from "./harness.server.ts";
+export { UnsentError };
 
 // Drive a live chat through a macro, as the one writer to its terminal
 // until the macro is done. The surface is always resolved server-side, once
@@ -194,8 +196,16 @@ function driving<T>(
   });
 }
 
+// A message into a chat, from a card or seamux's queue. A failure stays on
+// the chat's card, with the message, until one goes.
 export async function sendMessage(sessionId: string, text: string) {
-  await driving(sessionId, (s) => macros.send(s, text));
+  try {
+    await driving(sessionId, (s) => macros.send(s, text));
+  } catch (err) {
+    recordFailure(sessionId, text, err);
+    throw err;
+  }
+  clearFailure(sessionId);
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
 }
@@ -220,11 +230,20 @@ export async function readDraft(
 // Sends what the chat's prompt box holds, or empties it for the board to
 // edit, provided it still holds `text`, the draft the board showed.
 export async function sendDraft(sessionId: string, text: string) {
-  await driving(sessionId, (s) => macros.sendDraft(s, text));
+  try {
+    await driving(sessionId, (s) => macros.sendDraft(s, text));
+  } catch (err) {
+    // A box that changed since is the board out of date, not a failure.
+    if (err instanceof UnsentError) recordFailure(sessionId, text, err);
+    throw err;
+  }
+  clearFailure(sessionId);
 }
 
+// The message is the card's to send now, so a failure to send it is past.
 export async function takeDraft(sessionId: string, text: string) {
   await driving(sessionId, (s) => macros.takeDraft(s, text));
+  clearFailure(sessionId);
 }
 
 export async function resumeTurn(sessionId: string) {

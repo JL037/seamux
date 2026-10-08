@@ -124,6 +124,8 @@ export interface Card {
   // screen while the chat is at rest: one the board sent that the chat
   // didn't take, or one typed in the terminal.
   unsentDraft: string | null;
+  // The last message the board failed to send the chat, until one goes.
+  sendFailure: SendFailure | null;
   workspaceRef: string | null;
   // What the session was dispatched or forked to do, if seamux started it.
   intent: string | null;
@@ -308,6 +310,14 @@ export const DONE_VISIBLE_MS = 30 * 60 * 1000;
 // Whether the turn is over and no dialog is open, so what's typed lands in
 // an empty prompt box. A reply that ended on a question puts the card in
 // WAITING, but the prompt box is free.
+// A message the board couldn't get into a chat, and why.
+export interface SendFailure {
+  text: string;
+  error: string;
+  // When it failed, which tells one failure from the next.
+  at: number;
+}
+
 export function atRest(card: Card): boolean {
   return card.column === "idle" || card.waiting?.reason === ASKED_IN_REPLY;
 }

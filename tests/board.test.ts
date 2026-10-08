@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { loadBoard, loadMessages } from "~/lib/board.server";
+import { clearFailure, recordFailure } from "~/lib/send-failures.server";
 import { FakeCmux } from "./fake-cmux";
 
 let cmux: FakeCmux;
@@ -342,15 +343,22 @@ it("shows what an idle chat's prompt box holds unsent, and reads no box while a 
   const idle = cmux.addSession(ids.idle).surface;
   idle.screen = box;
   cmux.addSession(ids.working).surface.screen = box;
+  recordFailure(ids.idle, "1 - fair 2 - yes, fix it", new Error("Nope"));
   try {
     const { cards } = await loadBoard();
     const card = (id: string) => cards.find((c) => c.sessionId === id);
     expect(card(ids.idle)?.unsentDraft).toBe("1 - fair\n2 - yes, fix it");
+    expect(card(ids.idle)?.sendFailure).toMatchObject({
+      text: "1 - fair 2 - yes, fix it",
+      error: "Nope",
+    });
+    expect(card(ids.working)?.sendFailure).toBeNull();
     expect(card(ids.working)?.unsentDraft).toBeNull();
     expect(
       cmux.calls("terminal.replay").map((r) => r.params.surface_id),
     ).toEqual([idle.id]);
   } finally {
+    clearFailure(ids.idle);
     rmSync(agents, { force: true });
   }
 });
