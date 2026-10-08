@@ -26,7 +26,15 @@ Sent straight after a burst of about 7,000 characters, typed or pasted, the Ente
 
 - **Measured:** Claude Code 2.1.285.
 - **In seamux:** `submit`, `endsPromptBox` and `readPromptBox` in [harness.server.ts](../app/lib/harness.server.ts): after the Enter, seamux reads the box and tries again while the message is still in it, then gives up with `UnsentError`.
-- **See also:** [A chat can ignore cmux's Enter](#a-chat-can-ignore-cmuxs-enter-while-a-lone-typed-carriage-return-sends).
+- **See also:** [A chat that has fallen behind](#a-chat-that-has-fallen-behind-shows-a-message-seconds-late-and-its-box-reads-empty-meanwhile), [A chat can ignore cmux's Enter](#a-chat-can-ignore-cmuxs-enter-while-a-lone-typed-carriage-return-sends).
+
+## A chat that has fallen behind shows a message seconds late, and its box reads empty meanwhile
+
+Two long-running chats were each left with a reply in the prompt box, unsent, while the board reported it sent: `submit` read the box 300 ms after its Enter, still empty, and took that for sent. The Enter had been lost, and the message showed up in the box afterwards. A chat a few seconds old does the same: a message typed into it showed in the box 0.2 to 4.2 seconds after the last key, against about 55 ms in a chat that had settled. An Enter sent once the box showed the message could still go unanswered for seconds, or be ignored outright, and a send-key Enter some seconds later sent it. Within its first ten or so seconds, such a chat also ignored the keys that empty the box, and took two Enters as line breaks, so three messages typed a few seconds apart went as one. A chat that had settled took six messages in a row, each sent as soon as the turn before ended, with about 570 ms from the first key to the box emptying, and did the same with every core of the Mac busy.
+
+- **Measured:** Claude Code 2.1.294, cmux 0.64.23.
+- **In seamux:** `submit` in [harness.server.ts](../app/lib/harness.server.ts) waits up to `SHOWN_WAIT_MS` for the box to show the message before its Enter, and each try then waits up to `SENT_WAIT_MS` for the box to empty, so a chat that is behind gets its Enter once it has caught up, and an Enter that is lost ends in `UnsentError` rather than passing for sent.
+- **See also:** [An Enter that comes while Claude Code is still taking in a paste is lost](#an-enter-that-comes-while-claude-code-is-still-taking-in-a-paste-is-lost).
 
 ## A lone invisible character holds a message for a second Enter
 

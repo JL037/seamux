@@ -191,6 +191,28 @@ describe("sendMessage", () => {
     ]);
   });
 
+  it("waits for a chat that has fallen behind to show the message before its Enter", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = promptBox("");
+    // The box shows the message only half a second after it is typed: an
+    // Enter before then would be lost, while the box still read empty.
+    let shownAtEnter: boolean | undefined;
+    cmux.onInput((s, i) => {
+      if (i.value === "fix the login")
+        setTimeout(() => (s.screen = promptBox(i.value)), 500);
+      if (i.value === "enter") {
+        shownAtEnter = s.screen.includes("fix the login");
+        s.screen = promptBox("");
+      }
+    });
+    await sendMessage("s", "fix the login");
+    expect(shownAtEnter).toBe(true);
+    expect(input(surface).slice(-2)).toEqual([
+      "text:fix the login",
+      "key:enter",
+    ]);
+  });
+
   it("tries again when Claude Code holds a message it stripped invisible characters from", async () => {
     const { surface } = cmux.addSession("s");
     let tries = 0;
@@ -211,9 +233,23 @@ describe("sendMessage", () => {
     cmux.onInput((s, i) => {
       if (i.kind === "text" && i.value !== "\r") s.screen = promptBox(i.value);
     });
-    await expect(sendMessage("s", "fix the login")).rejects.toBeInstanceOf(
-      UnsentError,
-    );
+    // Each try waits seconds for the box to empty: the clock runs on its
+    // own, and the test moves it on past each wait.
+    vi.useFakeTimers({
+      shouldAdvanceTime: true,
+      toFake: ["setTimeout", "clearTimeout", "Date"],
+    });
+    try {
+      let settled = false;
+      const sent = sendMessage("s", "fix the login").finally(
+        () => (settled = true),
+      );
+      const failed = expect(sent).rejects.toBeInstanceOf(UnsentError);
+      while (!settled) await vi.advanceTimersByTimeAsync(1_000);
+      await failed;
+    } finally {
+      vi.useRealTimers();
+    }
     expect(input(surface).slice(-4)).toEqual([
       "key:enter",
       "text:\r",
@@ -224,7 +260,8 @@ describe("sendMessage", () => {
 
   // A draft in the prompt box, which takes the clearing keys as Claude Code
   // and Codex do: Ctrl+U empties the line, Backspace on an empty one joins
-  // it to the one above, or leaves shell mode in an empty box.
+  // it to the one above, or leaves shell mode in an empty box. Typed text
+  // shows in the box, and Enter empties it.
   const draft = (
     surface: { screen: string },
     lines: string[],
@@ -234,20 +271,25 @@ describe("sendMessage", () => {
       const [first, ...rest] = lines;
       surface.screen = [
         "⏺ ok",
+        "─".repeat(40),
         `${shell ? "!" : lead} ${first}`,
         ...rest.map((l) => `  ${l}`),
-        "",
+        "─".repeat(40),
         "  footer",
       ].join("\n");
     };
     draw();
     cmux.onInput((s, i) => {
-      if (s !== surface || i.kind !== "text") return;
-      if (i.value === "\x15") lines[lines.length - 1] = "";
+      if (s !== surface) return;
+      if (i.value === "enter" || i.value === "\r") lines = [""];
+      else if (i.kind !== "text") return;
+      else if (i.value === "\x15") lines[lines.length - 1] = "";
       else if (i.value === "\x7f") {
         if (lines.length > 1) lines.pop();
         else if (!stuck) shell = false;
-      } else return;
+      } else if (/^[^\x00-\x1f]/.test(i.value))
+        lines[lines.length - 1] += i.value;
+      else return;
       draw();
     });
   };

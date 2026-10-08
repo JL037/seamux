@@ -203,9 +203,13 @@ const LINE_BREAK = /\r\n|\r|\n/;
 const TYPE_CHUNK = 100;
 const TYPE_GAP_MS = 20;
 
-// How long to give a harness to take a message in before checking it went,
-// and how many more times to try sending it when it didn't.
-const SUBMIT_WAIT_MS = 300;
+// A chat that has fallen behind shows a message seconds after it is typed,
+// and empties its box seconds after the Enter. How long to wait for each,
+// how often to look, and how many more times to try sending a message that
+// stays in the box.
+const SHOWN_WAIT_MS = 10_000;
+const SENT_WAIT_MS = 3_000;
+const SCREEN_POLL_MS = 100;
 const SUBMIT_RETRIES = 3;
 
 // Ctrl+E to the end of the line, Ctrl+U to delete back to its start, and
@@ -284,22 +288,44 @@ export class Session {
     }
   }
 
-  // Enter, then, where the box can be read, try again while `text` still
-  // sits in it, and give up with an UnsentError if it stays. Each try is a
-  // carriage return typed on its own, which reaches the harness as written
+  // Enter, once the box shows `text`, then, where the box can be read, try
+  // again while `text` still sits in it, and give up with an UnsentError if
+  // it stays. A chat that has fallen behind shows neither the message nor
+  // its sending for seconds, and drops an Enter that comes before it has
+  // caught up, while a box it hasn't redrawn yet would pass for sent. So the
+  // Enter waits until the box shows the message, or a while, for a box that
+  // never does, and each try waits a while for the box to empty. Each try is
+  // a carriage return typed on its own, which reaches the harness as written
   // rather than through cmux's key encoding: a chat has been seen ignoring
   // cmux's Enter, or taking it as a line break, while a typed carriage return
   // sent. Typed with anything after it, it is taken for a paste and becomes
   // a line break.
   async submit(text: string) {
-    await this.press("enter");
     const unsent = this.harness.unsent;
+    // No input line, as under a dialog, has nothing to wait for.
+    if (unsent)
+      await this.until(
+        (screen) =>
+          unsent(screen, text) || inputArea(screen, this.harness) === null,
+        SHOWN_WAIT_MS,
+      );
+    await this.press("enter");
     if (!unsent) return;
     for (let tries = 0; ; tries++) {
-      await pause(SUBMIT_WAIT_MS);
-      if (!unsent(await this.screen(), text)) return;
+      if (await this.until((screen) => !unsent(screen, text), SENT_WAIT_MS))
+        return;
       if (tries === SUBMIT_RETRIES) throw new UnsentError();
       await this.keys("\r");
+    }
+  }
+
+  // Whether the screen comes to satisfy `done` within `ms`.
+  private async until(done: (screen: string) => boolean, ms: number) {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      if (done(await this.screen())) return true;
+      if (Date.now() >= deadline) return false;
+      await pause(SCREEN_POLL_MS);
     }
   }
 
