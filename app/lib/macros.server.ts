@@ -16,6 +16,26 @@ export async function send(s: Session, text: string) {
   await s.submit(text);
 }
 
+// A message left unsent in the prompt box, sent as it stands, or emptied
+// from it for the board to edit. Either only while the box still holds
+// `text`, the draft the board showed: it may have been sent or changed in
+// the terminal since.
+export async function sendDraft(s: Session, text: string) {
+  await holding(s, text);
+  await s.submit(text);
+}
+
+export async function takeDraft(s: Session, text: string) {
+  await holding(s, text);
+  await s.clearInput();
+}
+
+async function holding(s: Session, text: string) {
+  if (!s.harness.unsent?.(await s.screen(), text)) {
+    throw new Error("The chat's prompt box no longer holds that message");
+  }
+}
+
 // Picks a turn back up where something outside the chat cut it short, an
 // expired login or a failed request: one line telling the model to carry on.
 export async function resume(s: Session) {

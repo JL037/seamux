@@ -20,14 +20,21 @@ import {
   interrupt,
   listLive,
   readDialog,
+  readDraft,
   renameLive,
   resume,
   resumeTurn,
+  sendDraft,
   sendMessage,
+  takeDraft,
   UnsentError,
 } from "~/lib/drive.server";
-import { HARNESSES } from "~/lib/harness.server";
-import { FakeCmux, type FakeSurface } from "./fake-cmux";
+import {
+  HARNESSES,
+  promptBoxDraft,
+  type ReplayGrid,
+} from "~/lib/harness.server";
+import { FakeCmux, plainGrid, type FakeSurface } from "./fake-cmux";
 
 let cmux: FakeCmux;
 
@@ -45,7 +52,7 @@ afterEach(async () => {
   // whatever seamux runs in (CLAUDE.md).
   for (const r of cmux.requests) {
     if (
-      /^(surface\.(send_text|send_key|read_text|close)|terminal\.paste)$/.test(
+      /^(surface\.(send_text|send_key|read_text|close)|terminal\.(paste|replay))$/.test(
         r.method,
       )
     ) {
@@ -122,6 +129,112 @@ describe("listLive", () => {
     } finally {
       rmSync(agents, { force: true });
     }
+  });
+});
+
+describe("promptBoxDraft", () => {
+  // Claude Code's prompt box on a terminal 30 columns wide, so 28 cells to
+  // a row: the rows as drawn, each led by "❯ " or by two spaces.
+  const box = (...rows: string[]) =>
+    plainGrid(
+      ["⏺ ok", "─".repeat(30), ...rows, "─".repeat(30), "  ⏵⏵ auto mode"].join(
+        "\n",
+      ),
+      30,
+    );
+
+  it("reads a one-line draft", () => {
+    expect(promptBoxDraft(box("❯ fix the login"))).toBe("fix the login");
+  });
+
+  it("joins a row the box wrapped at a word with a space", () => {
+    // "the" would have taken the first row past 28 cells.
+    expect(
+      promptBoxDraft(box("❯ fix the login page before", "  the demo")),
+    ).toBe("fix the login page before the demo");
+  });
+
+  it("joins a word the box broke where its row was full", () => {
+    const word = "x".repeat(40);
+    expect(
+      promptBoxDraft(box(`❯ ${word.slice(0, 26)}`, `  ${word.slice(26)}`)),
+    ).toBe(word);
+  });
+
+  it("keeps a line break typed where the next word would have fit, and a blank line", () => {
+    expect(promptBoxDraft(box("❯ 1 - fair", "  2 - yes", "", "  thanks"))).toBe(
+      "1 - fair\n2 - yes\n\nthanks",
+    );
+  });
+
+  it("leaves out faint text: the placeholder, or a suggestion of what to send", () => {
+    const grid: ReplayGrid = {
+      columns: 30,
+      row_spans: [
+        { row: 0, column: 0, text: "─".repeat(30), cell_width: 30, style_id: 0 },
+        { row: 1, column: 0, text: "❯ ", cell_width: 2, style_id: 0 },
+        { row: 1, column: 2, text: "go ahead with 1-3", cell_width: 17, style_id: 1 },
+        { row: 2, column: 0, text: "─".repeat(30), cell_width: 30, style_id: 0 },
+      ],
+      styles: [
+        { id: 0, faint: false },
+        { id: 1, faint: true },
+      ],
+    };
+    expect(promptBoxDraft(grid)).toBeNull();
+  });
+
+  it("reads nothing from an empty box, one in shell mode, or a screen without one", () => {
+    expect(promptBoxDraft(box("❯"))).toBeNull();
+    expect(promptBoxDraft(box("! ls"))).toBeNull();
+    expect(promptBoxDraft(plainGrid(" Do you want to proceed?\n ❯ 1. Yes"))).toBeNull();
+  });
+});
+
+describe("unsent drafts", () => {
+  const promptBox = (text: string) =>
+    ["⏺ ok", "─".repeat(40), `❯ ${text}`, "─".repeat(40), "  footer"].join("\n");
+  // A box that empties on Enter or once its lines are deleted.
+  const emptying = (s: FakeSurface, i: { kind: string; value: string }) => {
+    if (i.value === "enter" || i.value === "\r" || i.value === "\x15")
+      s.screen = promptBox("");
+  };
+
+  it("reads what the chat's prompt box holds", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = promptBox("fix the login");
+    const live = (await listLive()).get("s")!;
+    expect(await readDraft("s", live.surface, "claude")).toBe("fix the login");
+    expect(await readDraft("s", live.surface, "codex")).toBeNull();
+  });
+
+  it("sends it with Enter, typing nothing", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = promptBox("fix the login");
+    cmux.onInput(emptying);
+    await sendDraft("s", "fix the login");
+    expect(input(surface)).toEqual(["key:enter"]);
+  });
+
+  it("empties the box for the board to edit it", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = promptBox("fix the login");
+    cmux.onInput(emptying);
+    await takeDraft("s", "fix the login");
+    expect(surface.screen).toBe(promptBox(""));
+    expect(input(surface)).not.toContain("key:enter");
+  });
+
+  it("leaves a box alone that no longer holds the draft the board showed", async () => {
+    const { surface } = cmux.addSession("s");
+    surface.screen = promptBox("something newer");
+    await expect(sendDraft("s", "fix the login")).rejects.toThrow(
+      /no longer holds/,
+    );
+    await expect(takeDraft("s", "fix the login")).rejects.toThrow(
+      /no longer holds/,
+    );
+    expect(input(surface)).toEqual([]);
   });
 });
 

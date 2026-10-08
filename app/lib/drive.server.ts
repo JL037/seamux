@@ -34,9 +34,11 @@ import {
   HARNESSES,
   pause,
   readScreen,
+  type ReplayGrid,
   Session,
   target,
   type Surface,
+  writingTo,
 } from "./harness.server.ts";
 import * as macros from "./macros.server.ts";
 import { projectOf } from "./project-colors.ts";
@@ -196,6 +198,33 @@ export async function sendMessage(sessionId: string, text: string) {
   await driving(sessionId, (s) => macros.send(s, text));
   // New skills on disk: the inputs' slash commands must be listed again.
   if (/^\/reload-skills\b/.test(text)) forgetCommands();
+}
+
+// What a chat's prompt box holds that was typed and never sent, as a
+// message the board sent and the chat didn't take, for a harness whose box
+// can be read that closely. Not while a macro types into it.
+export async function readDraft(
+  sessionId: string,
+  surface: Surface,
+  engine: Engine,
+): Promise<string | null> {
+  const draft = HARNESSES[engine].draft;
+  if (!draft || writingTo(sessionId)) return null;
+  const { render_grid } = await rpc<{ render_grid: ReplayGrid }>(
+    "terminal.replay",
+    target(surface),
+  );
+  return draft(render_grid);
+}
+
+// Sends what the chat's prompt box holds, or empties it for the board to
+// edit, provided it still holds `text`, the draft the board showed.
+export async function sendDraft(sessionId: string, text: string) {
+  await driving(sessionId, (s) => macros.sendDraft(s, text));
+}
+
+export async function takeDraft(sessionId: string, text: string) {
+  await driving(sessionId, (s) => macros.takeDraft(s, text));
 }
 
 export async function resumeTurn(sessionId: string) {

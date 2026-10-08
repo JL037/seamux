@@ -21,6 +21,8 @@ import { randomUUID } from "node:crypto";
 import { rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 
+import type { ReplayGrid } from "~/lib/harness.server";
+
 export interface Request {
   method: string;
   params: Record<string, unknown>;
@@ -32,6 +34,9 @@ export interface FakeSurface {
   id: string;
   // What surface.read_text returns: the terminal's screen.
   screen: string;
+  // What terminal.replay returns, when a test needs styles; otherwise the
+  // screen, each line one run of plain text.
+  grid?: ReplayGrid;
   // What was typed, pasted or pressed in it, in order.
   input: { kind: "text" | "paste" | "key"; value: string }[];
 }
@@ -87,6 +92,7 @@ const SURFACE_METHODS = new Set([
   "surface.read_text",
   "surface.close",
   "terminal.paste",
+  "terminal.replay",
 ]);
 
 export class FakeCmux {
@@ -332,6 +338,17 @@ export class FakeCmux {
           workspace_id: params.workspace_id,
         };
       }
+      case "terminal.replay": {
+        const surface = this.surfaceIn(
+          this.workspaceById(params.workspace_id),
+          params.surface_id,
+        );
+        return {
+          render_grid: surface.grid ?? plainGrid(surface.screen),
+          surface_id: surface.id,
+          workspace_id: params.workspace_id,
+        };
+      }
       case "surface.send_text":
       case "terminal.paste":
       case "surface.send_key": {
@@ -372,4 +389,18 @@ export class FakeCmux {
     if (!surface) throw new Refusal("invalid_params", "Surface is not a terminal");
     return surface;
   }
+}
+
+// A screen as terminal.replay draws it, every line one run in the plain
+// style, on a terminal 80 columns wide.
+export function plainGrid(screen: string, columns = 80): ReplayGrid {
+  return {
+    columns,
+    row_spans: screen.split("\n").flatMap((text, row) =>
+      text
+        ? [{ row, column: 0, text, cell_width: Array.from(text).length, style_id: 0 }]
+        : [],
+    ),
+    styles: [{ id: 0, faint: false }],
+  };
 }

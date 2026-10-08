@@ -79,9 +79,19 @@ Typing `!` first in Claude Code's prompt box puts it in shell mode: the box is l
 
 After a turn, Claude Code can fill an empty prompt box with a suggestion of what to send next, such as `go ahead with 1-3` after a reply asking "Should I go ahead with 1–3?". It doesn't come after every turn. `surface.read_text` gives it as plain text after `❯ `, exactly as if it had been typed, and it once passed for a reply the user had typed and not sent. `terminal.replay` tells the two apart. Its `render_grid` has `row_spans`, each with a `style_id` into `styles`, and a `cursor`. The suggestion's span is `faint: true`, and the cursor stays at column 2, just after `❯ `. Typed text has `faint: false`, and the cursor sits after it. Typing anything clears the suggestion, even a prefix of it. Nothing in the transcript records it.
 
-- **Measured:** Claude Code 2.1.289, cmux 0.64.23.
-- **In seamux:** nothing yet. `readPromptBox` in [harness.server.ts](../app/lib/harness.server.ts) reads the box through `surface.read_text`, but only `submit` uses it, right after Enter, while the turn runs and no suggestion shows.
-- **See also:** [A prompt box in shell mode runs what it holds](#a-prompt-box-in-shell-mode-runs-what-it-holds-as-shell-commands).
+The empty box's placeholder, `Try "…"`, is faint too.
+
+- **Measured:** Claude Code 2.1.289, cmux 0.64.23; the placeholder on Claude Code 2.1.294.
+- **In seamux:** `promptBoxDraft` in [harness.server.ts](../app/lib/harness.server.ts) leaves faint text out of a draft. `submit` reads the box through `surface.read_text`, right after Enter, while the turn runs and no suggestion shows.
+- **See also:** [A message unsent in the prompt box](#a-message-unsent-in-the-prompt-box-reads-back-from-the-screen-with-its-line-breaks), [A prompt box in shell mode runs what it holds](#a-prompt-box-in-shell-mode-runs-what-it-holds-as-shell-commands).
+
+## A message unsent in the prompt box reads back from the screen, with its line breaks
+
+A row of Claude Code's box is the terminal's width less 2 cells, its first two cells `❯ ` or two spaces. Claude Code wraps a draft at words, and breaks a word longer than a row where the row is full, so a row that ends short of the width with room for the next row's first word was ended by a typed line break, and a blank row is a blank line. Read that way off `terminal.replay`, two replies left unsent in long-running chats came back exactly as typed, blank line and all, and so did a 300-character word and a two-line draft in a fresh one. Moving a draft out of the box is Ctrl+E, Ctrl+U and Backspace, as for any draft, and sending it as it stands is Enter alone.
+
+- **Measured:** Claude Code 2.1.294, cmux 0.64.23.
+- **In seamux:** `promptBoxDraft` in [harness.server.ts](../app/lib/harness.server.ts), read by `readDraft` in [drive.server.ts](../app/lib/drive.server.ts) for each chat at rest into its card's `unsentDraft`; `sendDraft` and `takeDraft` in [macros.server.ts](../app/lib/macros.server.ts), each only while the box still holds the draft the card showed.
+- **See also:** [`terminal.replay` draws the screen as runs of styled text](cmux.md#terminalreplay-draws-the-screen-as-runs-of-styled-text-where-surfaceread_text-has-only-the-text), [A chat that has fallen behind](#a-chat-that-has-fallen-behind-shows-a-message-seconds-late-and-its-box-reads-empty-meanwhile).
 
 ## Ctrl+E, Ctrl+U and Backspace empty a prompt box a line at a time, in Claude Code and Codex alike
 

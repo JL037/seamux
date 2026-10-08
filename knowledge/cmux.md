@@ -53,6 +53,14 @@ A chat started by hand, though, leaves its shell prompt behind after `/exit`, so
 - **In seamux:** `closeChat` in [drive.server.ts](../app/lib/drive.server.ts).
 - **See also:** [`/exit` exits too, and the workspace closes a moment after cmux reports the session over](codex.md#exit-exits-too-and-the-workspace-closes-a-moment-after-cmux-reports-the-session-over).
 
+## `terminal.replay` draws the screen as runs of styled text, where `surface.read_text` has only the text
+
+Its `render_grid` has the terminal's `columns`, `row_spans` (each a run of text in one style, with its `row`, `column`, `cell_width` and `style_id`), `styles` (each with its `id` and flags such as `faint`) and the `cursor`. A row with nothing on it has no span. It says nothing of where a row's text was wrapped: a typed line break and a wrapped row look alike, and only how full the row is tells them apart ([A message unsent in the prompt box](prompt-box.md#a-message-unsent-in-the-prompt-box-reads-back-from-the-screen-with-its-line-breaks)).
+
+- **Measured:** cmux 0.64.23.
+- **In seamux:** `readDraft` in [drive.server.ts](../app/lib/drive.server.ts), `ReplayGrid` and `promptBoxDraft` in [harness.server.ts](../app/lib/harness.server.ts); `terminal.replay` in [tests/fake-cmux.ts](../tests/fake-cmux.ts) and [tests-cmux/contract.test.ts](../tests-cmux/contract.test.ts).
+- **See also:** [A suggested next prompt reads as a draft on the screen](prompt-box.md#a-suggested-next-prompt-reads-as-a-draft-on-the-screen-and-only-its-faint-style-and-the-cursor-tell-it-apart).
+
 ## `surface.close` refuses a workspace's last tab
 
 It answers `Cannot close the last surface`, so for the last tab seamux calls `workspace.close` instead.

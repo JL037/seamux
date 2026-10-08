@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { CMUX_BIN } from "~/lib/bins.server";
 import { CmuxError, cmuxCli, cmuxRpc } from "~/lib/cmux.server";
+import type { ReplayGrid } from "~/lib/harness.server";
 import { KEYS } from "../tests/fake-cmux";
 import {
   closeThrowaways,
@@ -146,6 +147,33 @@ describe("surfaces", () => {
       t.target,
     );
     expect(result.text).toEqual(expect.any(String));
+  });
+
+  // readDraft(): the prompt box, less the faint text that typed text never
+  // is, Claude Code's placeholder and its suggestion of what to send.
+  it("terminal.replay draws the screen as runs of text, the faint ones marked", async () => {
+    const m = marker("replay");
+    const t = await throwaway(
+      `printf 'plain-${m} \\033[2mfaint-${m}\\033[0m\\n'; sleep 30`,
+    );
+    await shows(t, `faint-${m}`);
+    const { render_grid: grid } = await cmuxRpc<{ render_grid: ReplayGrid }>(
+      "terminal.replay",
+      t.target,
+    );
+    expect(grid.columns).toEqual(expect.any(Number));
+    const faint = new Set(
+      grid.styles.filter((s) => s.faint).map((s) => s.id),
+    );
+    const span = (text: string) =>
+      grid.row_spans.find((s) => s.text.includes(text))!;
+    expect(span(`plain-${m}`)).toMatchObject({
+      row: expect.any(Number),
+      column: 0,
+      cell_width: expect.any(Number),
+    });
+    expect(faint.has(span(`plain-${m}`).style_id)).toBe(false);
+    expect(faint.has(span(`faint-${m}`).style_id)).toBe(true);
   });
 
   // sendMessage(), answerQuestion(): typed text, then Enter.

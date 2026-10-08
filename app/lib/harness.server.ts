@@ -39,6 +39,10 @@ export interface Harness {
   // Whether a message still sits in the prompt box after its Enter, for a
   // harness whose box can be read that closely.
   unsent?: (screen: string, text: string) => boolean;
+  // What its prompt box holds that was typed and never sent, read off the
+  // screen as cmux's terminal.replay draws it, for a harness whose box can
+  // be read that closely.
+  draft?: (grid: ReplayGrid) => string | null;
   // What approves a permission prompt.
   approveKey: string;
   // Launching it: the agent, cmux's wrapper for it, the dialog a new folder
@@ -88,6 +92,7 @@ export const HARNESSES: Record<Engine, Harness> = {
     inputLead: "❯",
     typesMessages: true,
     unsent: endsPromptBox,
+    draft: promptBoxDraft,
     // 1 is always "Yes".
     approveKey: "1",
     bin: "claude",
@@ -360,6 +365,12 @@ export class Session {
 // order they were asked for.
 const writing = new Map<string, Promise<unknown>>();
 
+// Whether a macro is typing into the chat now, when its prompt box holds
+// what the macro is part way through.
+export function writingTo(sessionId: string): boolean {
+  return writing.has(sessionId);
+}
+
 export function exclusive<T>(
   sessionId: string,
   fn: () => Promise<T>,
@@ -417,4 +428,62 @@ export function endsPromptBox(screen: string, text: string): boolean {
   const box = readPromptBox(screen);
   const tail = Array.from(text.replace(UNSEEN, "")).slice(-20).join("");
   return box !== null && tail.length > 0 && box.text.endsWith(tail);
+}
+
+// The screen as cmux's terminal.replay draws it: each run of text in one
+// style, by the row and column it starts at, and the styles they use.
+export interface ReplayGrid {
+  columns: number;
+  row_spans: {
+    row: number;
+    column: number;
+    text: string;
+    cell_width: number;
+    style_id: number;
+  }[];
+  styles: { id: number; faint: boolean }[];
+}
+
+// What Claude Code's prompt box holds, as typed: the rows between the last
+// two rules, the first led by "❯", less the two columns that lead each row.
+// Faint text is left out: the box's placeholder and its suggestion of what
+// to send next are faint, and typed text never is. A row of the box is
+// `columns` - 2 cells wide. A long word is broken where the row is full,
+// and other text before the word that wouldn't fit, so a row that ends
+// short of that is where a line break was typed. Null for an empty box, one
+// in shell mode, or a screen without one, as under a dialog.
+export function promptBoxDraft(grid: ReplayGrid): string | null {
+  const faint = new Set(grid.styles.filter((s) => s.faint).map((s) => s.id));
+  const rows = new Map<number, { text: string; cells: number }>();
+  for (const span of [...grid.row_spans].sort((a, b) => a.column - b.column)) {
+    const row = rows.get(span.row) ?? { text: "", cells: 0 };
+    if (!faint.has(span.style_id)) {
+      row.text += " ".repeat(Math.max(0, span.column - row.cells)) + span.text;
+      row.cells = span.column + span.cell_width;
+    }
+    rows.set(span.row, row);
+  }
+  const last = Math.max(-1, ...rows.keys());
+  const lines = Array.from(
+    { length: last + 1 },
+    (_, i) => rows.get(i)?.text.trimEnd() ?? "",
+  );
+  const rules = lines.flatMap((l, i) =>
+    /^[─━▔]{8,}/.test(l.trimStart()) ? [i] : [],
+  );
+  const [top, bottom] = rules.slice(-2);
+  if (bottom === undefined || !lines[top + 1].startsWith("❯")) return null;
+  const width = grid.columns - 2;
+  const box = lines.slice(top + 1, bottom);
+  let draft = "";
+  for (const [i, line] of box.entries()) {
+    const text = line.slice(2);
+    if (i > 0) {
+      const above = Array.from(box[i - 1]).length;
+      const word = Array.from(/^\S*/.exec(text)![0]).length;
+      draft += above >= width ? "" : above + 1 + word > width ? " " : "\n";
+    }
+    draft += text;
+  }
+  return draft.trim() || null;
 }

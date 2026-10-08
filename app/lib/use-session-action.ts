@@ -24,13 +24,16 @@ type Intent =
   | "queue"
   | "queue-edit"
   | "queue-send"
-  | "queue-drop";
+  | "queue-drop"
+  | "draft-send"
+  | "draft-take";
 
 // Where each verb puts the card, shown as it is sent, ahead of the poll.
 // Answering a question or approving a tool sets the turn going again.
 const MOVES: Partial<Record<Intent, Column>> = {
   send: "working",
   "queue-send": "working",
+  "draft-send": "working",
   answer: "working",
   approve: "working",
   interrupt: "idle",

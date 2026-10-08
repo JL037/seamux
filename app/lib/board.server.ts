@@ -45,6 +45,7 @@ import {
   listLive,
   readCodexApproval,
   readDialog,
+  readDraft,
   type LiveSession,
   type Surface,
 } from "./drive.server";
@@ -915,6 +916,13 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
           waiting.approval = null;
         }
       }
+      // At rest, the chat's prompt box may hold a message never sent.
+      const atRest =
+        !busy && (waiting === null || waiting.reason === ASKED_IN_REPLY);
+      const unsentDraft =
+        atRest && surface
+          ? await readDraft(row.sessionId, surface, "claude").catch(() => null)
+          : null;
       return {
         sessionId: row.sessionId,
         engine: "claude",
@@ -928,6 +936,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastReply: summary?.lastReply ?? null,
         context: summary?.context ?? null,
         terminalQueue: summary?.queued ?? [],
+        unsentDraft,
         boardQueue: [],
         workspaceRef: ws?.ref ?? null,
         intent: null,
@@ -1018,6 +1027,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
         lastReply: s.lastReply,
         context: s.context,
         terminalQueue: [],
+        unsentDraft: null,
         boardQueue: [],
         workspaceRef: null,
         intent: null,
@@ -1150,6 +1160,7 @@ function codexFields(
     lastReply: s.lastReply,
     context: s.context,
     terminalQueue: [],
+    unsentDraft: null,
     boardQueue: [],
     workspaceRef: null,
     intent: null,

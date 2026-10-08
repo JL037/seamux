@@ -287,3 +287,70 @@ it("takes a task notification after its answered hand-back as no turn", async ()
     rmSync(agents, { force: true });
   }
 });
+
+it("shows what an idle chat's prompt box holds unsent, and reads no box while a turn runs", async () => {
+  const project = join(process.env.HOME!, ".claude/projects/-work");
+  mkdirSync(project, { recursive: true });
+  const ids = {
+    idle: "6b1f2e3a-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
+    working: "7c2a3f4b-5d6e-4f70-9b8c-1d2e3f4a5b6c",
+  };
+  // One turn over, and one under way on a prompt just sent.
+  writeFileSync(
+    join(project, `${ids.idle}.jsonl`),
+    JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-01-01T00:00:00Z",
+      message: {
+        role: "assistant",
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "Done." }],
+      },
+    }) + "\n",
+  );
+  writeFileSync(
+    join(project, `${ids.working}.jsonl`),
+    JSON.stringify({
+      type: "user",
+      timestamp: "2026-01-01T00:00:00Z",
+      message: { role: "user", content: "fix the login" },
+    }) + "\n",
+  );
+  const agents = process.env.SEAMUX_TEST_CLAUDE_AGENTS!;
+  writeFileSync(
+    agents,
+    JSON.stringify(
+      Object.entries(ids).map(([status, sessionId], pid) => ({
+        pid: pid + 1,
+        cwd: "/work",
+        kind: "interactive",
+        startedAt: 0,
+        sessionId,
+        name: status,
+        status: status === "working" ? "busy" : "idle",
+      })),
+    ),
+  );
+  const box = [
+    "⏺ Done.",
+    "─".repeat(40),
+    "❯ 1 - fair",
+    "  2 - yes, fix it",
+    "─".repeat(40),
+    "  ⏵⏵ auto mode on",
+  ].join("\n");
+  const idle = cmux.addSession(ids.idle).surface;
+  idle.screen = box;
+  cmux.addSession(ids.working).surface.screen = box;
+  try {
+    const { cards } = await loadBoard();
+    const card = (id: string) => cards.find((c) => c.sessionId === id);
+    expect(card(ids.idle)?.unsentDraft).toBe("1 - fair\n2 - yes, fix it");
+    expect(card(ids.working)?.unsentDraft).toBeNull();
+    expect(
+      cmux.calls("terminal.replay").map((r) => r.params.surface_id),
+    ).toEqual([idle.id]);
+  } finally {
+    rmSync(agents, { force: true });
+  }
+});

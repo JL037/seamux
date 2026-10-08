@@ -18,6 +18,8 @@ import {
   renameClosed,
   renameLive,
   resume,
+  sendDraft,
+  takeDraft,
   UnsentError,
 } from "~/lib/drive.server";
 import { assertFromBoard, SESSION_ID } from "~/lib/guard.server";
@@ -52,6 +54,8 @@ const INTENTS = new Set([
   "queue-edit",
   "queue-send",
   "queue-drop",
+  "draft-send",
+  "draft-take",
 ]);
 const MAX_MESSAGE = 100_000;
 
@@ -153,6 +157,10 @@ async function perform(
       if (!(err instanceof UnsentError)) restoreQueued(row);
       throw err;
     }
+  } else if (intent === "draft-send") {
+    await sendDraft(sessionId, messageText(form));
+  } else if (intent === "draft-take") {
+    await takeDraft(sessionId, messageText(form));
   } else if (intent === "queue-drop") {
     takeQueued(queuedId(form), sessionId);
   } else if (intent === "close") {

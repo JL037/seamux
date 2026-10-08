@@ -120,6 +120,10 @@ export interface Card {
   terminalQueue: string[];
   // Messages seamux holds for the chat, sent in order once it is idle.
   boardQueue: QueuedMessage[];
+  // A message typed into the chat's prompt box and never sent, read off its
+  // screen while the chat is at rest: one the board sent that the chat
+  // didn't take, or one typed in the terminal.
+  unsentDraft: string | null;
   workspaceRef: string | null;
   // What the session was dispatched or forked to do, if seamux started it.
   intent: string | null;

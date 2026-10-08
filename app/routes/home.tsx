@@ -21,6 +21,7 @@ import {
   LoaderCircle,
   Maximize2,
   MessageSquare,
+  MessageSquareWarning,
   Pencil,
   Eye,
   EyeOff,
@@ -481,8 +482,25 @@ function ChatInput({
     </Button>
   );
 
+  // A message stuck in the chat's own prompt box, moved here to edit: after
+  // whatever this input already holds.
+  const moveIn = useCallback(
+    (text: string) => {
+      const before = current.current.trimEnd();
+      putDraft(before ? `${before}\n${text}` : text);
+    },
+    [putDraft],
+  );
+
   return (
     <div className="flex flex-col gap-1">
+      {card.unsentDraft && card.drivable && (
+        <UnsentDraft
+          sessionId={card.sessionId}
+          text={card.unsentDraft}
+          onTake={moveIn}
+        />
+      )}
       {/* A phone's card has no room to write in, so it opens the chat,
           with the context bar hung under it as it is under the input. */}
       <div className="flex flex-col md:hidden">
@@ -593,6 +611,64 @@ function ChatInput({
 
 function ActionError({ error }: { error: string }) {
   return <p className="text-destructive">{error}</p>;
+}
+
+// A message left in the chat's prompt box and never sent, such as one the
+// board sent that the chat didn't take: sent from here as it stands, or
+// moved into the card's input to edit, emptying the chat's box.
+function UnsentDraft({
+  sessionId,
+  text,
+  onTake,
+}: {
+  sessionId: string;
+  text: string;
+  onTake: (text: string) => void;
+}) {
+  const taking = useRef("");
+  const took = useCallback(() => onTake(taking.current), [onTake]);
+  const sender = useSessionAction(sessionId);
+  const taker = useSessionAction(sessionId, took);
+  useReportError("draft-send", sender.error);
+  useReportError("draft-take", taker.error);
+  const pending = sender.pending || taker.pending;
+  return (
+    <div className="flex flex-col gap-1 rounded-md bg-warning/10 px-2 py-1 text-warning-text">
+      <span className="flex items-center gap-1 font-medium">
+        <MessageSquareWarning className="size-3.5" />
+        Unsent in the chat
+      </span>
+      <Faded
+        from="start"
+        className="sensitive max-h-12 whitespace-pre-wrap text-foreground"
+      >
+        {text}
+      </Faded>
+      <div className="flex gap-1">
+        <Button
+          size="xs"
+          disabled={pending}
+          onClick={() => sender.submit("draft-send", { text })}
+        >
+          <SendHorizontal />
+          Send
+        </Button>
+        <Button
+          size="xs"
+          variant="outline"
+          disabled={pending}
+          title="Move it into this card's input, and empty the chat's prompt box"
+          onClick={() => {
+            taking.current = text;
+            taker.submit("draft-take", { text });
+          }}
+        >
+          <Pencil />
+          Edit
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 // Errors from a card's own controls: its pin, stop, close or resume, and
