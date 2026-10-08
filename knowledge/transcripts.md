@@ -33,3 +33,10 @@ The transcript logs the command as a user turn `<bash-input>…</bash-input>` an
 - **Measured:** Claude Code 2.1.283.
 - **In seamux:** `BACKGROUNDED` and `shellOutput` in [board.server.ts](../app/lib/board.server.ts).
 - **See also:** [A prompt box in shell mode runs what it holds as shell commands](prompt-box.md#a-prompt-box-in-shell-mode-runs-what-it-holds-as-shell-commands), [`claude auth login` needs no terminal](signing-in.md#claude-auth-login-needs-no-terminal).
+
+## A prompt command is logged as tags, its name before or after by kind
+
+A slash command that prompts the model, such as a skill or `/opsx:apply`, is a user turn `<command-message>name</command-message>\n<command-name>/name</command-name>`, with `\n<command-args>…</command-args>` when anything followed the name, and its expansion comes next as an `isMeta` message. A local command, such as `/rename`, `/compact` or `/model`, opens with `<command-name>` instead, followed by `<local-command-stdout>` turns. Which tag comes first is the only thing that tells the two apart. The chat log shows a prompt command as `/name args`, as it was typed, and leaves local commands out.
+
+- **Measured:** Claude Code 2.1.295, across every transcript on this Mac.
+- **In seamux:** `promptCommand` in [board.server.ts](../app/lib/board.server.ts).

@@ -233,6 +233,18 @@ function textOf(content: unknown): string | null {
 const SYNTHETIC_PROMPT =
   /^(<(local-command|command-|system-reminder|bash-|task-notification)|This session is being continued from a previous conversation|\[Request interrupted)/;
 
+// A prompt command, such as a skill, as the user typed it: Claude Code logs
+// `/name args` as <command-message> first, then <command-name> and
+// <command-args>. A local command, such as /rename, starts with
+// <command-name> and stays out of the chat.
+function promptCommand(text: string): string | null {
+  if (!text.startsWith("<command-message>")) return null;
+  const name = tagged(text, "command-name")?.trim();
+  if (!name) return null;
+  const args = tagged(text, "command-args")?.trim();
+  return args ? `${name} ${args}` : name;
+}
+
 // What the harness queues for the chat on its own: background task and
 // subagent hand-backs. The rest of the queue is prompts the user typed.
 const HARNESS_QUEUED = /^<(task-notification|agent-message)[\s>]/;
@@ -423,12 +435,13 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     if (o.type === "assistant" && !summary.lastReply) {
       summary.lastReply = replyExcerpt(text);
     }
+    const command = o.type === "user" ? promptCommand(text.trimStart()) : null;
     if (
       o.type === "user" &&
       !summary.lastPrompt &&
-      !SYNTHETIC_PROMPT.test(text.trimStart())
+      (command || !SYNTHETIC_PROMPT.test(text.trimStart()))
     ) {
-      summary.lastPrompt = excerpt(unwrapPasted(text));
+      summary.lastPrompt = excerpt(command ?? unwrapPasted(text));
       summary.lastPromptAt = Date.parse(o.timestamp) || null;
     }
     if (
@@ -579,10 +592,11 @@ async function loadClaudeMessages(path: string): Promise<ChatMessage[]> {
         ran.output = await shellOutput(text);
       continue;
     }
-    if (o.type === "user" && SYNTHETIC_PROMPT.test(text)) continue;
+    const command = o.type === "user" ? promptCommand(text) : null;
+    if (o.type === "user" && !command && SYNTHETIC_PROMPT.test(text)) continue;
     messages.push({
       role: o.type,
-      text: clip(o.type === "user" ? unwrapPasted(text) : text),
+      text: clip(command ?? (o.type === "user" ? unwrapPasted(text) : text)),
       at: o.timestamp ?? null,
     });
   }

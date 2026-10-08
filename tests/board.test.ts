@@ -156,6 +156,36 @@ it("shows `!` commands, and what a backgrounded one wrote", async () => {
   ]);
 });
 
+it("shows a prompt command as typed, and leaves local commands out", async () => {
+  // As Claude Code 2.1.295 logs them: a prompt command's line, then its
+  // expansion as a meta message; a local command starts with its name.
+  const sessionId = "3f0e8c1a-5b2d-4c3e-9f41-2a7d6b8e0c18";
+  const project = join(process.env.HOME!, ".claude/projects/-work");
+  mkdirSync(project, { recursive: true });
+  const user = (content: string, at: string, extra = {}) =>
+    JSON.stringify({ type: "user", timestamp: at, message: { role: "user", content }, ...extra });
+  writeFileSync(
+    join(project, `${sessionId}.jsonl`),
+    [
+      user(
+        "<command-name>/rename</command-name>\n            <command-message>rename</command-message>\n            <command-args>demo</command-args>",
+        "2026-01-01T00:00:00Z",
+      ),
+      user("<command-message>opsx:apply</command-message>\n<command-name>/opsx:apply</command-name>", "2026-01-01T00:00:01Z"),
+      user("Implement tasks from an OpenSpec change.", "2026-01-01T00:00:01Z", { isMeta: true }),
+      user(
+        "<command-message>push</command-message>\n<command-name>/push</command-name>\n<command-args>now</command-args>",
+        "2026-01-01T00:00:02Z",
+      ),
+    ].join("\n") + "\n",
+  );
+
+  expect(await loadMessages(sessionId)).toEqual([
+    { role: "user", text: "/opsx:apply", at: "2026-01-01T00:00:01Z" },
+    { role: "user", text: "/push now", at: "2026-01-01T00:00:02Z" },
+  ]);
+});
+
 it("offers a tool's own No/Yes confirmation as its options, not Approve", async () => {
   // As Claude Code 2.1.289 shows the Artifact tool's delete: unnumbered,
   // No first, and digits do nothing, so Approve's 1 would never answer it.
