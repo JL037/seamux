@@ -136,7 +136,7 @@ async function perform(
 ): Promise<string | void> {
   if (intent === "send") {
     const text = await withAttachments(sessionId, messageText(form), form);
-    await sendOrSignIn(sessionId, text);
+    await sendOrSignIn(sessionId, text, () => sessionInfo(sessionId));
   } else if (intent === "queue") {
     // Written now, so the queue holds the paths, not the files.
     queueMessage(
@@ -153,7 +153,7 @@ async function perform(
     const row = takeQueued(queuedId(form), sessionId);
     if (!row) throw new Error("Already sent");
     try {
-      await sendOrSignIn(sessionId, row.text);
+      await sendOrSignIn(sessionId, row.text, () => sessionInfo(sessionId));
     } catch (err) {
       // Typed but not sent: queued again, it would be typed a second time.
       if (!(err instanceof UnsentError)) restoreQueued(row);

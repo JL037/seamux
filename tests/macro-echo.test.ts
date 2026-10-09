@@ -22,19 +22,51 @@ function custom(changes: Partial<Record<keyof Config["macros"], string>>) {
   return out;
 }
 
-it("keeps the prompt of a new session and names How to worktree", () => {
+const info = renderMacro(macros.sessionInformation.text, {
+  name: "fix-it",
+  cwd: "/work/repo/.claude/worktrees/fix-it",
+}).trim();
+
+// A first prompt as dispatch sends it with the default macros.
+const first = (prompt: string, howToWorktree = howTo) =>
+  renderMacro(macros.newSession.text, {
+    prompt,
+    session_information: info,
+    how_to_worktree: howToWorktree,
+  }).trim();
+
+it("keeps the prompt of a new session after the macros ahead of it", () => {
   // As the user typed it in the dispatch bar, with Windows line ends.
   const prompt = "Fix the thing\r\n\r\nand the other";
-  const sent = renderMacro(macros.newSession.text, {
+  expect(macroEcho(first(prompt), macros)).toEqual({
     prompt,
-    cwd: "/work/repo",
-    how_to_worktree: howTo,
-  }).trim();
-  expect(macroEcho(sent, macros)).toEqual({
-    prompt,
-    macros: ["howToWorktree"],
+    macros: ["sessionInformation", "howToWorktree", "newSession"],
+    promptAt: 3,
   });
-  expect(shownPrompt(sent, macros)).toBe(prompt);
+  expect(shownPrompt(first(prompt), macros)).toBe(prompt);
+  // Without a worktree, and with a skill as the prompt.
+  expect(macroEcho(first("/gtd daily", ""), macros)).toEqual({
+    prompt: "/gtd daily",
+    macros: ["sessionInformation", "newSession"],
+    promptAt: 2,
+  });
+});
+
+it("names the macros sent again after a clear", () => {
+  expect(macroEcho(`${info}\n\n${howTo}`, macros)).toEqual({
+    prompt: "",
+    macros: ["sessionInformation", "howToWorktree"],
+    promptAt: 2,
+  });
+  expect(shownPrompt(info, macros)).toBe("✦ Session information ✦");
+});
+
+it("still names How to worktree after a prompt sent before Session information", () => {
+  expect(macroEcho(`Fix the thing\n\n${howTo}`, macros)).toEqual({
+    prompt: "Fix the thing",
+    macros: ["howToWorktree"],
+    promptAt: 0,
+  });
 });
 
 it("leaves a prompt that carries no macro text alone", () => {
@@ -57,6 +89,7 @@ it("names the close-session macro, with or without siblings", () => {
     expect(macroEcho(sent, macros)).toEqual({
       prompt: "",
       macros: ["closeSession"],
+      promptAt: 1,
     });
     expect(shownPrompt(sent, macros)).toBe("✦ Close session ✦");
   }
@@ -67,17 +100,24 @@ it("follows macros as they are set", () => {
     newSession: "Work on this: {{prompt}}",
     closeSession: "Wrap up in {{cwd}}.",
   });
-  // A new-session macro without {{how_to_worktree}} gets it at the end.
+  // A new-session macro without {{how_to_worktree}} gets it at the end,
+  // and Session information at the start.
   expect(
-    macroEcho(`Work on this: the bug\n\n${howTo}`, set),
-  ).toEqual({ prompt: "the bug", macros: ["newSession", "howToWorktree"] });
+    macroEcho(`${info}\n\nWork on this: the bug\n\n${howTo}`, set),
+  ).toEqual({
+    prompt: "the bug",
+    macros: ["sessionInformation", "newSession", "howToWorktree"],
+    promptAt: 2,
+  });
   expect(macroEcho("Work on this: the bug", set)).toEqual({
     prompt: "the bug",
     macros: ["newSession"],
+    promptAt: 1,
   });
   expect(macroEcho("Wrap up in /work/repo.", set)).toEqual({
     prompt: "",
     macros: ["closeSession"],
+    promptAt: 1,
   });
   // The default text, once changed, is the user's own.
   expect(macroEcho(renderMacro(macros.closeSession.text, {}), set)).toBeNull();

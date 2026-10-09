@@ -31,6 +31,7 @@ import {
   listLive,
   resumeTurn,
   sendMessage,
+  type About,
 } from "./drive.server";
 
 const run = promisify(execFile);
@@ -270,13 +271,15 @@ const LOGIN_COMMAND = /^\/login\s*$/;
 
 // What the board sends a chat, except `/login`: that runs the board's own
 // sign-in for the chat's service instead, finished from its Attention card
-// on any device. Returns whether the text went to the chat.
+// on any device. Returns whether the text went to the chat. `about` says
+// where the chat is, for what follows a clear.
 export async function sendOrSignIn(
   sessionId: string,
   text: string,
+  about?: About,
 ): Promise<boolean> {
   if (!LOGIN_COMMAND.test(text.trim())) {
-    await sendMessage(sessionId, text);
+    await sendMessage(sessionId, text, about);
     return true;
   }
   const live = (await listLive()).get(sessionId);

@@ -36,6 +36,20 @@ async function holding(s: Session, text: string) {
   }
 }
 
+// Long enough for a chat to start afresh after /clear. A message sent at
+// once went to the cleared chat too, so this is generous margin: the chat is
+// held for the macro meanwhile, so nothing else is typed into it.
+export const CLEAR_GAP_MS = 3000;
+
+// Clears the chat, then sends what it should know from the start, which
+// the clear dropped.
+export async function clear(s: Session, line: string, context: string) {
+  await send(s, line);
+  if (!context) return;
+  await pause(CLEAR_GAP_MS);
+  await send(s, context);
+}
+
 // Picks a turn back up where something outside the chat cut it short, an
 // expired login or a failed request: one line telling the model to carry on.
 export async function resume(s: Session) {

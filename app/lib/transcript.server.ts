@@ -87,8 +87,8 @@ export function promptExcerpt(text: string, macros: Config["macros"]): string {
   return excerpt(shownPrompt(text, macros));
 }
 
-// A prompt as the chat shows it: what the user typed, then the name of each
-// macro seamux sent it in, in place of the macro's text.
+// A prompt as the chat shows it: what the user typed, with the name of each
+// macro seamux sent it in where the macro's text was.
 export function userTurn(
   text: string,
   at: string | null,
@@ -101,6 +101,7 @@ export function userTurn(
     name,
     at,
   }));
-  if (echo.prompt) turn.unshift({ role: "user", text: clip(echo.prompt), at });
+  if (echo.prompt)
+    turn.splice(echo.promptAt, 0, { role: "user", text: clip(echo.prompt), at });
   return turn;
 }

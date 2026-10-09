@@ -79,6 +79,9 @@ export interface Harness {
   // A turn stopped on a failed request resumes once the API answers again
   // (reconnect.server.ts), for a harness whose transcripts record it.
   reconnects: boolean;
+  // The command that empties the chat into a new session in the same
+  // process, which then gets Session information again.
+  clear?: RegExp;
 }
 
 // Measured against Claude Code 2.1.281 to 2.1.286 and codex-cli 0.156.1.
@@ -117,6 +120,7 @@ export const HARNESSES: Record<Engine, Harness> = {
     filedOnPrompt: false,
     renameClosed: renameClaudeTranscript,
     reconnects: true,
+    clear: /^\/clear\s*$/,
   },
   // Codex is the other way round: it folds long typed input into
   // "[Pasted Content N chars]" but shows a paste in full, so it always gets

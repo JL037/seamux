@@ -89,7 +89,8 @@ async function drain() {
     if (!row) continue;
     try {
       // A `/login` starts no turn, so the next message needn't wait on one.
-      if (await sendOrSignIn(sessionId, row.text)) {
+      const about = async () => ({ name: card.name, cwd: card.cwd });
+      if (await sendOrSignIn(sessionId, row.text, about)) {
         state.sent.set(sessionId, { at: Date.now(), seenBusy: false });
       }
     } catch (err) {

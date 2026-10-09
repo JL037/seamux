@@ -48,3 +48,10 @@ Until the new workspace starts Claude, nothing reports the session as live, so a
 - **Measured:** Claude Code 2.1.283.
 - **In seamux:** `processKey` in [board.server.ts](../app/lib/board.server.ts), and `notePinProcess` and `carryPin` in [store.server.ts](../app/lib/store.server.ts), which keep a pin on the chat across the change.
 - **See also:** [A chat moved to the background keeps its old transcript apart](background-sessions.md#a-chat-moved-to-the-background-keeps-its-old-transcript-apart), another way one chat ends up under two ids.
+
+## A message sent straight after `/clear` reaches the cleared chat
+
+`/clear` and Enter, then a message and Enter at once, with no pause between: the message went into the new transcript, after its `SessionStart:clear` hook, and the old one never saw it. Whatever the chat was told at its start goes with the clear, so seamux sends it again.
+
+- **Measured:** Claude Code 2.1.295, in a throwaway workspace.
+- **In seamux:** `clear` in [macros.server.ts](../app/lib/macros.server.ts), which pauses `CLEAR_GAP_MS`, three seconds, anyway, and `sendMessage` in [drive.server.ts](../app/lib/drive.server.ts), which sends Session information after a clear from the board.

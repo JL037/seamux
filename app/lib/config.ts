@@ -4,6 +4,7 @@
 // System macros: text the dispatcher sends into a session as a user prompt,
 // at a fixed point in its life.
 export const MACRO_NAMES = [
+  "sessionInformation",
   "newSession",
   "howToWorktree",
   "closeSession",
@@ -20,12 +21,26 @@ export interface MacroInfo {
 }
 
 export const MACROS: Record<MacroName, MacroInfo> = {
+  sessionInformation: {
+    label: "Session information",
+    when: "Filled into the new session's {{session_information}} for every session seamux dispatches, and sent again, with How to worktree when the chat is in one, after you clear a chat from the board. Leave it empty to say nothing.",
+    variables: [
+      { name: "name", meaning: "the session's name" },
+      { name: "cwd", meaning: "the directory it runs in" },
+    ],
+    required: null,
+  },
   newSession: {
     label: "New session",
     when: "The first prompt of every session seamux dispatches, from the board or a fan-out.",
     variables: [
       { name: "prompt", meaning: "what you typed into the dispatch bar" },
       { name: "cwd", meaning: "the directory the session starts in" },
+      {
+        name: "session_information",
+        meaning:
+          "the Session information macro; added at the start if left out",
+      },
       {
         name: "how_to_worktree",
         meaning:
@@ -65,7 +80,11 @@ export const MACROS: Record<MacroName, MacroInfo> = {
 };
 
 export const DEFAULT_MACROS: Record<MacroName, string> = {
-  newSession: "{{prompt}}\n\n{{how_to_worktree}}",
+  sessionInformation: `# Session information
+
+This session runs inside seamux, a board over agent sessions powered by the cmux terminal on macOS. Its chat is "{{name}}", in {{cwd}}. Messages may arrive from the board while you work, and seamux will do its best to use your established hooks and servers for querying about subagent and fan-out work. If you and the user encounter issues, you can offer to help the user submit feedback or a bug to the seamux repository at https://github.com/thecodedrift/seamux`,
+  newSession:
+    "{{session_information}}\n\n{{how_to_worktree}}\n\n# User prompt\n\n{{prompt}}",
   howToWorktree: `## How to worktree
 
 You are working in a new git worktree, {{worktree}}, on branch {{branch}}, made from the repo's main checkout, {{repo}}.
@@ -164,4 +183,19 @@ export function renderMacro(
 
 export function usesVariable(text: string, name: string): boolean {
   return new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`).test(text);
+}
+
+// The New session macro as dispatch fills it: Session information at the
+// start and How to worktree at the end when it leaves either out.
+export function newSessionTemplate(text: string): string {
+  if (!usesVariable(text, "session_information"))
+    text = `{{session_information}}\n\n${text}`;
+  if (!usesVariable(text, "how_to_worktree")) text += "\n\n{{how_to_worktree}}";
+  return text;
+}
+
+// `text` without `{{name}}` and the blank lines after it, for a variable
+// with nothing to fill in.
+export function dropVariable(text: string, name: string): string {
+  return text.replace(new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}\\s*`, "g"), "");
 }

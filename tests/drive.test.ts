@@ -490,6 +490,45 @@ describe("sendMessage", () => {
     expect(input(surface)).toEqual(["paste:short", "key:enter"]);
   });
 
+  it("sends Session information again after a /clear", async () => {
+    const { surface } = cmux.addSession("s");
+    const cwd = realpathSync(mkdtempSync(join(tmpdir(), "seamux-clear-")));
+    // The pause after the clear, skipped.
+    vi.useFakeTimers({ toFake: ["setTimeout"], shouldAdvanceTime: true });
+    try {
+      let settled = false;
+      const sent = sendMessage("s", "/clear", async () => ({
+        name: "fix-it",
+        cwd,
+      })).finally(() => (settled = true));
+      while (!settled) await vi.advanceTimersByTimeAsync(500);
+      await sent;
+    } finally {
+      vi.useRealTimers();
+      rmSync(cwd, { recursive: true, force: true });
+    }
+    const sent = input(surface);
+    expect(sent.slice(0, 2)).toEqual(["text:/clear", "key:enter"]);
+    // What was typed after it, a little at a time.
+    const after = surface.input
+      .slice(2)
+      .map((i) => (i.kind === "key" ? "\n" : i.value))
+      .join("");
+    expect(after).toContain("# Session information");
+    expect(after).toContain(`Its chat is "fix-it", in ${cwd}.`);
+    // Outside a worktree, nothing about one.
+    expect(after).not.toContain("How to worktree");
+  });
+
+  it("sends a /clear alone to a harness that has no clear", async () => {
+    const { surface } = cmux.addSession("s", {
+      agent: "codex",
+      active_for_surface: false,
+    });
+    await sendMessage("s", "/clear", async () => ({ name: "x", cwd: "/" }));
+    expect(input(surface)).toEqual(["paste:/clear", "key:enter"]);
+  });
+
   it("refuses a session that isn't running in cmux", async () => {
     await expect(sendMessage("gone", "hello")).rejects.toThrow(
       "This session is not running in a cmux surface",
@@ -765,7 +804,14 @@ describe("dispatch", () => {
     expect(command).toContain(`--session-id`);
     expect(command).toContain(sessionId);
     expect(command).toContain("--name");
-    expect(command).toContain("Fix the login page");
+    // Session information first, then what was typed.
+    const info = command.indexOf("# Session information");
+    expect(command).toContain('Its chat is "fix-the-login-page"');
+    expect(info).toBeGreaterThan(-1);
+    expect(command.indexOf("# User prompt")).toBeGreaterThan(info);
+    expect(command.indexOf("Fix the login page")).toBeGreaterThan(
+      command.indexOf("# User prompt"),
+    );
   });
 
   it("takes the next free name when a workspace already has it", async () => {

@@ -6,7 +6,7 @@
 
 import {
   MACROS,
-  usesVariable,
+  newSessionTemplate,
   type Config,
   type MacroName,
 } from "./config.ts";
@@ -17,7 +17,10 @@ export const MACRO_MARK = "✦";
 export interface MacroEcho {
   // What the user typed into the dispatch bar, if the macro carried it.
   prompt: string;
+  // In the order the message holds them.
   macros: MacroName[];
+  // Where the prompt sat among them.
+  promptAt: number;
 }
 
 // The macro text as a pattern: each variable is anything, whitespace is any
@@ -50,6 +53,47 @@ function literal(text: string): string {
   return text.replace(/\{\{\s*\w+\s*\}\}/g, "").trim();
 }
 
+// The macros the New session macro fills in, by variable, each matched in
+// a group of its own.
+const INNER = {
+  session_information: { group: "info", macro: "sessionInformation" },
+  how_to_worktree: { group: "howTo", macro: "howToWorktree" },
+} as const satisfies Record<string, { group: string; macro: MacroName }>;
+type Inner = keyof typeof INNER;
+
+// One shape a message seamux sent can take: a template of the macros above
+// and {{prompt}}, and whether it is the New session macro's own.
+interface Form {
+  re: RegExp;
+  order: (Inner | "prompt")[];
+  wrapper: boolean;
+}
+
+function form(
+  template: string,
+  macros: Config["macros"],
+  wrapper: boolean,
+): Form {
+  const inner: Record<string, string> = {};
+  for (const [name, { group, macro }] of Object.entries(INNER)) {
+    const text = macros[macro].text.trim();
+    inner[name] = literal(text) ? `(?<${group}>${pattern(text)})?` : "";
+  }
+  const order = new Set<Inner | "prompt">();
+  for (const [, name] of template.matchAll(/\{\{\s*(\w+)\s*\}\}/g))
+    if (name === "prompt" || Object.hasOwn(INNER, name))
+      order.add(name as Inner | "prompt");
+  return {
+    re: new RegExp(`^${pattern(template, inner)}$`),
+    order: [...order],
+    wrapper,
+  };
+}
+
+// The New session macro as seamux's defaults had it before Session
+// information, so a chat dispatched then still reads the same.
+const EARLIER_NEW_SESSION = "{{prompt}}\n\n{{how_to_worktree}}";
+
 let cached: { key: string; match: (text: string) => MacroEcho | null } | null =
   null;
 
@@ -60,29 +104,38 @@ function matcher(macros: Config["macros"]) {
   const close = macros.closeSession.text.trim();
   const closeRe = close ? new RegExp(`^${pattern(close)}$`) : null;
 
-  // The new-session macro as firstPrompt (drive.server.ts) renders it: How
-  // to worktree goes in its variable, or at the end when it has none.
-  const howTo = macros.howToWorktree.text.trim();
-  let newText = macros.newSession.text;
-  if (howTo && !usesVariable(newText, "how_to_worktree"))
-    newText += "\n\n{{how_to_worktree}}";
-  const newRe = new RegExp(
-    `^${pattern(newText, {
-      how_to_worktree: howTo ? `(?<howTo>${pattern(howTo)})?` : "",
-    })}$`,
-  );
-  const newLiteral = literal(macros.newSession.text) !== "";
+  // A first prompt as firstPrompt (drive.server.ts) renders it, the macros
+  // sent again after a /clear, and a first prompt from before.
+  const forms = [
+    form(
+      newSessionTemplate(macros.newSession.text),
+      macros,
+      literal(macros.newSession.text) !== "",
+    ),
+    form("{{session_information}}\n\n{{how_to_worktree}}", macros, false),
+    form(EARLIER_NEW_SESSION, macros, false),
+  ];
 
   const match = (text: string): MacroEcho | null => {
     const trimmed = text.trim();
-    if (closeRe?.test(trimmed)) return { prompt: "", macros: ["closeSession"] };
-    const m = newRe.exec(trimmed);
-    if (!m) return null;
-    const found: MacroName[] = [];
-    if (newLiteral) found.push("newSession");
-    if (m.groups?.howTo) found.push("howToWorktree");
-    if (!found.length) return null;
-    return { prompt: (m.groups?.prompt ?? "").trim(), macros: found };
+    if (closeRe?.test(trimmed))
+      return { prompt: "", macros: ["closeSession"], promptAt: 1 };
+    for (const f of forms) {
+      const groups = f.re.exec(trimmed)?.groups;
+      if (!groups) continue;
+      const found: MacroName[] = [];
+      let promptAt = 0;
+      for (const name of f.order) {
+        if (name === "prompt") {
+          if (f.wrapper) found.push("newSession");
+          promptAt = found.length;
+        } else if (groups[INNER[name].group]) found.push(INNER[name].macro);
+      }
+      if (!f.order.includes("prompt")) promptAt = found.length;
+      if (found.length)
+        return { prompt: (groups.prompt ?? "").trim(), macros: found, promptAt };
+    }
+    return null;
   };
   cached = { key, match };
   return match;

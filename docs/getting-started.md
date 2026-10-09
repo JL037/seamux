@@ -88,13 +88,14 @@ Macros are prompts seamux sends into a session for you. `{{name}}` variables are
 
 | Macro | Sent | Variables |
 | --- | --- | --- |
-| New session | Wrapped around the first prompt of every session seamux dispatches. Must contain `{{prompt}}`, and defaults to that followed by `{{how_to_worktree}}` | `prompt`, `cwd`, `how_to_worktree` |
+| Session information | Filled into the new session's `{{session_information}}` for every session seamux dispatches. It tells the session it runs inside seamux, its name and directory, and where to report a problem with seamux. When you clear a chat from the board, seamux sends `/clear`, pauses, then sends this again, with How to worktree when the chat is in a worktree. Leave it empty to say nothing | `name`, `cwd` |
+| New session | Wrapped around the first prompt of every session seamux dispatches. Must contain `{{prompt}}`, and defaults to `{{session_information}}`, then `{{how_to_worktree}}`, then `# User prompt` and `{{prompt}}`. One without `{{session_information}}` gets it at the start. A prompt that is a skill, such as `/gtd daily`, still runs: the agent reads it after the macros and calls the skill itself | `prompt`, `cwd`, `session_information`, `how_to_worktree` |
 | How to worktree | Filled into the new session's `{{how_to_worktree}}` whenever the session starts in a new worktree; empty otherwise. By default it has the session follow the repo's own worktree convention from its CLAUDE.md or AGENTS.md, or, when there is none, propose one to you before starting: worktrees under the directory seamux used and gitignored, each starting from the latest main unless told otherwise, dependencies installed in the worktree, all work done there. Once you agree, the session records it in the repo's agent instructions, so later sessions just follow it. A New session macro without `{{how_to_worktree}}` gets it at the end | `worktree`, `branch`, `repo`, `worktrees` |
 | Close session | When you close an idle chat, before it exits. Defaults to a cleanup prompt asking the session to remove its own worktree. Leave it empty to exit straight away | `cwd`, `repo`, `siblings` |
 
 `{{siblings}}` is a sentence naming the other live sessions under the same repo. Without it, a session can't know that another session is using the same repo.
 
-The chat shows a macro it sent by its name, such as `✦ Close session ✦`, rather than its text, and a new session's first message as only what you typed. It recognises the macro by its text as set now, so one sent before you edited it shows in full.
+The chat shows a macro it sent by its name, such as `✦ Close session ✦`, rather than its text, and a new session's first message as the names of its macros, then what you typed. A card's last prompt shows only what you typed. It recognises the macro by its text as set now, so one sent before you edited it shows in full.
 
 ### Themes
 

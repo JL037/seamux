@@ -9,6 +9,14 @@ Typing `/` into a surface and calling `read-screen` shows the menu as text, a co
 - **Measured:** Claude Code 2.1.282.
 - **See also:** [A headless session lists its slash commands before any prompt](#a-headless-session-lists-its-slash-commands-before-any-prompt), what seamux does instead, and [Ctrl+E, Ctrl+U and Backspace empty a prompt box](prompt-box.md#ctrle-ctrlu-and-backspace-empty-a-prompt-box-a-line-at-a-time-in-claude-code-and-codex-alike), which clears a stray `/`.
 
+## A skill named after other text in a prompt is called by the model
+
+A slash command runs as one only at the very start of a prompt. Sent after a few lines of other text, `/probe daily` was logged as a plain user message, with no `<command-message>`, and the model called the Skill tool for `probe` itself, with `daily` as its arguments. A built-in command, which is no skill, gets no such help.
+
+- **Measured:** Claude Code 2.1.295, launched with the prompt as its argument, in a throwaway workspace with a test skill.
+- **In seamux:** the New session macro's default in [config.ts](../app/lib/config.ts), which puts Session information ahead of the prompt.
+- **See also:** [A prompt command is logged as tags](transcripts.md#a-prompt-command-is-logged-as-tags-its-name-before-or-after-by-kind).
+
 ## A headless session lists its slash commands before any prompt
 
 `claude -p --input-format stream-json --output-format stream-json --verbose --no-session-persistence` prints `{"type":"system","subtype":"commands_changed","commands":[...]}` as its first line, each command with `name`, `description` and `argumentHint`, in about two seconds; closing stdin then runs no turn. It covers built-ins, skills and MCP prompts for that folder, but not the terminal-only commands (`/add-dir`, `/artifacts` and others), and plugin skills lose their prefix (`docs`, where the transcript's `skill_listing` says `anthropic-skills:docs`).

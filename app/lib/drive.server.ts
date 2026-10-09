@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -20,9 +20,10 @@ import { forgetCommands } from "./commands.server.ts";
 import { parseCodexApproval } from "./codex.server.ts";
 import {
   ENGINE_LABELS,
+  dropVariable,
   ENGINES,
+  newSessionTemplate,
   renderMacro,
-  usesVariable,
   type Engine,
 } from "./config.ts";
 import { configOrDefaults } from "./config.server.ts";
@@ -196,11 +197,32 @@ function driving<T>(
   });
 }
 
+// A chat's name and directory, from its transcript, which this module
+// can't read for itself.
+export type About = () => Promise<{ name: string; cwd: string } | null>;
+
 // A message into a chat, from a card or seamux's queue. A failure stays on
-// the chat's card, with the message, until one goes.
-export async function sendMessage(sessionId: string, text: string) {
+// the chat's card, with the message, until one goes. A clear is followed by
+// Session information, and How to worktree in a worktree, for which `about`
+// says where the chat is.
+export async function sendMessage(
+  sessionId: string,
+  text: string,
+  about?: About,
+) {
   try {
-    await driving(sessionId, (s) => macros.send(s, text));
+    await driving(sessionId, async (s) => {
+      if (!s.harness.clear?.test(text.trim())) return macros.send(s, text);
+      const chat = await about?.();
+      const context = chat
+        ? openingMacros(chat.name, chat.cwd, await worktreeAt(chat.cwd))
+        : null;
+      await macros.clear(
+        s,
+        text,
+        [context?.info, context?.howTo].filter(Boolean).join("\n\n"),
+      );
+    });
   } catch (err) {
     recordFailure(sessionId, text, err);
     throw err;
@@ -919,15 +941,61 @@ export function nameFrom(prompt: string): string {
 
 const WORKTREE_NAME = /^[a-z0-9][a-z0-9._/-]{0,60}$/;
 
-interface NewWorktree {
-  // What went on the end of the name asked for to make it free.
-  suffix: string;
+interface Worktree {
   path: string;
   branch: string;
   // The repo's main checkout, which holds every worktree.
   repo: string;
   // Where in it the worktrees go: .claude/worktrees/ or worktrees/.
   home: string;
+}
+
+interface NewWorktree extends Worktree {
+  // What went on the end of the name asked for to make it free.
+  suffix: string;
+}
+
+// The worktree `cwd` is in, or null in a main checkout or outside git.
+async function worktreeAt(cwd: string): Promise<Worktree | null> {
+  try {
+    const [{ stdout: top }, { stdout: list }] = await Promise.all([
+      run("git", ["-C", cwd, "rev-parse", "--show-toplevel"]),
+      run("git", ["-C", cwd, "worktree", "list", "--porcelain"]),
+    ]);
+    const entries = list.split("\n\n").map((entry) => ({
+      path: /^worktree (.*)$/m.exec(entry)?.[1],
+      branch: /^branch refs\/heads\/(.*)$/m.exec(entry)?.[1],
+    }));
+    // The main checkout is the first entry git lists.
+    const repo = entries[0]?.path;
+    const here = entries.slice(1).find((e) => e.path === top.trim());
+    if (!repo || !here?.path) return null;
+    return {
+      path: here.path,
+      branch: here.branch ?? "HEAD",
+      repo,
+      home: `${relative(repo, dirname(here.path))}/`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// What a session should know from its start: Session information, and
+// How to worktree when it is in one, each filled in or empty.
+function openingMacros(name: string, cwd: string, wt: Worktree | null) {
+  const { macros } = configOrDefaults();
+  return {
+    info: renderMacro(macros.sessionInformation.text, { name, cwd }).trim(),
+    howTo: wt
+      ? renderMacro(macros.howToWorktree.text, {
+          worktree: wt.path,
+          branch: wt.branch,
+          repo: wt.repo,
+          worktrees: wt.home,
+        }).trim()
+      : "",
+  };
 }
 
 // A new worktree for dispatched work, branched from what the chosen checkout
@@ -989,22 +1057,25 @@ async function createWorktree(
 }
 
 // The first prompt of a dispatched session: the new-session macro around
-// what was typed, with How to worktree when it has a new worktree. A macro
-// customised without {{how_to_worktree}} gets it at the end.
-function firstPrompt(prompt: string, cwd: string, wt: NewWorktree | null) {
-  const { macros } = configOrDefaults();
-  const howTo = wt
-    ? renderMacro(macros.howToWorktree.text, {
-        worktree: wt.path,
-        branch: wt.branch,
-        repo: wt.repo,
-        worktrees: wt.home,
-      }).trim()
-    : "";
-  let text = macros.newSession.text;
-  if (howTo && !usesVariable(text, "how_to_worktree"))
-    text += "\n\n{{how_to_worktree}}";
-  return renderMacro(text, { prompt, cwd, how_to_worktree: howTo }).trim();
+// what was typed, after Session information, and How to worktree when it
+// has a new worktree. A macro customised without either gets Session
+// information at the start and How to worktree at the end.
+function firstPrompt(
+  prompt: string,
+  name: string,
+  cwd: string,
+  wt: NewWorktree | null,
+) {
+  const { info, howTo } = openingMacros(name, cwd, wt);
+  let text = newSessionTemplate(configOrDefaults().macros.newSession.text);
+  if (!info) text = dropVariable(text, "session_information");
+  if (!howTo) text = dropVariable(text, "how_to_worktree");
+  return renderMacro(text, {
+    prompt,
+    cwd,
+    session_information: info,
+    how_to_worktree: howTo,
+  }).trim();
 }
 
 // A leading dash would be read as a flag.
@@ -1043,7 +1114,7 @@ export async function dispatch(input: DispatchInput): Promise<string> {
   const where = wt?.path ?? cwd;
   // The session gets the prompt inside the new-session macro; the card
   // shows what was typed.
-  const first = asPrompt(firstPrompt(prompt, where, wt));
+  const first = asPrompt(firstPrompt(prompt, name, where, wt));
   const record = (sessionId: string) =>
     recordDispatch({
       session_id: sessionId,
