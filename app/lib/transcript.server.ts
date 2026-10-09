@@ -3,6 +3,10 @@
 
 import { open } from "node:fs/promises";
 
+import type { ChatMessage } from "./board.ts";
+import type { Config } from "./config.ts";
+import { macroEcho, shownPrompt } from "./macro-echo.ts";
+
 const TAIL_BYTES = 2 * 1024 * 1024;
 const EXCERPT_CHARS = 280;
 // A card renders its last reply as markdown, clipped to a few lines.
@@ -76,4 +80,27 @@ export function clip(text: string): string {
   return text.length > MESSAGE_CHARS
     ? `${text.slice(0, MESSAGE_CHARS)}…`
     : text;
+}
+
+// A prompt as a card shows it, a macro seamux sent by its name.
+export function promptExcerpt(text: string, macros: Config["macros"]): string {
+  return excerpt(shownPrompt(text, macros));
+}
+
+// A prompt as the chat shows it: what the user typed, then the name of each
+// macro seamux sent it in, in place of the macro's text.
+export function userTurn(
+  text: string,
+  at: string | null,
+  macros: Config["macros"],
+): ChatMessage[] {
+  const echo = macroEcho(text, macros);
+  if (!echo) return [{ role: "user", text: clip(text), at }];
+  const turn: ChatMessage[] = echo.macros.map((name) => ({
+    role: "macro",
+    name,
+    at,
+  }));
+  if (echo.prompt) turn.unshift({ role: "user", text: clip(echo.prompt), at });
+  return turn;
 }

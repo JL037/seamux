@@ -40,6 +40,7 @@ import {
   type CodexTranscript,
 } from "./codex.server";
 import { ENGINES, type Engine } from "./config";
+import { configOrDefaults } from "./config.server";
 import {
   closingState,
   listLive,
@@ -68,8 +69,10 @@ import {
   excerpt,
   MESSAGE_CHARS,
   readTail,
+  promptExcerpt,
   replyExcerpt,
   unwrapPasted,
+  userTurn,
 } from "./transcript.server";
 import {
   dispatchesFor,
@@ -375,6 +378,7 @@ function apiErrorOf(o: any): ApiError | null {
 }
 
 async function summarize(path: string): Promise<TranscriptSummary> {
+  const { macros } = configOrDefaults();
   const summary: TranscriptSummary = {
     name: null,
     cwd: null,
@@ -441,7 +445,9 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       !summary.lastPrompt &&
       (command || !SYNTHETIC_PROMPT.test(text.trimStart()))
     ) {
-      summary.lastPrompt = excerpt(command ?? unwrapPasted(text));
+      summary.lastPrompt = command
+        ? excerpt(command)
+        : promptExcerpt(unwrapPasted(text), macros);
       summary.lastPromptAt = Date.parse(o.timestamp) || null;
     }
     if (
@@ -565,6 +571,7 @@ export async function loadMessages(
 
 async function loadClaudeMessages(path: string): Promise<ChatMessage[]> {
   const messages: ChatMessage[] = [];
+  const { macros } = configOrDefaults();
   for (const line of await readTail(path)) {
     if (!line) continue;
     let o: any;
@@ -594,11 +601,10 @@ async function loadClaudeMessages(path: string): Promise<ChatMessage[]> {
     }
     const command = o.type === "user" ? promptCommand(text) : null;
     if (o.type === "user" && !command && SYNTHETIC_PROMPT.test(text)) continue;
-    messages.push({
-      role: o.type,
-      text: clip(command ?? (o.type === "user" ? unwrapPasted(text) : text)),
-      at: o.timestamp ?? null,
-    });
+    const at = o.timestamp ?? null;
+    if (o.type === "user" && !command)
+      messages.push(...userTurn(unwrapPasted(text), at, macros));
+    else messages.push({ role: o.type, text: clip(command ?? text), at });
   }
   return messages;
 }

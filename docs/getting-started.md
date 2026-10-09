@@ -94,6 +94,8 @@ Macros are prompts seamux sends into a session for you. `{{name}}` variables are
 
 `{{siblings}}` is a sentence naming the other live sessions under the same repo. Without it, a session can't know that another session is using the same repo.
 
+The chat shows a macro it sent by its name, such as `✦ Close session ✦`, rather than its text, and a new session's first message as only what you typed. It recognises the macro by its text as set now, so one sent before you edited it shows in full.
+
 ### Themes
 
 A theme repaints the board, on every browser that has it open. Pick one from the list on the left and this browser previews it until you leave the tab; no other board changes. **Make active**, beside Save, switches every open board to it at once. `seamux` is the built-in one.

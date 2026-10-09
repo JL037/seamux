@@ -1,6 +1,6 @@
 // Shared board types. Safe to import from client and server.
 
-import type { Engine } from "./config.ts";
+import type { Engine, MacroName } from "./config.ts";
 
 export const COLUMNS = ["idle", "waiting", "working", "done"] as const;
 export type Column = (typeof COLUMNS)[number];
@@ -280,6 +280,8 @@ export type CmuxTrouble =
 
 export type ChatMessage =
   | { role: "user" | "assistant"; text: string; at: string | null }
+  // A system macro seamux sent, shown by its name rather than its text.
+  | { role: "macro"; name: MacroName; at: string | null }
   // A command the user ran in the chat with `!`. output is null while it
   // runs.
   | {

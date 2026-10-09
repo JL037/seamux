@@ -392,3 +392,30 @@ it("shows what an idle chat's prompt box holds unsent, and reads no box while a 
     rmSync(agents, { force: true });
   }
 });
+
+it("shows a macro seamux sent by its name, after the prompt it carried", async () => {
+  const sessionId = "3f0e8c1a-5b2d-4c3e-9f41-2a7d6b8e0c19";
+  const project = join(process.env.HOME!, ".claude/projects/-work");
+  mkdirSync(project, { recursive: true });
+  const user = (content: string, at: string) =>
+    JSON.stringify({ type: "user", timestamp: at, message: { role: "user", content } });
+  writeFileSync(
+    join(project, `${sessionId}.jsonl`),
+    [
+      user(
+        "Fix the thing\n\n## How to worktree\n\nYou are working in a new git worktree, /work/wt, on branch wt, made from the repo's main checkout, /work.\n\nIf the repo already has a convention for working in worktrees, in its CLAUDE.md, AGENTS.md or other agent instructions, follow that and ignore the rest of this.\n\nIf it doesn't, propose this convention to the user before you start the work. Once they have agreed to it, or to their own version of it, record it in the repo's agent instructions (CLAUDE.md, AGENTS.md, or whichever it has), so later sessions follow it without asking, and follow it in this worktree:\n\n1. Worktrees go under worktrees/ in the main checkout, never inside other worktrees, and git ignores that directory: `git -C /work check-ignore -q worktrees/` succeeds when it does. If it doesn't, add it to .gitignore.\n2. A new worktree starts from the latest main, unless the work was asked to start from a particular branch or commit: fetch, then rebase onto whichever of the local main branch and the remote's is ahead.\n3. Install the project's dependencies in the worktree before running any of its scripts. Package managers hoist dependencies inconsistently, so what is installed in the main checkout may not resolve from a worktree.\n4. Do all the work in the worktree, never in the main checkout.",
+        "2026-01-01T00:00:00Z",
+      ),
+      user(
+        "Clean up after yourself: if you are working in a worktree, remove it and its branch.\n\n Do not touch anything outside your own worktree, and do not run a bare `git worktree prune` or anything else that operates on the whole repo.\n\nIf you have uncommitted work, say so and stop rather than discarding it.",
+        "2026-01-01T00:01:00Z",
+      ),
+    ].join("\n") + "\n",
+  );
+
+  expect(await loadMessages(sessionId)).toEqual([
+    { role: "user", text: "Fix the thing", at: "2026-01-01T00:00:00Z" },
+    { role: "macro", name: "howToWorktree", at: "2026-01-01T00:00:00Z" },
+    { role: "macro", name: "closeSession", at: "2026-01-01T00:01:00Z" },
+  ]);
+});

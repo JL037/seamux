@@ -34,6 +34,7 @@ import {
 } from "~/lib/attachments";
 import type { Card, ChatMessage, QueuedMessage } from "~/lib/board";
 import { ENGINE_FEATURES } from "~/lib/config";
+import { macroLabel } from "~/lib/macro-echo";
 import { scrollKey } from "~/lib/sweep";
 import { useCoarsePointer } from "~/lib/use-pointer";
 import { useSessionAction } from "~/lib/use-session-action";
@@ -517,7 +518,8 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
 // The conversation, apart from the input so a keystroke there doesn't
 // render every message's markdown again. The replies a turn writes between
 // its tool calls arrive as messages of their own, so a run of them shares one
-// bubble and reads as the one response it is.
+// bubble and reads as the one response it is. A macro seamux sent shows by
+// its name, which says what it asked without the clutter of its text.
 const Conversation = memo(function Conversation({
   messages,
   cwd,
@@ -541,6 +543,13 @@ const Conversation = memo(function Conversation({
           </div>
         ) : m.role === "shell" ? (
           <ShellRun key={`${m.at}-${i}`} run={m} />
+        ) : m.role === "macro" ? (
+          <div
+            key={`${m.at}-${i}`}
+            className="sensitive self-end rounded-full border px-3 py-1 text-xs text-muted-foreground max-md:text-sm"
+          >
+            {macroLabel(m.name)}
+          </div>
         ) : (
           <div
             key={`${m.at}-${i}`}

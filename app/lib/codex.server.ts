@@ -9,12 +9,15 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { ChatMessage, ContextUsage } from "./board.ts";
+import { configOrDefaults } from "./config.server.ts";
 import {
   clip,
   endingQuestionIn,
   excerpt,
+  promptExcerpt,
   readTail,
   replyExcerpt,
+  userTurn,
 } from "./transcript.server.ts";
 
 const CODEX_DIR = process.env.CODEX_HOME ?? join(homedir(), ".codex");
@@ -196,7 +199,7 @@ export async function summarizeCodex(path: string): Promise<CodexSummary> {
         const item = p.item;
         const text = itemText(item)?.trim();
         if (text && item?.type === "UserMessage" && !s.lastPrompt) {
-          s.lastPrompt = excerpt(text);
+          s.lastPrompt = promptExcerpt(text, configOrDefaults().macros);
           s.lastPromptAt = Date.parse(o.timestamp) || null;
         }
         if (text && item?.type === "AgentMessage") {
@@ -234,6 +237,7 @@ export async function summarizeCodex(path: string): Promise<CodexSummary> {
 // tool traffic or the context Codex injects.
 export async function loadCodexMessages(path: string): Promise<ChatMessage[]> {
   const messages: ChatMessage[] = [];
+  const { macros } = configOrDefaults();
   for (const line of await readTail(path)) {
     if (!line.includes('"item_completed"')) continue;
     let o: any;
@@ -251,7 +255,9 @@ export async function loadCodexMessages(path: string): Promise<ChatMessage[]> {
           : null;
     const text = itemText(item)?.trim();
     if (!role || !text) continue;
-    messages.push({ role, text: clip(text), at: o.timestamp ?? null });
+    const at = o.timestamp ?? null;
+    if (role === "user") messages.push(...userTurn(text, at, macros));
+    else messages.push({ role, text: clip(text), at });
   }
   return messages;
 }
