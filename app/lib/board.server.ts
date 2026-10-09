@@ -451,9 +451,10 @@ async function summarize(path: string): Promise<TranscriptSummary> {
       !summary.lastPrompt &&
       (command || !SYNTHETIC_PROMPT.test(text.trimStart()))
     ) {
-      summary.lastPrompt = command
-        ? excerpt(command)
-        : promptExcerpt(unwrapPasted(text), macros);
+      summary.lastPrompt = promptExcerpt(
+        command ?? unwrapPasted(text),
+        macros,
+      );
       summary.lastPromptAt = Date.parse(o.timestamp) || null;
     }
     if (
@@ -616,9 +617,9 @@ async function loadClaudeMessages(path: string): Promise<ChatMessage[]> {
     const command = o.type === "user" ? promptCommand(text) : null;
     if (o.type === "user" && !command && SYNTHETIC_PROMPT.test(text)) continue;
     const at = o.timestamp ?? null;
-    if (o.type === "user" && !command)
-      messages.push(...userTurn(unwrapPasted(text), at, macros));
-    else messages.push({ role: o.type, text: clip(command ?? text), at });
+    if (o.type === "user")
+      messages.push(...userTurn(command ?? unwrapPasted(text), at, macros));
+    else messages.push({ role: o.type, text: clip(text), at });
   }
   return messages;
 }

@@ -463,6 +463,29 @@ it("shows a macro seamux sent by its name, after the prompt it carried", async (
   ]);
 });
 
+it("shows a macro sent after a prompt command by its name", async () => {
+  const sessionId = "5a1e7c3d-9b2f-4e6a-8c0d-3f4b2a1e9d58";
+  const project = join(process.env.HOME!, ".claude/projects/-work");
+  mkdirSync(project, { recursive: true });
+  writeFileSync(
+    join(project, `${sessionId}.jsonl`),
+    JSON.stringify({
+      type: "user",
+      timestamp: "2026-01-01T00:00:00Z",
+      message: {
+        role: "user",
+        content:
+          "<command-message>gtd</command-message>\n<command-name>/gtd</command-name>\n<command-args>daily\n\n## How to worktree\n\nYou are working in a new git worktree, /work/wt, on branch wt, made from the repo's main checkout, /work.\n\nIf the repo already has a convention for working in worktrees, in its CLAUDE.md, AGENTS.md or other agent instructions, follow that and ignore the rest of this.\n\nIf it doesn't, propose this convention to the user before you start the work. Once they have agreed to it, or to their own version of it, record it in the repo's agent instructions (CLAUDE.md, AGENTS.md, or whichever it has), so later sessions follow it without asking, and follow it in this worktree:\n\n1. Worktrees go under worktrees/ in the main checkout, never inside other worktrees, and git ignores that directory: `git -C /work check-ignore -q worktrees/` succeeds when it does. If it doesn't, add it to .gitignore.\n2. A new worktree starts from the latest main, unless the work was asked to start from a particular branch or commit: fetch, then rebase onto whichever of the local main branch and the remote's is ahead.\n3. Install the project's dependencies in the worktree before running any of its scripts. Package managers hoist dependencies inconsistently, so what is installed in the main checkout may not resolve from a worktree.\n4. Do all the work in the worktree, never in the main checkout.</command-args>",
+      },
+    }) + "\n",
+  );
+
+  expect(await loadMessages(sessionId)).toEqual([
+    { role: "user", text: "/gtd daily", at: "2026-01-01T00:00:00Z" },
+    { role: "macro", name: "howToWorktree", at: "2026-01-01T00:00:00Z" },
+  ]);
+});
+
 it("shows a prompt sent while a turn ran, which Claude Code logs as a queued command", async () => {
   const sessionId = "7c2d9e4b-1a3f-4b8e-a6d0-5e9f2c1b3a47";
   const project = join(process.env.HOME!, ".claude/projects/-work");
