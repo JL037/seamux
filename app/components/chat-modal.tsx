@@ -514,11 +514,10 @@ function QueuedItem({ card, message }: { card: Card; message: QueuedMessage }) {
   );
 }
 
-// A command the user ran with `!`, and what it printed. One still running
-// may be waiting on the user, as a login waits for its URL to be opened,
-// so it says so rather than showing nothing.
 // The conversation, apart from the input so a keystroke there doesn't
-// render every message's markdown again.
+// render every message's markdown again. The replies a turn writes between
+// its tool calls arrive as messages of their own, so a run of them shares one
+// bubble and reads as the one response it is.
 const Conversation = memo(function Conversation({
   messages,
   cwd,
@@ -528,24 +527,26 @@ const Conversation = memo(function Conversation({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      {messages.map((m, i) =>
-        m.role === "shell" ? (
+      {groupReplies(messages).map((m, i) =>
+        Array.isArray(m) ? (
+          <div
+            key={`${m[0].at}-${i}`}
+            className="sensitive prose prose-sm max-md:prose-base max-w-[85%] self-start rounded-lg bg-muted px-3 py-2 text-sm max-md:text-base dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none"
+          >
+            {m.map((reply, j) => (
+              <Markdown key={j} base={cwd}>
+                {reply.text}
+              </Markdown>
+            ))}
+          </div>
+        ) : m.role === "shell" ? (
           <ShellRun key={`${m.at}-${i}`} run={m} />
         ) : (
           <div
             key={`${m.at}-${i}`}
-            className={cn(
-              "sensitive max-w-[85%] rounded-lg px-3 py-2 text-sm max-md:text-base",
-              m.role === "user"
-                ? "self-end whitespace-pre-wrap break-words bg-primary text-primary-foreground"
-                : "prose prose-sm max-md:prose-base self-start bg-muted dark:prose-invert prose-pre:overflow-x-auto prose-pre:bg-background prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none",
-            )}
+            className="sensitive max-w-[85%] self-end whitespace-pre-wrap break-words rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground max-md:text-base"
           >
-            {m.role === "user" ? (
-              <MessageText text={m.text} />
-            ) : (
-              <Markdown base={cwd}>{m.text}</Markdown>
-            )}
+            <MessageText text={m.text} />
           </div>
         ),
       )}
@@ -553,6 +554,24 @@ const Conversation = memo(function Conversation({
   );
 });
 
+type Reply = Extract<ChatMessage, { text: string }> & { role: "assistant" };
+
+// Gathers each run of consecutive replies into one array, leaving every
+// other message as it is.
+function groupReplies(messages: ChatMessage[]): (ChatMessage | Reply[])[] {
+  const out: (ChatMessage | Reply[])[] = [];
+  for (const m of messages) {
+    const last = out.at(-1);
+    if (m.role !== "assistant") out.push(m);
+    else if (Array.isArray(last)) last.push(m as Reply);
+    else out.push([m as Reply]);
+  }
+  return out;
+}
+
+// A command the user ran with `!`, and what it printed. One still running
+// may be waiting on the user, as a login waits for its URL to be opened,
+// so it says so rather than showing nothing.
 function ShellRun({ run }: { run: Extract<ChatMessage, { role: "shell" }> }) {
   return (
     <div className="sensitive w-full max-w-[85%] self-end overflow-hidden rounded-lg border font-mono text-xs max-md:text-sm">
