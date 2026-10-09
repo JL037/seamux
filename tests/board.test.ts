@@ -51,7 +51,9 @@ it("loads with only Codex installed, and no claude to run", async () => {
     fileURLToPath(new URL("./bin/cmux", import.meta.url)),
     join(bin, "cmux"),
   );
-  process.env.PATH = [bin, dirname(process.execPath), "/usr/bin", "/bin"].join(":");
+  process.env.PATH = [bin, dirname(process.execPath), "/usr/bin", "/bin"].join(
+    ":",
+  );
   const board = await loadBoard();
   expect(board.cards).toEqual([]);
   expect(board.warnings).toEqual([]);
@@ -105,7 +107,10 @@ it("runs the `cmux` command from cmux's app bundle when it isn't on PATH", async
 });
 
 it("says cmux isn't installed when there is no `cmux` command at all", async () => {
-  const bundled = join(process.env.SEAMUX_CMUX_APP!, "Contents/Resources/bin/cmux");
+  const bundled = join(
+    process.env.SEAMUX_CMUX_APP!,
+    "Contents/Resources/bin/cmux",
+  );
   const away = `${bundled}.away`;
   renameSync(bundled, away);
   process.env.PATH = [dirname(process.execPath), "/usr/bin", "/bin"].join(":");
@@ -126,14 +131,24 @@ it("shows `!` commands, and what a backgrounded one wrote", async () => {
   mkdirSync(project, { recursive: true });
   mkdirSync(tasks);
   const output = join(tasks, "baou49weh.output");
-  writeFileSync(output, "Open this URL in your browser:\n  https://example.test/verify\n");
+  writeFileSync(
+    output,
+    "Open this URL in your browser:\n  https://example.test/verify\n",
+  );
   const user = (content: string, at: string) =>
-    JSON.stringify({ type: "user", timestamp: at, message: { role: "user", content } });
+    JSON.stringify({
+      type: "user",
+      timestamp: at,
+      message: { role: "user", content },
+    });
   writeFileSync(
     join(project, `${sessionId}.jsonl`),
     [
       user("<bash-input> echo hi</bash-input>", "2026-01-01T00:00:00Z"),
-      user("<bash-stdout>hi</bash-stdout><bash-stderr></bash-stderr>", "2026-01-01T00:00:01Z"),
+      user(
+        "<bash-stdout>hi</bash-stdout><bash-stderr></bash-stderr>",
+        "2026-01-01T00:00:01Z",
+      ),
       user("<bash-input>tool auth login</bash-input>", "2026-01-01T00:00:02Z"),
       user(
         `<bash-stdout>Command did not complete within its 120s timeout and was moved to the background (ID: baou49weh). Output is being written to: ${output}. You will be notified when it completes.</bash-stdout><bash-stderr></bash-stderr>`,
@@ -145,14 +160,24 @@ it("shows `!` commands, and what a backgrounded one wrote", async () => {
 
   const messages = await loadMessages(sessionId);
   expect(messages).toEqual([
-    { role: "shell", command: "echo hi", output: "hi", at: "2026-01-01T00:00:00Z" },
+    {
+      role: "shell",
+      command: "echo hi",
+      output: "hi",
+      at: "2026-01-01T00:00:00Z",
+    },
     {
       role: "shell",
       command: "tool auth login",
       output: expect.stringContaining("https://example.test/verify"),
       at: "2026-01-01T00:00:02Z",
     },
-    { role: "shell", command: "sleep 600", output: null, at: "2026-01-01T00:03:00Z" },
+    {
+      role: "shell",
+      command: "sleep 600",
+      output: null,
+      at: "2026-01-01T00:03:00Z",
+    },
   ]);
 });
 
@@ -163,7 +188,12 @@ it("shows a prompt command as typed, and leaves local commands out", async () =>
   const project = join(process.env.HOME!, ".claude/projects/-work");
   mkdirSync(project, { recursive: true });
   const user = (content: string, at: string, extra = {}) =>
-    JSON.stringify({ type: "user", timestamp: at, message: { role: "user", content }, ...extra });
+    JSON.stringify({
+      type: "user",
+      timestamp: at,
+      message: { role: "user", content },
+      ...extra,
+    });
   writeFileSync(
     join(project, `${sessionId}.jsonl`),
     [
@@ -171,8 +201,13 @@ it("shows a prompt command as typed, and leaves local commands out", async () =>
         "<command-name>/rename</command-name>\n            <command-message>rename</command-message>\n            <command-args>demo</command-args>",
         "2026-01-01T00:00:00Z",
       ),
-      user("<command-message>opsx:apply</command-message>\n<command-name>/opsx:apply</command-name>", "2026-01-01T00:00:01Z"),
-      user("Implement tasks from an OpenSpec change.", "2026-01-01T00:00:01Z", { isMeta: true }),
+      user(
+        "<command-message>opsx:apply</command-message>\n<command-name>/opsx:apply</command-name>",
+        "2026-01-01T00:00:01Z",
+      ),
+      user("Implement tasks from an OpenSpec change.", "2026-01-01T00:00:01Z", {
+        isMeta: true,
+      }),
       user(
         "<command-message>push</command-message>\n<command-name>/push</command-name>\n<command-args>now</command-args>",
         "2026-01-01T00:00:02Z",
@@ -297,7 +332,11 @@ it("takes a task notification after its answered hand-back as no turn", async ()
     reply,
     notification("a9dd2f7e8a0e90819"),
   ]);
-  write(notYet, [user("review the PR"), reply, notification("a9dd2f7e8a0e90819")]);
+  write(notYet, [
+    user("review the PR"),
+    reply,
+    notification("a9dd2f7e8a0e90819"),
+  ]);
   const agents = process.env.SEAMUX_TEST_CLAUDE_AGENTS!;
   const row = (sessionId: string) => ({
     pid: 1,
@@ -398,7 +437,11 @@ it("shows a macro seamux sent by its name, after the prompt it carried", async (
   const project = join(process.env.HOME!, ".claude/projects/-work");
   mkdirSync(project, { recursive: true });
   const user = (content: string, at: string) =>
-    JSON.stringify({ type: "user", timestamp: at, message: { role: "user", content } });
+    JSON.stringify({
+      type: "user",
+      timestamp: at,
+      message: { role: "user", content },
+    });
   writeFileSync(
     join(project, `${sessionId}.jsonl`),
     [
@@ -417,5 +460,49 @@ it("shows a macro seamux sent by its name, after the prompt it carried", async (
     { role: "user", text: "Fix the thing", at: "2026-01-01T00:00:00Z" },
     { role: "macro", name: "howToWorktree", at: "2026-01-01T00:00:00Z" },
     { role: "macro", name: "closeSession", at: "2026-01-01T00:01:00Z" },
+  ]);
+});
+
+it("shows a prompt sent while a turn ran, which Claude Code logs as a queued command", async () => {
+  const sessionId = "7c2d9e4b-1a3f-4b8e-a6d0-5e9f2c1b3a47";
+  const project = join(process.env.HOME!, ".claude/projects/-work");
+  mkdirSync(project, { recursive: true });
+  const queued = (prompt: unknown, origin: object, at: string) =>
+    JSON.stringify({
+      type: "attachment",
+      timestamp: at,
+      attachment: {
+        type: "queued_command",
+        prompt,
+        commandMode: "prompt",
+        origin,
+      },
+    });
+  writeFileSync(
+    join(project, `${sessionId}.jsonl`),
+    [
+      JSON.stringify({
+        type: "user",
+        timestamp: "2026-01-01T00:00:00Z",
+        message: { role: "user", content: "Fix the thing" },
+      }),
+      queued("Also the other thing", { kind: "human" }, "2026-01-01T00:00:10Z"),
+      queued(
+        '<agent-message from="a1">done</agent-message>',
+        { kind: "peer" },
+        "2026-01-01T00:00:20Z",
+      ),
+      queued(
+        [{ type: "text", text: "[Image #1] and this" }],
+        { kind: "human" },
+        "2026-01-01T00:00:30Z",
+      ),
+    ].join("\n") + "\n",
+  );
+
+  expect(await loadMessages(sessionId)).toEqual([
+    { role: "user", text: "Fix the thing", at: "2026-01-01T00:00:00Z" },
+    { role: "user", text: "Also the other thing", at: "2026-01-01T00:00:10Z" },
+    { role: "user", text: "[Image #1] and this", at: "2026-01-01T00:00:30Z" },
   ]);
 });

@@ -18,6 +18,14 @@ Each change is a `queue-operation` line: `enqueue` with the item's text, `dequeu
 - **Measured:** not recorded.
 - **In seamux:** `queuedPrompts` in [board.server.ts](../app/lib/board.server.ts). The board's own queue, for messages waiting on an idle chat, is separate: [queue.server.ts](../app/lib/queue.server.ts).
 
+## A prompt taken mid-turn is an attachment, not a user message
+
+A prompt typed while a turn runs is taken at the turn's next step and logged once, as a line with `type: "attachment"` and `attachment: { type: "queued_command", prompt, commandMode: "prompt", origin: { kind: "human" } }`, after the queue's `remove`. No `user` line ever carries it, so a reader of `user` lines alone misses it. `prompt` is a string, or content blocks when it holds an image. Subagent hand-backs arrive the same way with `origin.kind` `peer`, and task notifications with `commandMode` `task-notification`.
+
+- **Measured:** Claude Code 2.1.246 to 2.1.295, across this Mac's transcripts.
+- **In seamux:** `midTurnPrompt` in [board.server.ts](../app/lib/board.server.ts), for the chat log and the card's last prompt. A queued message sent now from the board arrives this way.
+- **See also:** [Codex logs a prompt sent mid-turn like any other](codex.md#a-prompt-sent-mid-turn-waits-for-the-next-tool-call-and-is-logged-like-any-other).
+
 ## Transcripts do not record the context window
 
 Each response logs its token usage, but a 1M-token Opus session is logged as plain `claude-opus-5`, the same as a 200k one; only `/context` output names `[1m]`. Opus sessions here have run to 999k, so the context bar assumes 1M for Opus and 200k for anything else, raising it to 1M once a response holds more than 200k.

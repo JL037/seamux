@@ -57,11 +57,7 @@ import {
   packageVersion,
   SEAMUX_HOME,
 } from "./paths.server";
-import {
-  dispatchStatus,
-  listDispatches,
-  type Alive,
-} from "./protocol.server";
+import { dispatchStatus, listDispatches, type Alive } from "./protocol.server";
 import { serviceNotices } from "./service.server";
 import {
   clip,
@@ -246,6 +242,15 @@ function promptCommand(text: string): string | null {
   if (!name) return null;
   const args = tagged(text, "command-args")?.trim();
   return args ? `${name} ${args}` : name;
+}
+
+// A prompt the user sent while a turn ran, such as a queued message sent
+// now: Claude Code takes it at the turn's next step and logs it as a
+// queued_command attachment, never as a user message.
+function midTurnPrompt(o: any): string | null {
+  const a = o.type === "attachment" ? o.attachment : null;
+  if (a?.type !== "queued_command" || a.origin?.kind !== "human") return null;
+  return textOf(a.prompt);
 }
 
 // What the harness queues for the chat on its own: background task and
@@ -434,14 +439,15 @@ async function summarize(path: string): Promise<TranscriptSummary> {
     }
     if (o.isSidechain || o.isMeta || o.isCompactSummary) continue;
 
-    const text = textOf(o.message?.content);
+    const midTurn = midTurnPrompt(o);
+    const text = midTurn ?? textOf(o.message?.content);
     if (!text) continue;
     if (o.type === "assistant" && !summary.lastReply) {
       summary.lastReply = replyExcerpt(text);
     }
     const command = o.type === "user" ? promptCommand(text.trimStart()) : null;
     if (
-      o.type === "user" &&
+      (o.type === "user" || midTurn) &&
       !summary.lastPrompt &&
       (command || !SYNTHETIC_PROMPT.test(text.trimStart()))
     ) {
@@ -580,8 +586,16 @@ async function loadClaudeMessages(path: string): Promise<ChatMessage[]> {
     } catch {
       continue;
     }
+    if (o.isSidechain) continue;
+    const midTurn = midTurnPrompt(o)?.trim();
+    if (midTurn) {
+      messages.push(
+        ...userTurn(unwrapPasted(midTurn), o.timestamp ?? null, macros),
+      );
+      continue;
+    }
     if (o.type !== "user" && o.type !== "assistant") continue;
-    if (o.isSidechain || o.isMeta || o.isCompactSummary) continue;
+    if (o.isMeta || o.isCompactSummary) continue;
     const text = textOf(o.message?.content)?.trim();
     if (!text) continue;
     if (o.type === "user" && text.startsWith("<bash-input>")) {
@@ -1132,8 +1146,7 @@ export async function loadBoard(now = Date.now()): Promise<Board> {
   const rank = (c: Card) => pinRank.get(c.sessionId) ?? pinRows.length;
   cards.sort((a, b) => rank(a) - rank(b));
   // Without both sources, a worker missing from them may still run.
-  const alive: Alive =
-    agentsKnown && liveKnown ? (id) => !closed(id) : null;
+  const alive: Alive = agentsKnown && liveKnown ? (id) => !closed(id) : null;
   const lastWrite = (id: string) =>
     (transcripts.get(id) ?? codexTranscripts.get(id))?.mtimeMs ?? null;
   const dispatches = loadDispatchSets(now, alive, lastWrite, warnings);

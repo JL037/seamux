@@ -67,6 +67,13 @@ It goes `running` on a prompt and `idle` when a turn completes, but stays `runni
 - **In seamux:** `indexCodexTranscripts`, `summarizeCodex` and `loadCodexMessages` in [codex.server.ts](../app/lib/codex.server.ts).
 - **See also:** [Transcripts do not record the context window](transcripts.md#transcripts-do-not-record-the-context-window), which Codex's do, and [cmux has no transcript for OpenCode](opencode.md#cmux-has-no-transcript-for-opencode-whose-sessions-live-in-sqlite), whose record names none.
 
+## A prompt sent mid-turn waits for the next tool call, and is logged like any other
+
+A message submitted while a turn runs shows under "Messages to be submitted after next tool call (press esc to interrupt and send immediately)". Once that call returns, Codex logs it as an `item_completed` `UserMessage`, exactly like a prompt that starts a turn, and the turn's reply answers both. Claude Code logs one differently: [A prompt taken mid-turn is an attachment](transcripts.md#a-prompt-taken-mid-turn-is-an-attachment-not-a-user-message).
+
+- **Measured:** Codex 0.157.1, cmux 0.64.23, a message pasted and sent with Enter during a `sleep 45`.
+- **In seamux:** `loadCodexMessages` and `summarizeCodex` in [codex.server.ts](../app/lib/codex.server.ts) need nothing for it.
+
 ## An open approval is a tool call with no output
 
 The screen shows "Would you like to run the following command?" with "1. Yes, proceed (y)", an always-allow, and "3. No, and tell Codex what to do differently (esc)". Typing `y` approves with no Enter.
