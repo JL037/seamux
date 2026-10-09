@@ -2,8 +2,7 @@ import { Check, CircleDashed, LoaderCircle } from "lucide-react";
 
 import type { ReactNode } from "react";
 
-import { SUBAGENT_VISIBLE_MS, type Subagent } from "~/lib/board";
-import { cn } from "~/lib/utils";
+import type { Subagent } from "~/lib/board";
 
 function since(ms: number | null, now: number): string {
   if (ms == null) return "";
@@ -14,57 +13,12 @@ function since(ms: number | null, now: number): string {
 function StatusIcon({ agent }: { agent: Subagent }) {
   if (agent.stale) return <CircleDashed className="size-3 shrink-0" />;
   if (agent.running)
-    return (
-      <LoaderCircle className="size-3 shrink-0 animate-spin text-info" />
-    );
+    return <LoaderCircle className="size-3 shrink-0 animate-spin text-info" />;
   return <Check className="size-3 shrink-0 text-success" />;
 }
 
 function label(agent: Subagent): string {
   return agent.description ?? agent.type ?? agent.agentId;
-}
-
-// On a card: running subagents one per line, finished ones as a count.
-export function SubagentSummary({
-  subagents,
-  now,
-}: {
-  subagents: Subagent[];
-  now: number;
-}) {
-  const running = subagents.filter((s) => s.running);
-  const finished = subagents.length - running.length;
-  if (subagents.length === 0) return null;
-
-  return (
-    <div className="flex flex-col gap-1">
-      {running.map((s) => (
-        <div
-          key={s.agentId}
-          className={cn(
-            "flex items-center gap-1.5",
-            s.stale && "text-muted-foreground",
-          )}
-        >
-          <StatusIcon agent={s} />
-          <span className="sensitive truncate">{label(s)}</span>
-          {s.type && s.description && (
-            <span className="shrink-0 text-muted-foreground">{s.type}</span>
-          )}
-          <span className="sensitive ml-auto shrink-0 text-muted-foreground">
-            {s.stale ? "stale" : since(s.startedAt, now)}
-          </span>
-        </div>
-      ))}
-      {finished > 0 && (
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Check className="size-3 shrink-0 text-success" />
-          {finished} subagent{finished === 1 ? "" : "s"} finished in the last{" "}
-          {SUBAGENT_VISIBLE_MS / 60000}m
-        </div>
-      )}
-    </div>
-  );
 }
 
 // Something finished, in the side rail: one line, which opens to what it
@@ -97,7 +51,9 @@ export function Finished({
       <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
         {line}
       </summary>
-      <div className="sensitive flex flex-col gap-1 pt-1 pl-4.5">{children}</div>
+      <div className="sensitive flex flex-col gap-1 pt-1 pl-4.5">
+        {children}
+      </div>
     </details>
   );
 }
@@ -124,7 +80,10 @@ export function SubagentDetail({
               <span className="sensitive font-medium">{label(s)}</span>
             </div>
             <div className="sensitive pl-4.5 text-muted-foreground">
-              {[s.type, s.stale ? "stale" : `running ${since(s.startedAt, now)}`]
+              {[
+                s.type,
+                s.stale ? "stale" : `running ${since(s.startedAt, now)}`,
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </div>

@@ -65,7 +65,6 @@ import { DispatchBar } from "~/components/dispatch-bar";
 import { workerCount } from "~/components/worker-list";
 import { Markdown } from "~/components/markdown";
 import { SeamuxMark } from "~/components/seamux-mark";
-import { SubagentSummary } from "~/components/subagent-list";
 import { ThemeToggle } from "~/components/theme-toggle";
 import {
   titleWithCount,
@@ -100,10 +99,12 @@ import {
   COLUMN_LABELS,
   COLUMNS,
   showsCard,
+  SUBAGENT_VISIBLE_MS,
   type Board,
   type Card as BoardCard,
   type Column,
   type SendFailure,
+  type Subagent,
 } from "~/lib/board";
 import { loadBoard } from "~/lib/board.server";
 import { ENGINE_FEATURES, ENGINE_LABELS, type Engine } from "~/lib/config";
@@ -1314,7 +1315,6 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
               </p>
             )}
             <WaitingPanel card={card} />
-            <SubagentSummary subagents={card.subagents} now={now} />
             {card.background.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {card.background.map((b) => (
@@ -1337,6 +1337,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
               column={card.column}
               queued={card.terminalQueue.length + card.boardQueue.length}
               workers={workerCount(card.fanouts)}
+              subagents={card.subagents}
               onOpen={() => setChatOpen(true)}
             />
             <ChatInput card={card} open={chatOpen} setOpen={setChatOpen} />
@@ -1391,16 +1392,18 @@ function StartingCard({ spawn }: { spawn: Spawning }) {
 // that is waiting, and done cards are over. Anything queued shows as +N, and
 // the line then opens the chat, where the queue is listed. A chat that fanned
 // out says how many workers it has, which opens the chat too: its side rail
-// lists them.
+// lists them, and so does one running subagents.
 function CardState({
   column,
   queued,
   workers,
+  subagents,
   onOpen,
 }: {
   column: Column;
   queued: number;
   workers: number;
+  subagents: Subagent[];
   onOpen: () => void;
 }) {
   const state =
@@ -1427,6 +1430,24 @@ function CardState({
       ({workers} worker{workers === 1 ? "" : "s"})
     </button>
   );
+  const running = subagents.filter((s) => s.running).length;
+  const finished = subagents.length - running;
+  const subagentCount = subagents.length > 0 && (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={`${[
+        running > 0 && `${running} running`,
+        finished > 0 &&
+          `${finished} finished in the last ${SUBAGENT_VISIBLE_MS / 60000}m`,
+      ]
+        .filter(Boolean)
+        .join(", ")}. Open the chat to see them`}
+      className="cursor-pointer text-muted-foreground hover:underline"
+    >
+      ({subagents.length} subagent{subagents.length === 1 ? "" : "s"})
+    </button>
+  );
   let main: ReactNode = state && (
     <span className={cn("flex items-center gap-1.5", tone)}>{state}</span>
   );
@@ -1449,10 +1470,11 @@ function CardState({
       </button>
     );
   }
-  if (!main && !fanout) return null;
+  if (!main && !fanout && !subagentCount) return null;
   return (
     <span className="flex w-fit items-center gap-1.5">
       {main}
+      {subagentCount}
       {fanout}
     </span>
   );
