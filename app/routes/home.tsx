@@ -277,7 +277,9 @@ function PathSwatch({ cwd }: { cwd: string }) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label={`Colour for ${shortPath(project)}`}
-        title={shortPath(project)}
+        // Hovering shows where the session was launched, which may be a
+        // worktree of the project the colour belongs to.
+        title={shortPath(cwd)}
         // A 10px square is too small to tap; the hit area reaches past it.
         className="relative size-2.5 shrink-0 cursor-pointer rounded-[2px] outline-offset-2 after:absolute after:-inset-2"
         style={{ backgroundColor: projectColor(current) }}
@@ -1223,6 +1225,7 @@ function SessionCard({ card, now }: { card: BoardCard; now: number }) {
                   title={COLUMN_LABELS[card.column]}
                 />
               )}
+              {minimized && <PathSwatch cwd={card.cwd} />}
               <SessionName card={card} />
             </span>
             <span className="flex shrink-0 items-center gap-1">
