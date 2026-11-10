@@ -1,5 +1,12 @@
 # seamux
 
+## 0.5.2
+
+### Patch Changes
+
+- 7097754: Answering a question from a chat's full view closes it once the answer goes through, back to the board, on a phone as on a desktop. A failed answer leaves the view open with its error.
+- 0386c3c: The trigger phrase now waits for the text to stop changing for a moment, under a second, before its count starts. Typing "make it so" on the way to a longer sentence no longer closes a chat's full view or lights up the send button mid-sentence; a dictated phrase still starts the count almost at once.
+
 ## 0.5.1
 
 ### Patch Changes
